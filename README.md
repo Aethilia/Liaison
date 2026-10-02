@@ -64,6 +64,10 @@ observations, consignes, responsable, absents, activité, sorties par matière e
 - **Import** d'un classeur existant (ex. `OCTOBRE_2026.xlsx`) et **impression**
   de la journée (une page A4 par service, comme le classeur).
 
+## Installation et partage avec les collègues
+
+Voir [PARTAGE.md](PARTAGE.md) : téléchargement, dossier commun, configuration des postes.
+
 ## Utilisation
 
 1. Au premier lancement, renseigner le **nom du poste** (ex. « Pont-bascule »),
