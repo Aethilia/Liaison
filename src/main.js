@@ -8,6 +8,9 @@ const { Store, ConflictError } = require('./core/store');
 const { exportWorkbook, importWorkbook } = require('./core/excel');
 const M = require('./core/model');
 
+// Interface en français (heures sur 24 h dans les champs horaires).
+app.commandLine.appendSwitch('lang', 'fr-FR');
+
 let win;
 let config;
 let store;
@@ -93,6 +96,13 @@ handle('day:revs', (date) => {
   return out;
 });
 handle('month:load', (year, month) => store.loadMonth(year, month));
+handle('range:load', (from, to) => {
+  const dates = [];
+  for (let d = from; d <= to; d = M.addDays(d, 1)) dates.push(d);
+  return store.loadRange(dates);
+});
+handle('users:load', () => store.loadUsers());
+handle('users:save', (users) => store.saveUsers(users));
 
 handle('excel:export', async ({ from, to, suggestedName }) => {
   const r = await dialog.showSaveDialog(win, {

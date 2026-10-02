@@ -209,7 +209,13 @@ function readService(ws, def, date) {
     }
     const last = s.observations[s.observations.length - 1];
     if (!heure && last) last.texte = last.texte ? `${last.texte} ${texte}` : texte;
-    else s.observations.push({ heure, texte });
+    else s.observations.push({ heure, texte, important: false, auteur: '' });
+  }
+  for (const obs of s.observations) {
+    if (obs.texte.startsWith(M.IMPORTANT_PREFIX)) {
+      obs.important = true;
+      obs.texte = obs.texte.slice(M.IMPORTANT_PREFIX.length);
+    }
   }
   if (consignes) s.consignes = consignes;
   return s;

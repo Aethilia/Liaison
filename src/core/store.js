@@ -68,6 +68,27 @@ class Store {
     return dates.map((date) => ({ date, services: this.loadDay(date) }));
   }
 
+  // Liste des responsables, commune à tous les postes qui partagent le dossier.
+  loadUsers() {
+    try {
+      const users = JSON.parse(fs.readFileSync(path.join(this.dir, 'responsables.json'), 'utf8')).responsables;
+      return Array.isArray(users) ? users.filter((u) => typeof u === 'string' && u.trim()) : [];
+    } catch (err) {
+      if (err.code === 'ENOENT') return [];
+      throw err;
+    }
+  }
+
+  saveUsers(users) {
+    const clean = [...new Set(users.map((u) => String(u).trim()).filter(Boolean))];
+    fs.mkdirSync(this.dir, { recursive: true });
+    const file = path.join(this.dir, 'responsables.json');
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ responsables: clean }, null, 2), 'utf8');
+    fs.renameSync(tmp, file);
+    return clean;
+  }
+
   loadMonth(year, month) {
     return this.loadRange(daysInMonth(year, month));
   }

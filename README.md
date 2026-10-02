@@ -9,6 +9,36 @@ Elle reprend exactement la structure de l'onglet « Modèle » du classeur
 un classeur Excel identique** (un onglet `JJ-MM` par jour, mise en forme,
 listes déroulantes, barres de remplissage et sauts de page compris).
 
+## Parcours
+
+1. **Qui prend le poste ?** — choix du responsable parmi la liste (partagée entre
+   tous les postes, modifiable dans les paramètres ou avec « Ajouter »).
+2. **Quel service ?** — les trois services du jour en cartes : état (clôturé, en
+   cours…), responsable, nombre d'observations et d'alertes. « Voir le détail »
+   ouvre la fiche du service sans entrer en saisie.
+3. **Main courante** — la saisie du service choisi. Le responsable choisi à
+   l'étape 1 est inscrit automatiquement s'il n'y en a pas encore. Le bouton en
+   haut à droite (nom + service) ramène au choix du service ou du responsable.
+
+## Observations
+
+Les observations sont en tête de la saisie, avec une ligne de saisie rapide
+(heure préremplie, texte, Entrée). Chaque observation garde le nom de son auteur
+et peut être marquée **importante** (drapeau) : elle ressort alors en rouge dans
+la relève, la fiche et le journal, et est précédée de « ⚠ » dans l'export Excel.
+
+- Bouton **+ Observation** (ou **Ctrl+O**) accessible depuis tous les écrans.
+- Onglet **Observations** : journal de toutes les observations et consignes,
+  sur la journée, 7 jours ou le mois, avec recherche, filtre par service et
+  filtre « importantes ».
+
+## Fiche détaillée d'un service
+
+L'icône « œil » (onglets de service, cartes de l'étape 2, panneau de relève,
+journal) et les pastilles du récap mensuel ouvrent la **fiche du service** :
+observations, consignes, responsable, absents, activité, sorties par matière et
+état des boxs, avec navigation vers le service précédent / suivant.
+
 ## Ce que l'application apporte en plus du classeur
 
 - **Passation de la relève** : à l'ouverture d'un service, le panneau de droite
@@ -36,17 +66,18 @@ listes déroulantes, barres de remplissage et sauts de page compris).
 
 ## Utilisation
 
-1. Au premier lancement, renseigner le **nom du poste** (ex. « Pont-bascule »)
-   et le **dossier des données**. Pour partager entre plusieurs PC, choisir le
+1. Au premier lancement, renseigner le **nom du poste** (ex. « Pont-bascule »),
+   le **dossier des données** et les **responsables**. Pour partager entre plusieurs PC, choisir le
    même dossier réseau sur chaque poste (ex. `\\serveur\partage\Liaison`).
-2. Choisir la date (flèches ou clic sur la date) et l'onglet du service.
+2. Choisir son nom, puis le service (la date se change aux deux étapes).
 3. Saisir : tout est enregistré automatiquement (Ctrl+S force l'enregistrement).
 4. En fin de service : remplir les **consignes pour la relève** puis
    **Clôturer le service**.
 5. **Exporter la journée / le mois** produit un classeur au format habituel
    (nommé par défaut `OCTOBRE_2026.xlsx` pour un mois).
 
-Les données sont stockées en JSON lisible : `AAAA/MM/AAAA-MM-JJ_service.json`.
+Les données sont stockées en JSON lisible : `AAAA/MM/AAAA-MM-JJ_service.json`,
+et la liste des responsables dans `responsables.json`.
 
 ## Développement
 
@@ -70,7 +101,7 @@ sur une pull request) produit les exécutables Windows en artefact téléchargea
 | `src/core/store.js` | Lecture/écriture des fichiers, détection des conflits entre postes |
 | `src/core/excel.js` | Export/import au format du classeur à partir de `assets/modele.xlsx` |
 | `src/main.js`, `src/preload.js` | Processus Electron, dialogues fichiers, configuration |
-| `src/renderer/` | Interface (HTML/CSS/JS sans framework) |
+| `src/renderer/` | Interface (HTML/CSS/JS sans framework, pictogrammes dans `icons.js`) |
 | `assets/modele.xlsx` | Onglets « Légende » et « Modèle » du classeur d'origine |
 
 Pour modifier les matières, bennes, plateaux ou motifs d'absence, mettre à jour

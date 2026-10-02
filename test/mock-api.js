@@ -6,6 +6,7 @@
   const M = () => window.LiaisonModel;
   const load = (d, s) => (db[key(d, s)] ? JSON.parse(JSON.stringify(db[key(d, s)])) : M().emptyService(d, s));
   let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule' };
+  let users = window.__users || [];
   window.__db = db;
   window.api = {
     getConfig: () => ok(config),
@@ -23,6 +24,13 @@
     loadDay: (d) => ok({ matin: load(d, 'matin'), apresmidi: load(d, 'apresmidi'), nuit: load(d, 'nuit') }),
     dayRevs: (d) => ok({ matin: load(d, 'matin').rev, apresmidi: load(d, 'apresmidi').rev, nuit: load(d, 'nuit').rev }),
     loadMonth: (y, m) => ok(M().daysInMonth(y, m).map((d) => ({ date: d, services: { matin: load(d, 'matin'), apresmidi: load(d, 'apresmidi'), nuit: load(d, 'nuit') } }))),
+    loadRange: (from, to) => {
+      const out = [];
+      for (let d = from; d <= to; d = M().addDays(d, 1)) out.push({ date: d, services: { matin: load(d, 'matin'), apresmidi: load(d, 'apresmidi'), nuit: load(d, 'nuit') } });
+      return ok(out);
+    },
+    loadUsers: () => ok(users),
+    saveUsers: (u) => { users = [...new Set(u.map((x) => x.trim()).filter(Boolean))]; return ok(users); },
     exportExcel: () => ok(null),
     openFile: () => ok(true),
     pickImport: () => ok(null),

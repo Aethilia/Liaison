@@ -22,7 +22,7 @@ function sample(date = '2026-10-02', service = 'nuit') {
   s.sorties.Bois.nb = 1;
   s.bennes.Fer = 85;
   s.plateaux.Sport = 40;
-  s.observations = [{ heure: '22:15', texte: 'Benne fer pleine, appel prestataire.' }, { heure: '23:40', texte: 'RAS' }];
+  s.observations = [{ heure: '22:15', texte: 'Benne fer pleine, appel prestataire.', important: true, auteur: '' }, { heure: '23:40', texte: 'RAS', important: false, auteur: '' }];
   s.consignes = 'Prévoir rotation DIB à 6h';
   return s;
 }
@@ -66,6 +66,13 @@ test('stockage : un fichier par service et détection des conflits', () => {
   assert.equal(store.loadMonth(2026, 10).length, 31);
 });
 
+test('liste des responsables partagée dans le dossier des données', () => {
+  const store = new Store(tmp());
+  assert.deepEqual(store.loadUsers(), []);
+  assert.deepEqual(store.saveUsers([' Marie Dupont ', 'Karim Benali', 'Marie Dupont', '']), ['Marie Dupont', 'Karim Benali']);
+  assert.deepEqual(new Store(store.dir).loadUsers(), ['Marie Dupont', 'Karim Benali']);
+});
+
 test('export Excel au format du modèle puis réimport', async () => {
   const dir = tmp();
   const file = path.join(dir, 'export.xlsx');
@@ -82,7 +89,7 @@ test('export Excel au format du modèle puis réimport', async () => {
   assert.equal(ws.getCell('D92').value, 5.54);
   assert.equal(ws.getCell('F90').value, 0.85);
   assert.equal(ws.getCell('H85').formula, 'SUM(C85,F85)');
-  assert.equal(ws.getCell('B101').value, 'Benne fer pleine, appel prestataire.');
+  assert.equal(ws.getCell('B101').value, '⚠ Benne fer pleine, appel prestataire.');
 
   const [day] = await importWorkbook(file);
   assert.equal(day.date, '2026-10-02');

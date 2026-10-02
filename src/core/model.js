@@ -58,7 +58,9 @@ function normalize(data, date, service) {
   for (const m of MATIERES) out.sorties[m] = { ...base.sorties[m], ...((data.sorties || {})[m] || {}) };
   out.bennes = { ...base.bennes, ...(data.bennes || {}) };
   out.plateaux = { ...base.plateaux, ...(data.plateaux || {}) };
-  out.observations = Array.isArray(data.observations) ? data.observations.map((o) => ({ heure: o.heure || '', texte: o.texte || '' })) : [];
+  out.observations = Array.isArray(data.observations)
+    ? data.observations.map((o) => ({ heure: o.heure || '', texte: o.texte || '', important: !!o.important, auteur: o.auteur || '' }))
+    : [];
   return out;
 }
 
@@ -90,6 +92,7 @@ function totals(s) {
 // modèle Excel : une observation trop longue continue sur la ligne suivante.
 const LARGEUR_LIGNE_NB = 95;
 const CONSIGNES_PREFIX = '► Consignes relève :';
+const IMPORTANT_PREFIX = '⚠ ';
 
 function wrapText(text, width) {
   const out = [];
@@ -116,7 +119,7 @@ function layoutObservations(s, width = LARGEUR_LIGNE_NB) {
   const lines = [];
   for (const o of s.observations) {
     if (!o.heure && !o.texte) continue;
-    wrapText(o.texte || '', width).forEach((t, i) => lines.push({ heure: i === 0 ? o.heure || '' : '', texte: t }));
+    wrapText(`${o.important ? IMPORTANT_PREFIX : ''}${o.texte || ''}`, width).forEach((t, i) => lines.push({ heure: i === 0 ? o.heure || '' : '', texte: t }));
   }
   if (s.consignes && s.consignes.trim()) {
     wrapText(`${CONSIGNES_PREFIX} ${s.consignes.trim()}`, width).forEach((t) => lines.push({ heure: '', texte: t }));
@@ -170,7 +173,7 @@ function daysInMonth(year, month) {
 }
 
 const api = {
-  SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX,
+  SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth,
 };

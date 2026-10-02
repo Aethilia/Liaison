@@ -1,26 +1,39 @@
 'use strict';
 
-/* global LiaisonModel */
-const M = window.LiaisonModel;
+/* global LiaisonModel, Icons */
 // `api` est exposé par preload.js (window.api).
 /* global api */
+const M = window.LiaisonModel;
+const { icon, decorate } = window.Icons;
 
-const SVC = Object.fromEntries(M.SERVICES.map((s) => [s.id, s]));
+const UI = {
+  matin: { icon: 'sunrise', c2: '#e8843f' },
+  apresmidi: { icon: 'sun', c2: '#4f9be0' },
+  nuit: { icon: 'moon', c2: '#3c5480' },
+};
+const SVC = Object.fromEntries(M.SERVICES.map((s) => [s.id, { ...s, ...UI[s.id] }]));
+const AVATAR_COLORS = ['#c55a11', '#2e75b6', '#1f2f4f', '#2f855a', '#8e44ad', '#b83280', '#0f766e', '#b7791f'];
 const POLL_MS = 8000;
 const SAVE_DELAY_MS = 700;
 
 const S = {
   config: null,
+  users: [],
+  user: null,
+  screen: 'user',
   view: 'saisie',
   date: null,
   service: 'matin',
   data: {}, // services du jour affiché
-  prev: null, // service précédent (passation)
+  prev: null, // service précédent (relève)
   dirty: false,
   saveTimer: null,
   saving: null,
   conflict: null,
-  recapMonth: null, // { year, month }
+  qa: { texte: '', heure: '', important: false }, // saisie rapide d'observation
+  recapMonth: null,
+  journal: { period: 'jour', q: '', hidden: new Set(), importantOnly: false, days: null, key: null },
+  fiche: null,
 };
 
 /* ---------- Utilitaires ---------- */
@@ -35,8 +48,7 @@ function h(tag, attrs, ...children) {
         if (prop.startsWith('--')) el.style.setProperty(prop, val);
         else el.style[prop] = val;
       }
-    }
-    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    } else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
     else if (k in el && k !== 'list' && !k.startsWith('data-') && !k.startsWith('aria-')) el[k] = v;
     else el.setAttribute(k, v === true ? '' : v);
   }
@@ -60,6 +72,18 @@ const fmtTime = (isoTs) => (isoTs ? new Date(isoTs).toLocaleTimeString('fr-FR', 
 const fmtDateTime = (isoTs) => (isoTs ? new Date(isoTs).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
 const fmtNum = (v, max = 3) => (v == null ? '' : Number(v).toLocaleString('fr-FR', { maximumFractionDigits: max }));
 const fmtTon = (v) => `${Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} T`;
+const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
+
+function initials(name) {
+  const parts = String(name).trim().split(/[\s.-]+/).filter(Boolean);
+  return ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+function avatarColor(name) {
+  let hash = 0;
+  for (const ch of String(name)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+const avatar = (name) => h('span', { class: 'avatar', style: { '--av': avatarColor(name) } }, initials(name));
 
 function getPath(obj, p) {
   return p.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
@@ -67,8 +91,7 @@ function getPath(obj, p) {
 function setPath(obj, p, v) {
   const keys = p.split('.');
   const last = keys.pop();
-  const target = keys.reduce((o, k) => o[k], obj);
-  target[last] = v;
+  keys.reduce((o, k) => o[k], obj)[last] = v;
 }
 
 // Accepte « 5,54 », « 5.54 » et la notation du terrain « 5T540 » pour les tonnages.
@@ -108,12 +131,25 @@ function ask(title, text, buttons) {
   const dlg = $('#confirm');
   $('#confirm-title').textContent = title;
   $('#confirm-text').textContent = text;
-  const actions = $('#confirm-actions');
-  actions.replaceChildren(h('span', { class: 'spacer' }), ...buttons.map((b) => h('button', { class: `btn ${b.cls || 'ghost'}`, value: b.value }, b.label)));
+  $('#confirm-actions').replaceChildren(h('span', { class: 'spacer' }), ...buttons.map((b) => h('button', { class: `btn ${b.cls || 'ghost'}`, value: b.value }, b.label)));
   dlg.returnValue = '';
   dlg.showModal();
   return new Promise((resolve) => {
     dlg.addEventListener('close', () => resolve(dlg.returnValue || null), { once: true });
+  });
+}
+
+function promptText(title, placeholder = '') {
+  const dlg = $('#prompt');
+  $('#prompt-title').textContent = title;
+  const input = $('#prompt-input');
+  input.value = '';
+  input.placeholder = placeholder;
+  dlg.returnValue = '';
+  dlg.showModal();
+  input.focus();
+  return new Promise((resolve) => {
+    dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok' ? input.value.trim() : null), { once: true });
   });
 }
 
@@ -129,10 +165,117 @@ async function call(promise) {
 
 const cur = () => S.data[S.service];
 const isClosed = (s) => !!(s && s.cloture);
+const realObs = (s) => s.observations.filter((o) => o.heure || o.texte);
 const boxAlerts = (s) => [
   ...M.BENNES.filter((b) => s.bennes[b] >= M.SEUIL_ALERTE).map((b) => ({ type: 'Benne', nom: b, v: s.bennes[b] })),
   ...M.PLATEAUX.filter((p) => s.plateaux[p] >= M.SEUIL_ALERTE).map((p) => ({ type: 'Plateau', nom: p, v: s.plateaux[p] })),
 ];
+
+function serviceState(s) {
+  const live = M.currentService();
+  if (isClosed(s)) return { cls: 'done', label: 'Clôturé', icon: 'lock' };
+  if (live.date === s.date && live.service === s.service) return { cls: 'live', label: 'En cours', icon: 'clock' };
+  if (!M.isEmpty(s)) return { cls: 'draft', label: 'Non clôturé', icon: 'edit' };
+  return { cls: '', label: 'Vide', icon: null };
+}
+const statePill = (s, extra = '') => {
+  const st = serviceState(s);
+  return h('span', { class: `pill ${st.cls} ${extra}` }, st.icon ? icon(st.icon, 12) : null, st.label);
+};
+const svcStyle = (id) => ({ '--c': SVC[id].couleur, '--c2': SVC[id].c2 });
+
+/* ---------- Écrans ---------- */
+
+function showScreen(name) {
+  S.screen = name;
+  $('#screen-user').hidden = name !== 'user';
+  $('#screen-service').hidden = name !== 'service';
+  $('#screen-app').hidden = name !== 'app';
+}
+
+// Étape 1 : choix du responsable
+function renderUserScreen() {
+  let last = null;
+  try {
+    last = localStorage.getItem('liaison.lastUser');
+  } catch { /* stockage indisponible */ }
+  const cards = S.users.map((name) => h('button', { class: `user-card${name === last ? ' last' : ''}`, onclick: () => chooseUser(name) },
+    avatar(name), h('span', {}, name), name === last ? h('span', { class: 'u-hint' }, 'Dernière connexion sur ce poste') : null));
+  cards.push(h('button', { class: 'user-card add', onclick: addUserFromWelcome },
+    h('span', { class: 'avatar' }, icon('plus', 24)), h('span', {}, 'Ajouter un responsable')));
+  $('#user-list').replaceChildren(...(S.users.length ? [] : [h('div', { class: 'empty-users' }, 'Commencez par ajouter les responsables (une seule fois, la liste est partagée entre les postes).')]), ...cards);
+  $('#welcome-poste').textContent = S.config.poste ? `Poste : ${S.config.poste}` : '';
+  showScreen('user');
+}
+
+async function addUserFromWelcome() {
+  const name = await promptText('Nouveau responsable', 'Prénom Nom');
+  if (!name) return;
+  S.users = await call(api.saveUsers([...S.users, name]));
+  renderUserScreen();
+}
+
+async function chooseUser(name) {
+  S.user = name;
+  try {
+    localStorage.setItem('liaison.lastUser', name);
+  } catch { /* stockage indisponible */ }
+  S.date = M.currentService().date;
+  await renderServiceScreen();
+}
+
+// Étape 2 : choix du service
+async function renderServiceScreen() {
+  await flush();
+  S.data = await call(api.loadDay(S.date));
+  const live = M.currentService();
+  $('#service-hello').textContent = `${S.user}, sur quel service travaillez-vous ?`;
+  $('#svc-date-text').textContent = fmtLongDate(S.date);
+  $('#svc-date-input').value = S.date;
+  const cards = M.SERVICES.map((def) => {
+    const s = S.data[def.id];
+    const obs = realObs(s);
+    const imp = obs.filter((o) => o.important).length;
+    const isLive = live.date === S.date && live.service === def.id;
+    return h('div', {
+      class: `svc-card${isLive ? ' live' : ''}`, style: svcStyle(def.id), role: 'button', tabIndex: 0,
+      onclick: () => enterService(def.id),
+      onkeydown: (e) => { if (e.key === 'Enter') enterService(def.id); },
+    },
+    h('span', { class: 'sc-badge' }, statePill(s, 'light')),
+    h('div', { class: 'sc-top' }, h('span', { class: 'sc-icon' }, icon(SVC[def.id].icon, 26)),
+      h('div', {}, h('div', { class: 'sc-name' }, def.label), h('div', { class: 'sc-hours' }, def.horaires))),
+    h('div', { class: 'sc-resp' }, s.responsable ? `Responsable : ${s.responsable}` : 'Aucun responsable pour l\'instant'),
+    h('div', { class: 'sc-stats' },
+      h('div', { class: 'sc-stat' }, h('b', {}, obs.length), h('span', {}, obs.length > 1 ? 'observations' : 'observation')),
+      h('div', { class: 'sc-stat' }, h('b', {}, imp + boxAlerts(s).length), h('span', {}, imp + boxAlerts(s).length > 1 ? 'alertes' : 'alerte'))),
+    h('div', { class: 'sc-actions' },
+      h('button', { class: 'sc-detail', onclick: (e) => { e.stopPropagation(); openFiche(S.date, def.id); } }, icon('eye', 15), 'Voir le détail'),
+      h('span', { class: 'sc-go' }, 'Ouvrir', icon('arrowRight', 15))));
+  });
+  $('#service-cards').replaceChildren(...cards);
+  showScreen('service');
+}
+
+// Étape 3 : main courante du service choisi
+async function enterService(id, view = 'saisie') {
+  showScreen('app');
+  setView(view, { silent: true });
+  await goTo(S.date, id);
+  const s = cur();
+  if (!isClosed(s) && !s.responsable && S.user) {
+    s.responsable = S.user;
+    renderForm();
+    renderTabs();
+    markDirty();
+  }
+}
+
+async function backToUsers() {
+  await flush();
+  S.users = await call(api.loadUsers());
+  renderUserScreen();
+}
 
 /* ---------- Chargement / enregistrement ---------- */
 
@@ -198,43 +341,37 @@ function setStatus(text, cls = '') {
   el.className = cls;
 }
 
-/* ---------- Rendu : en-tête et onglets ---------- */
+/* ---------- En-tête et onglets ---------- */
 
 function renderHeader() {
   $('#date-text').textContent = fmtLongDate(S.date);
   $('#date-input').value = S.date;
-  $('#poste').textContent = S.config.poste ? `Poste : ${S.config.poste}` : '';
-  $('#data-dir').textContent = `Données : ${S.config.dataDir}`;
+  $('#data-dir').textContent = `${S.config.poste ? `Poste ${S.config.poste} · ` : ''}Données : ${S.config.dataDir}`;
+  const av = $('#user-avatar');
+  av.textContent = initials(S.user || '?');
+  av.style.setProperty('--av', avatarColor(S.user || '?'));
+  $('#user-name').textContent = S.user || '';
+  $('#user-service').textContent = `Service ${SVC[S.service].label.toLowerCase()}`;
   document.body.dataset.service = S.service;
-}
-
-function serviceState(id) {
-  const s = S.data[id];
-  const live = M.currentService();
-  if (isClosed(s)) return { cls: 'done', label: 'Clôturé' };
-  if (live.date === S.date && live.service === id) return { cls: 'live', label: 'En cours' };
-  if (s && !M.isEmpty(s)) return { cls: 'draft', label: 'Non clôturé' };
-  return { cls: '', label: 'Vide' };
 }
 
 function renderTabs() {
   const tabs = M.SERVICES.map((def) => {
     const s = S.data[def.id];
-    const st = serviceState(def.id);
-    const alerts = s ? boxAlerts(s).length : 0;
-    return h('button', {
-      class: `tab${def.id === S.service ? ' active' : ''}`,
-      style: { '--tab-color': def.couleur },
+    if (!s) return null;
+    const alerts = boxAlerts(s).length + realObs(s).filter((o) => o.important).length;
+    return h('div', {
+      class: `tab${def.id === S.service ? ' active' : ''}`, style: svcStyle(def.id), role: 'button', tabIndex: 0,
       onclick: () => switchService(def.id),
     },
-    h('span', { class: 'swatch', style: { background: def.couleur } }),
-    h('div', {}, h('div', { class: 't-title' }, def.label), h('div', { class: 't-sub' }, def.horaires, s && s.responsable ? ` · ${s.responsable}` : '')),
+    h('span', { class: 't-icon' }, icon(SVC[def.id].icon, 20)),
+    h('div', {}, h('div', { class: 't-title' }, def.label), h('div', { class: 't-sub' }, def.horaires, s.responsable ? ` · ${s.responsable}` : '')),
     h('div', { class: 't-state' },
-      alerts ? h('span', { class: 'pill alert', title: 'Boxs remplis à 80 % ou plus' }, `${alerts} box${alerts > 1 ? 's' : ''} ≥ ${M.SEUIL_ALERTE} %`) : null,
-      ' ',
-      h('span', { class: `pill ${st.cls}` }, st.label)));
+      statePill(s),
+      alerts ? h('span', { class: 'pill alert', title: 'Boxs ≥ 80 % et observations importantes' }, icon('alert', 12), alerts) : null),
+    h('button', { class: 't-eye', title: 'Voir la fiche détaillée', 'aria-label': `Fiche du service ${def.label}`, onclick: (e) => { e.stopPropagation(); openFiche(S.date, def.id); } }, icon('eye', 17)));
   });
-  $('#service-tabs').replaceChildren(...tabs);
+  $('#service-tabs').replaceChildren(...tabs.filter(Boolean));
 }
 
 function renderConflict() {
@@ -246,6 +383,7 @@ function renderConflict() {
   const c = S.conflict.current;
   el.hidden = false;
   el.replaceChildren(
+    icon('alert'),
     h('div', {}, h('b', {}, 'Ce service a été modifié sur un autre poste'),
       ` (${c.updatedBy || 'poste inconnu'}, ${fmtDateTime(c.updatedAt)}). Vos dernières modifications ne sont pas enregistrées.`),
     h('span', { class: 'spacer' }),
@@ -269,7 +407,7 @@ async function resolveConflict(choice) {
   renderConflict();
 }
 
-/* ---------- Rendu : formulaire de saisie ---------- */
+/* ---------- Formulaire de saisie ---------- */
 
 function field(bind, type, attrs = {}) {
   const s = cur();
@@ -288,9 +426,9 @@ function field(bind, type, attrs = {}) {
   return el;
 }
 
-function card(title, body, { wide = false, hint = null, cls = '' } = {}) {
+function card(title, iconName, body, { wide = false, hint = null, cls = '' } = {}) {
   return h('div', { class: `card${wide ? ' wide' : ''} ${cls}` },
-    h('div', { class: 'card-head' }, title, hint ? h('span', { class: 'hint' }, hint) : null),
+    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon(iconName, 16)), title, hint ? h('span', { class: 'hint' }, hint) : null),
     h('div', { class: 'card-body' }, body));
 }
 
@@ -308,30 +446,67 @@ function renderForm() {
   const closed = isClosed(s);
 
   const banner = h('div', { class: 'service-banner' },
+    h('span', { class: 'sb-icon' }, icon(def.icon, 26)),
     h('div', {}, h('div', { class: 'sb-date' }, fmtLongDate(S.date)), h('div', { class: 'sb-title' }, def.titre)),
-    h('label', { class: 'sb-resp' }, 'Responsable', field('responsable', 'text', { placeholder: 'Nom du chef de service', 'aria-label': 'Responsable' })),
+    h('label', { class: 'sb-resp' }, 'Responsable', field('responsable', 'text', { placeholder: 'Nom du chef de service', list: 'users-list', 'aria-label': 'Responsable' })),
+    h('datalist', { id: 'users-list' }, S.users.map((u) => h('option', { value: u }))),
+    h('button', { class: 'btn', title: 'Fiche détaillée du service', onclick: () => openFiche(S.date, S.service) }, icon('eye', 16)),
     closed
-      ? h('button', { class: 'btn', onclick: reopenService }, 'Rouvrir')
-      : h('button', { class: 'btn', onclick: closeService }, 'Clôturer le service'));
+      ? h('button', { class: 'btn', onclick: reopenService }, icon('unlock', 16), 'Rouvrir')
+      : h('button', { class: 'btn solid', onclick: closeService }, icon('lock', 16), 'Clôturer le service'));
 
   const closedNote = closed
-    ? h('div', { class: 'closed-note' }, h('b', {}, 'Service clôturé'), ` le ${fmtDateTime(s.cloture.at)}`,
+    ? h('div', { class: 'closed-note' }, icon('lock'), h('span', {}, h('b', {}, 'Service clôturé'), ` le ${fmtDateTime(s.cloture.at)}`,
       s.cloture.par ? ` par ${s.cloture.par}` : '', s.cloture.poste ? ` (poste ${s.cloture.poste})` : '',
-      '. Les informations sont transmises au service suivant. Cliquez sur « Rouvrir » pour corriger.')
+      '. Les informations sont transmises au service suivant. « Rouvrir » pour corriger.'))
     : null;
 
+  // Observations : en premier, avec une ligne de saisie rapide.
+  const quickAdd = closed ? null : h('div', { class: 'quick-add' },
+    h('input', { type: 'time', id: 'qa-heure', value: S.qa.heure || nowHHMM(), 'aria-label': 'Heure', oninput: (e) => { S.qa.heure = e.target.value; } }),
+    h('input', {
+      type: 'text', id: 'qa-texte', value: S.qa.texte, placeholder: 'Écrire une observation puis Entrée…', autocomplete: 'off',
+      oninput: (e) => { S.qa.texte = e.target.value; },
+      onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); submitQuickAdd(); } },
+    }),
+    h('button', {
+      class: `flag-btn${S.qa.important ? ' on' : ''}`, title: 'Marquer comme importante',
+      onclick: (e) => { S.qa.important = !S.qa.important; e.currentTarget.classList.toggle('on', S.qa.important); },
+    }, icon('flag', 15), 'Importante'),
+    h('button', { class: 'btn accent', onclick: submitQuickAdd }, icon('plus', 16), 'Ajouter'));
+
+  const obsRows = s.observations.map((o, i) => h('div', { class: `obs${o.important ? ' important' : ''}` },
+    field(`observations.${i}.heure`, 'time', { 'aria-label': 'Heure' }),
+    autoGrow(h('textarea', { 'data-bind': `observations.${i}.texte`, 'data-type': 'text', rows: 1, readOnly: closed, placeholder: 'Observation', value: o.texte })),
+    h('div', { class: 'o-tools' },
+      o.auteur ? h('span', { class: 'o-author', title: 'Saisie par' }, o.auteur) : null,
+      closed ? null : h('button', { class: `o-btn flag${o.important ? ' on' : ''}`, title: o.important ? 'Retirer « importante »' : 'Marquer comme importante', onclick: () => toggleImportant(i) }, icon('flag', 16)),
+      closed ? null : h('button', { class: 'o-btn rm', title: 'Supprimer', 'aria-label': 'Supprimer l\'observation', onclick: () => removeObservation(i) }, icon('trash', 16)))));
+
+  const obs = card('Observations', 'note', [
+    quickAdd,
+    h('div', { class: 'obs-list', id: 'obs-list' }, obsRows.length ? obsRows : h('div', { class: 'empty' }, 'Aucune observation pour ce service.')),
+    h('div', { class: 'obs-foot' }, h('span', { class: 'usage', id: 'calc-usage' }))],
+  { wide: true, cls: 'obs-card', hint: 'Ctrl+O depuis n\'importe quel écran' });
+
+  const consignes = card('Consignes pour la relève', 'send', h('div', { class: 'consignes' },
+    autoGrow(h('textarea', {
+      'data-bind': 'consignes', 'data-type': 'text', readOnly: closed, value: s.consignes,
+      placeholder: 'Ce que le service suivant doit savoir ou faire : rotations à prévoir, matériel en panne, consignes du chef…',
+    }))), { wide: true, hint: 'Affichées en priorité au service suivant' });
+
   const motifs = h('datalist', { id: 'motifs' }, M.MOTIFS.map((m) => h('option', { value: m })));
-  const absents = card('Agents absents', h('div', { class: 'absents' },
+  const absents = card('Agents absents', 'users', h('div', { class: 'absents' },
     s.absents.map((_, i) => h('div', { class: 'absent' },
       field(`absents.${i}.nom`, 'text', { placeholder: 'Nom de l\'agent' }),
-      field(`absents.${i}.motif`, 'text', { placeholder: 'Motif', list: 'motifs' })))), { hint: 'Motif : choisir ou taper librement' });
+      field(`absents.${i}.motif`, 'text', { placeholder: 'Motif', list: 'motifs' })))), { hint: 'Motif : liste ou texte libre' });
 
-  const entrees = card('Entrées — passages de véhicules', h('div', { class: 'entrees' },
+  const entrees = card('Entrées — passages de véhicules', 'truck', h('div', { class: 'entrees' },
     h('label', { class: 'field' }, h('span', {}, 'Plateaux'), field('entrees.plateaux', 'int')),
     h('label', { class: 'field' }, h('span', {}, 'Poids lourds (PL)'), field('entrees.pl', 'int')),
     h('div', { class: 'total-box' }, h('span', {}, 'TOTAL'), h('b', { id: 'calc-entrees' }, '0'))));
 
-  const sorties = card('Sorties', h('table', { class: 'grid' },
+  const sorties = card('Sorties', 'upload', h('table', { class: 'grid' },
     h('thead', {}, h('tr', {}, h('th', {}, 'Matière'), h('th', {}, 'Nb sorties'), h('th', {}, 'Tonnage (T)'))),
     h('tbody', {}, M.MATIERES.map((m) => h('tr', {},
       h('td', { class: 'label' }, m),
@@ -346,31 +521,12 @@ function renderForm() {
     h('span', {}, nom),
     h('div', { class: 'bar', 'data-bar': `${group}.${nom}` }, h('i')),
     h('div', { class: 'pct' }, field(`${group}.${nom}`, 'pct', { 'aria-label': `${group === 'bennes' ? 'Benne' : 'Plateau'} ${nom}` })));
-  const boxs = card('État des boxs', h('div', { class: 'boxs' },
+  const boxs = card('État des boxs', 'box', h('div', { class: 'boxs' },
     h('div', {}, h('h4', {}, 'Bennes'), M.BENNES.map((b) => boxRow('bennes', b))),
     h('div', {}, h('h4', {}, 'Plateaux'), M.PLATEAUX.map((p) => boxRow('plateaux', p)))),
   { hint: `Remplissage en % · alerte à ${M.SEUIL_ALERTE} %` });
 
-  const obsList = h('div', { class: 'obs-list', id: 'obs-list' },
-    s.observations.length
-      ? s.observations.map((o, i) => h('div', { class: 'obs' },
-        field(`observations.${i}.heure`, 'time', { 'aria-label': 'Heure' }),
-        autoGrow(h('textarea', { 'data-bind': `observations.${i}.texte`, 'data-type': 'text', rows: 1, readOnly: closed, placeholder: 'Observation', value: o.texte })),
-        closed ? h('span') : h('button', { class: 'rm', title: 'Supprimer', 'aria-label': 'Supprimer l\'observation', onclick: () => removeObservation(i) }, '×')))
-      : h('div', { class: 'empty' }, 'Aucune observation pour ce service.'));
-  const obs = card('N.B. — observations', [obsList,
-    h('div', { class: 'obs-foot' },
-      closed ? null : h('button', { class: 'btn accent small', onclick: () => addObservation() }, '+ Ajouter une observation'),
-      h('span', { class: 'usage', id: 'calc-usage' }))],
-  { wide: true, hint: 'Entrée : nouvelle ligne · Maj+Entrée : retour à la ligne' });
-
-  const consignes = card('Consignes pour la relève', h('div', { class: 'consignes' },
-    autoGrow(h('textarea', {
-      'data-bind': 'consignes', 'data-type': 'text', readOnly: closed, value: s.consignes,
-      placeholder: 'Ce que le service suivant doit savoir ou faire : rotations à prévoir, matériel en panne, consignes du chef…',
-    }))), { wide: true, hint: 'Affichées en priorité au service suivant' });
-
-  $('#form').replaceChildren(...[banner, closedNote, motifs, absents, entrees, sorties, boxs, obs, consignes].filter(Boolean));
+  $('#form').replaceChildren(...[banner, closedNote, obs, consignes, motifs, absents, entrees, sorties, boxs].filter(Boolean));
   $('#form').querySelectorAll('textarea').forEach(fitTextarea);
   updateComputed();
 }
@@ -395,7 +551,7 @@ function updateComputed() {
   set('calc-entrees', fmtNum(t.entrees));
   set('calc-nb', fmtNum(t.sortiesNb));
   set('calc-ton', fmtTon(t.tonnage));
-  document.querySelectorAll('[data-bar]').forEach((bar) => {
+  document.querySelectorAll('#form [data-bar]').forEach((bar) => {
     const v = getPath(s, bar.dataset.bar);
     const alert = v != null && v >= M.SEUIL_ALERTE;
     bar.firstChild.style.width = `${Math.min(100, v || 0)}%`;
@@ -436,28 +592,73 @@ function onFormKey(e) {
   const el = e.target;
   if (e.key === 'Enter' && !e.shiftKey && el.tagName === 'TEXTAREA' && /^observations\.\d+\.texte$/.test(el.dataset.bind || '')) {
     e.preventDefault();
-    const i = Number(el.dataset.bind.split('.')[1]);
-    const next = document.querySelector(`[data-bind="observations.${i + 1}.texte"]`);
-    if (next) next.focus();
-    else addObservation();
+    const next = document.querySelector(`[data-bind="observations.${Number(el.dataset.bind.split('.')[1]) + 1}.texte"]`);
+    (next || document.getElementById('qa-texte') || el).focus();
   }
 }
 
-function addObservation() {
+// Ajoute une observation au service affiché (saisie rapide ou fenêtre Ctrl+O).
+function addObservation({ heure, texte, important }) {
   const s = cur();
-  if (isClosed(s)) return;
-  s.observations.push({ heure: nowHHMM(), texte: '' });
-  renderForm();
+  if (isClosed(s) || !texte.trim()) return false;
+  s.observations.push({ heure: heure || nowHHMM(), texte: texte.trim(), important: !!important, auteur: S.user || '' });
   markDirty();
-  const last = document.querySelector(`[data-bind="observations.${s.observations.length - 1}.texte"]`);
-  if (last) last.focus();
+  return true;
+}
+
+function submitQuickAdd() {
+  const heure = ($('#qa-heure') || {}).value || nowHHMM();
+  const texte = ($('#qa-texte') || {}).value || '';
+  if (!texte.trim()) {
+    $('#qa-texte').focus();
+    return;
+  }
+  addObservation({ heure, texte, important: S.qa.important });
+  S.qa = { texte: '', heure: '', important: false };
+  renderForm();
+  renderTabs();
+  $('#qa-texte').focus();
+}
+
+function toggleImportant(i) {
+  const o = cur().observations[i];
+  o.important = !o.important;
+  renderForm();
+  renderTabs();
+  markDirty();
 }
 
 function removeObservation(i) {
-  const s = cur();
-  s.observations.splice(i, 1);
+  cur().observations.splice(i, 1);
   renderForm();
+  renderTabs();
   markDirty();
+}
+
+function openQuickObs() {
+  if (S.screen !== 'app') return;
+  if (isClosed(cur())) {
+    toast('Ce service est clôturé : rouvrez-le pour ajouter une observation.');
+    return;
+  }
+  const dlg = $('#quickobs');
+  $('#quickobs-target').textContent = `Service ${SVC[S.service].label.toLowerCase()} du ${fmtLongDate(S.date)} · ${S.user}`;
+  $('#qo-heure').value = nowHHMM();
+  $('#qo-texte').value = '';
+  $('#qo-important').checked = false;
+  dlg.returnValue = '';
+  dlg.showModal();
+  $('#qo-texte').focus();
+}
+
+function onQuickObsClose() {
+  if ($('#quickobs').returnValue !== 'ok') return;
+  const added = addObservation({ heure: $('#qo-heure').value, texte: $('#qo-texte').value, important: $('#qo-important').checked });
+  if (!added) return;
+  renderForm();
+  renderTabs();
+  if (S.view === 'journal') renderJournal({ reload: true });
+  toast('Observation ajoutée.');
 }
 
 async function closeService() {
@@ -465,14 +666,15 @@ async function closeService() {
   const warnings = [];
   if (!s.responsable) warnings.push('• Le responsable n\'est pas renseigné.');
   if (M.BENNES.every((b) => s.bennes[b] == null) && M.PLATEAUX.every((p) => s.plateaux[p] == null)) warnings.push('• L\'état des boxs n\'est pas renseigné.');
-  if (!s.observations.some((o) => o.texte)) warnings.push('• Aucune observation saisie.');
+  if (!realObs(s).length) warnings.push('• Aucune observation saisie.');
+  if (!s.consignes) warnings.push('• Aucune consigne pour la relève.');
   const text = `Le service ${SVC[S.service].label.toLowerCase()} du ${fmtLongDate(S.date)} sera marqué comme terminé et transmis au service suivant.${warnings.length ? `\n\nÀ vérifier :\n${warnings.join('\n')}` : ''}`;
   const r = await ask('Clôturer le service ?', text, [
     { label: 'Annuler', value: 'no' },
     { label: 'Clôturer', value: 'yes', cls: 'primary' },
   ]);
   if (r !== 'yes') return;
-  s.cloture = { at: new Date().toISOString(), par: s.responsable || null, poste: S.config.poste || null };
+  s.cloture = { at: new Date().toISOString(), par: s.responsable || S.user || null, poste: S.config.poste || null };
   S.dirty = true;
   await save();
   renderSaisie();
@@ -491,14 +693,16 @@ async function reopenService() {
   renderSaisie();
 }
 
-/* ---------- Rendu : passation (relève) ---------- */
+/* ---------- Relève (service précédent) ---------- */
 
 function renderPassation() {
   const p = M.previousService(S.date, S.service);
   const prev = S.prev;
   const def = SVC[p.service];
-  const style = { '--prev-color': def.couleur, '--prev-soft': `var(--${p.service}-soft)` };
-  const head = h('div', { class: 'card-head' }, `Relève · service ${def.label.toLowerCase()}`, h('span', { class: 'hint' }, fmtShortDate(p.date)));
+  const style = { '--pc': def.couleur, '--pc2': def.c2 };
+  const head = h('div', { class: 'pass-head' }, icon('send'),
+    h('div', {}, h('div', { class: 'ph-title' }, `Relève · ${def.label}`), h('div', { class: 'ph-sub' }, fmtLongDate(p.date))),
+    h('button', { class: 'btn small', onclick: () => openFiche(p.date, p.service) }, icon('eye', 14), 'Détail'));
 
   if (!prev || M.isEmpty(prev)) {
     $('#passation').replaceChildren(h('div', { class: 'card', style }, head,
@@ -508,29 +712,27 @@ function renderPassation() {
 
   const t = M.totals(prev);
   const alerts = boxAlerts(prev);
-  const obs = prev.observations.filter((o) => o.heure || o.texte);
+  const obs = realObs(prev);
+  const important = obs.filter((o) => o.important);
   const absents = prev.absents.filter((a) => a.nom);
-  const etat = isClosed(prev)
-    ? h('span', { class: 'pill done' }, `Clôturé ${fmtDateTime(prev.cloture.at)}`)
-    : h('span', { class: 'pill draft' }, 'Non clôturé');
+  const obsItem = (o) => h('li', { class: o.important ? 'important' : '' }, h('b', {}, o.heure || ''), h('span', {}, o.texte));
 
   const cardEl = h('div', { class: 'card', style }, head,
     h('div', { class: 'pass-section' },
       h('div', { class: 'kv' }, h('span', {}, 'Responsable'), h('b', {}, prev.responsable || '—')),
-      h('div', { class: 'kv' }, h('span', {}, 'État'), etat),
-      prev.updatedBy ? h('div', { class: 'kv muted' }, h('span', {}, 'Dernière saisie'), h('span', {}, `${prev.updatedBy}, ${fmtDateTime(prev.updatedAt)}`)) : null),
-    h('div', { class: 'pass-section' }, h('h5', {}, 'Consignes'),
+      h('div', { class: 'kv' }, h('span', {}, 'État'), isClosed(prev) ? h('span', { class: 'pill done' }, icon('lock', 12), `Clôturé ${fmtDateTime(prev.cloture.at)}`) : h('span', { class: 'pill draft' }, 'Non clôturé'))),
+    h('div', { class: 'pass-section' }, h('h5', {}, icon('send', 13), 'Consignes'),
       prev.consignes ? h('div', { class: 'pass-consignes' }, prev.consignes) : h('div', { class: 'empty' }, 'Aucune consigne transmise.')),
-    h('div', { class: 'pass-section' }, h('h5', {}, `Boxs à ${M.SEUIL_ALERTE} % ou plus`),
+    important.length ? h('div', { class: 'pass-section' }, h('h5', {}, icon('flag', 13), `Observations importantes (${important.length})`),
+      h('ul', { class: 'pass-obs' }, important.map(obsItem))) : null,
+    h('div', { class: 'pass-section' }, h('h5', {}, icon('box', 13), `Boxs à ${M.SEUIL_ALERTE} % ou plus`),
       alerts.length
         ? h('div', { class: 'alert-list' }, alerts.map((a) => h('span', { class: 'pill alert' }, `${a.type} ${a.nom} : ${fmtNum(a.v)} %`)))
         : h('div', { class: 'empty' }, 'Aucun box en alerte.'),
       isClosed(cur()) ? null : h('button', { class: 'btn small', style: { marginTop: '8px' }, onclick: takeOverBoxes }, 'Reprendre l\'état des boxs')),
-    h('div', { class: 'pass-section' }, h('h5', {}, `Observations (${obs.length})`),
-      obs.length
-        ? h('ul', { class: 'pass-obs' }, obs.map((o) => h('li', {}, h('b', {}, o.heure || ''), h('span', {}, o.texte))))
-        : h('div', { class: 'empty' }, 'Aucune observation.')),
-    h('div', { class: 'pass-section' }, h('h5', {}, 'Activité'),
+    h('div', { class: 'pass-section' }, h('h5', {}, icon('note', 13), `Toutes les observations (${obs.length})`),
+      obs.length ? h('ul', { class: 'pass-obs' }, obs.map(obsItem)) : h('div', { class: 'empty' }, 'Aucune observation.')),
+    h('div', { class: 'pass-section' }, h('h5', {}, icon('chart', 13), 'Activité'),
       h('div', { class: 'kv' }, h('span', {}, 'Entrées'), h('b', {}, fmtNum(t.entrees))),
       h('div', { class: 'kv' }, h('span', {}, 'Sorties'), h('b', {}, fmtNum(t.sortiesNb))),
       h('div', { class: 'kv' }, h('span', {}, 'Tonnage'), h('b', {}, fmtTon(t.tonnage))),
@@ -557,6 +759,187 @@ async function takeOverBoxes() {
   toast('État des boxs repris du service précédent — ajustez si besoin.');
 }
 
+/* ---------- Fiche détaillée d'un service ---------- */
+
+async function openFiche(date, service) {
+  await flush();
+  const data = date === S.date && S.data[service] ? S.data[service] : await call(api.loadService(date, service));
+  S.fiche = { date, service, data };
+  renderFiche();
+  const dlg = $('#fiche');
+  if (!dlg.open) dlg.showModal();
+}
+
+function highlight(text, q) {
+  if (!q) return text;
+  const out = [];
+  const lower = text.toLowerCase();
+  const needle = q.toLowerCase();
+  let i = 0;
+  for (let j = lower.indexOf(needle); j !== -1; j = lower.indexOf(needle, i)) {
+    out.push(text.slice(i, j), h('mark', {}, text.slice(j, j + needle.length)));
+    i = j + needle.length;
+  }
+  out.push(text.slice(i));
+  return out;
+}
+
+function obsEntry(o, q = '') {
+  return h('div', { class: `j-entry${o.important ? ' important' : ''}` },
+    h('span', { class: 'je-time' }, o.heure || '—'),
+    h('span', { class: 'je-text' }, o.important ? h('b', {}, '⚠ ') : null, highlight(o.texte, q)),
+    o.auteur ? h('span', { class: 'je-author' }, o.auteur) : h('span'));
+}
+
+function renderFiche() {
+  const { date, service, data: s } = S.fiche;
+  const def = SVC[service];
+  const t = M.totals(s);
+  const obs = realObs(s);
+  const absents = s.absents.filter((a) => a.nom || a.motif);
+  const step = (dir) => {
+    const n = dir < 0 ? M.previousService(date, service) : M.nextService(date, service);
+    return openFiche(n.date, n.service);
+  };
+  const miniBar = (nom, v) => h('div', { class: 'mini-bar' }, h('span', {}, nom),
+    h('div', { class: `bar${v >= M.SEUIL_ALERTE ? ' alert' : ''}` }, h('i', { style: { width: `${Math.min(100, v || 0)}%` } })),
+    h('span', { class: v >= M.SEUIL_ALERTE ? 'red' : '' }, v == null ? '—' : `${fmtNum(v)} %`));
+  const ficheCard = (title, iconName, body) => h('div', { class: 'card' },
+    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon(iconName, 16)), title), h('div', { class: 'card-body' }, body));
+  const subTitle = (txt, top) => h('h4', { class: 'muted', style: { margin: `${top}px 0 6px`, fontSize: '11.5px', letterSpacing: '.6px' } }, txt);
+
+  const body = h('div', { style: svcStyle(service) },
+    h('div', { class: 'fiche-head' },
+      h('span', { class: 'fh-icon' }, icon(def.icon, 26)),
+      h('div', {}, h('div', { class: 'fh-title' }, `Service ${def.label.toLowerCase()} · ${def.horaires}`), h('div', { class: 'fh-sub' }, fmtLongDate(date))),
+      h('div', { class: 'fh-nav' },
+        statePill(s, 'light'),
+        h('button', { class: 'icon-btn', title: 'Service précédent', onclick: () => step(-1) }, icon('chevronLeft')),
+        h('button', { class: 'icon-btn', title: 'Service suivant', onclick: () => step(1) }, icon('chevronRight')),
+        h('button', { class: 'icon-btn', title: 'Fermer', onclick: () => $('#fiche').close() }, icon('x')))),
+    h('div', { class: 'fiche-tabs' }, M.SERVICES.map((d) => h('button', {
+      class: d.id === service ? 'on' : '', style: { '--tc': d.couleur }, onclick: () => openFiche(date, d.id),
+    }, icon(SVC[d.id].icon, 15), d.label))),
+    h('div', { class: 'fiche-content' },
+      h('div', { class: 'fiche-col' },
+        ficheCard(`Observations (${obs.length})`, 'note', obs.length ? h('div', { class: 'fiche-obs' }, obs.map((o) => obsEntry(o))) : h('div', { class: 'empty' }, 'Aucune observation.')),
+        ficheCard('Consignes pour la relève', 'send', s.consignes ? h('div', { class: 'pass-consignes' }, s.consignes) : h('div', { class: 'empty' }, 'Aucune consigne.'))),
+      h('div', { class: 'fiche-col' },
+        ficheCard('Service', 'user', [
+          h('div', { class: 'kv' }, h('span', {}, 'Responsable'), h('b', {}, s.responsable || '—')),
+          h('div', { class: 'kv' }, h('span', {}, 'État'), isClosed(s) ? h('span', {}, `Clôturé le ${fmtDateTime(s.cloture.at)}${s.cloture.par ? ` par ${s.cloture.par}` : ''}`) : h('span', {}, serviceState(s).label)),
+          s.updatedAt ? h('div', { class: 'kv' }, h('span', {}, 'Dernière saisie'), h('span', {}, `${fmtDateTime(s.updatedAt)}${s.updatedBy ? ` · ${s.updatedBy}` : ''}`)) : null,
+          h('div', { class: 'kv' }, h('span', {}, 'Absents'), h('span', {}, absents.length ? absents.map((a) => `${a.nom}${a.motif ? ` (${a.motif})` : ''}`).join(', ') : 'Aucun')),
+        ]),
+        ficheCard('Activité', 'truck', [
+          h('div', { class: 'fiche-kpis' },
+            h('div', {}, h('b', {}, fmtNum(t.entrees)), h('span', {}, `Entrées (${fmtNum(s.entrees.plateaux || 0)} plat. · ${fmtNum(s.entrees.pl || 0)} PL)`)),
+            h('div', {}, h('b', {}, fmtNum(t.sortiesNb)), h('span', {}, 'Sorties')),
+            h('div', {}, h('b', {}, fmtNum(t.tonnage)), h('span', {}, 'Tonnes'))),
+          h('table', { class: 'simple', style: { marginTop: '10px' } },
+            h('tbody', {}, M.MATIERES.filter((m) => s.sorties[m].nb != null || s.sorties[m].tonnage != null).map((m) => h('tr', {},
+              h('td', {}, m), h('td', {}, plural(s.sorties[m].nb || 0, 'sortie')),
+              h('td', {}, M.MATIERES_EXTERNES.includes(m) ? 'externe' : fmtTon(s.sorties[m].tonnage))))),
+            h('tfoot', {}, h('tr', { class: 'tot' }, h('td', {}, 'Total'), h('td', {}, plural(t.sortiesNb, 'sortie')), h('td', {}, fmtTon(t.tonnage))))),
+        ]),
+        ficheCard('État des boxs', 'box', [
+          subTitle('BENNES', 0), M.BENNES.map((b) => miniBar(b, s.bennes[b])),
+          subTitle('PLATEAUX', 10), M.PLATEAUX.map((p) => miniBar(p, s.plateaux[p])),
+        ]))),
+    h('div', { class: 'fiche-foot' },
+      h('span', { class: 'spacer' }),
+      h('button', { class: 'btn ghost', onclick: () => $('#fiche').close() }, 'Fermer'),
+      h('button', {
+        class: 'btn primary',
+        onclick: async () => {
+          $('#fiche').close();
+          if (S.screen !== 'app') {
+            S.date = date;
+            await enterService(service);
+          } else {
+            setView('saisie', { silent: true });
+            await goTo(date, service);
+          }
+        },
+      }, icon('edit', 16), 'Ouvrir en saisie')));
+  $('#fiche-body').replaceChildren(body);
+}
+
+/* ---------- Journal des observations ---------- */
+
+function journalRange() {
+  const p = S.journal.period;
+  if (p === 'jour') return [S.date, S.date];
+  if (p === 'semaine') return [M.addDays(S.date, -6), S.date];
+  const d = M.parseISODate(S.date);
+  const days = M.daysInMonth(d.getFullYear(), d.getMonth() + 1);
+  return [days[0], days[days.length - 1]];
+}
+
+async function renderJournal({ reload = false } = {}) {
+  const J = S.journal;
+  const [from, to] = journalRange();
+  const key = `${from}_${to}`;
+  if (reload || J.key !== key || !J.days) {
+    await flush();
+    J.days = await call(api.loadRange(from, to));
+    J.key = key;
+  }
+  if (!$('#journal-bar')) buildJournalBar();
+  $('#journal-bar').querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.period === J.period));
+  $('#journal-bar').querySelectorAll('.chip[data-svc]').forEach((c) => c.classList.toggle('off', J.hidden.has(c.dataset.svc)));
+  $('#j-imp').classList.toggle('on-red', J.importantOnly);
+
+  const q = J.q.trim();
+  const ql = q.toLowerCase();
+  let count = 0;
+  const groups = [...J.days].reverse().map((day) => {
+    const svcs = M.SERVICES.filter((d) => !J.hidden.has(d.id)).map((d) => {
+      const s = day.services[d.id];
+      let obs = realObs(s);
+      if (J.importantOnly) obs = obs.filter((o) => o.important);
+      if (ql) obs = obs.filter((o) => o.texte.toLowerCase().includes(ql) || (o.auteur || '').toLowerCase().includes(ql));
+      const showConsignes = s.consignes && !J.importantOnly && (!ql || s.consignes.toLowerCase().includes(ql));
+      if (!obs.length && !showConsignes) return null;
+      count += obs.length;
+      return h('div', { class: 'j-svc', style: svcStyle(d.id) },
+        h('div', { class: 'j-svc-head' },
+          h('span', { class: 'js-ico' }, icon(SVC[d.id].icon, 18)),
+          h('span', { class: 'js-name' }, `${d.label} · ${d.horaires}`),
+          h('span', { class: 'js-resp' }, s.responsable ? `Responsable : ${s.responsable}` : ''),
+          statePill(s),
+          h('button', { class: 'btn small ghost', onclick: () => openFiche(day.date, d.id) }, icon('eye', 14), 'Fiche'),
+          h('button', { class: 'btn small ghost', onclick: () => { setView('saisie', { silent: true }); goTo(day.date, d.id); } }, icon('edit', 14), 'Saisie')),
+        obs.map((o) => obsEntry(o, q)),
+        showConsignes ? h('div', { class: 'j-consignes' }, h('div', { class: 'pass-consignes' }, h('b', {}, 'Consignes relève : '), highlight(s.consignes, q))) : null);
+    }).filter(Boolean);
+    if (!svcs.length) return null;
+    return h('div', { class: 'j-day' }, h('h3', { class: 'j-day-title' }, fmtLongDate(day.date)), svcs);
+  }).filter(Boolean);
+
+  $('#j-count').textContent = plural(count, 'observation');
+  $('#journal-list').replaceChildren(...(groups.length ? groups : [h('div', { class: 'j-empty' }, icon('note', 32),
+    h('p', {}, ql || J.importantOnly ? 'Aucune observation ne correspond à la recherche.' : 'Aucune observation sur cette période.'))]));
+}
+
+function buildJournalBar() {
+  const J = S.journal;
+  const bar = h('div', { class: 'journal-bar', id: 'journal-bar' },
+    h('div', { class: 'search' }, icon('search', 16),
+      h('input', { type: 'text', id: 'j-search', placeholder: 'Rechercher dans les observations et consignes…', value: J.q, oninput: (e) => { J.q = e.target.value; renderJournal(); } })),
+    h('div', { class: 'seg' }, [['jour', 'Journée'], ['semaine', '7 jours'], ['mois', 'Mois']].map(([p, label]) => h('button', {
+      'data-period': p, onclick: () => { J.period = p; renderJournal(); },
+    }, label))),
+    M.SERVICES.map((d) => h('button', {
+      class: 'chip', 'data-svc': d.id, style: { '--c': d.couleur },
+      onclick: () => { if (J.hidden.has(d.id)) J.hidden.delete(d.id); else J.hidden.add(d.id); renderJournal(); },
+    }, h('span', { class: 'sw' }), d.label)),
+    h('button', { class: 'chip', id: 'j-imp', onclick: () => { J.importantOnly = !J.importantOnly; renderJournal(); } }, icon('flag', 13), 'Importantes'),
+    h('span', { class: 'muted', id: 'j-count' }),
+    h('button', { class: 'btn accent small', onclick: openQuickObs }, icon('plus', 15), 'Observation'));
+  $('#journal').replaceChildren(bar, h('div', { id: 'journal-list' }));
+}
+
 /* ---------- Navigation ---------- */
 
 async function goTo(date, service = S.service) {
@@ -565,13 +948,15 @@ async function goTo(date, service = S.service) {
   S.service = service;
   S.conflict = null;
   await loadDay();
+  renderSaisie();
   if (S.view === 'recap') {
     const d = M.parseISODate(date);
     S.recapMonth = { year: d.getFullYear(), month: d.getMonth() + 1 };
     await renderRecap();
   }
-  renderSaisie();
-  setStatus(cur().updatedAt ? `Dernier enregistrement ${fmtDateTime(cur().updatedAt)}${cur().updatedBy ? ` · ${cur().updatedBy}` : ''}` : 'Aucune saisie pour ce service');
+  if (S.view === 'journal') await renderJournal();
+  const c = cur();
+  setStatus(c.updatedAt ? `Dernier enregistrement ${fmtDateTime(c.updatedAt)}${c.updatedBy ? ` · ${c.updatedBy}` : ''}` : 'Aucune saisie pour ce service');
 }
 
 async function switchService(id) {
@@ -582,21 +967,24 @@ async function switchService(id) {
   renderSaisie();
 }
 
-function setView(view) {
+function setView(view, { silent = false } = {}) {
   S.view = view;
   document.querySelectorAll('.view-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $('#view-saisie').hidden = view !== 'saisie';
+  $('#view-journal').hidden = view !== 'journal';
   $('#view-recap').hidden = view !== 'recap';
+  if (silent) return;
   if (view === 'recap') {
     const d = M.parseISODate(S.date);
     S.recapMonth = { year: d.getFullYear(), month: d.getMonth() + 1 };
     flush().then(renderRecap);
   }
+  if (view === 'journal') renderJournal({ reload: true }).then(() => $('#j-search').focus());
 }
 
 // Recharge les services modifiés depuis un autre poste.
 async function poll() {
-  if (document.hidden || S.view !== 'saisie' || S.saving) return;
+  if (document.hidden || S.screen !== 'app' || S.view !== 'saisie' || S.saving || $('#fiche').open) return;
   let revs;
   try {
     revs = await call(api.dayRevs(S.date));
@@ -611,10 +999,11 @@ async function poll() {
     S.data[id] = await call(api.loadService(S.date, id));
     changed = true;
     if (id === S.service) {
-      const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.bind : null;
+      const active = document.activeElement;
+      const focused = active && active.dataset && active.dataset.bind ? `[data-bind="${active.dataset.bind}"]` : active && active.id ? `#${active.id}` : null;
       renderForm();
       if (focused) {
-        const el = document.querySelector(`[data-bind="${focused}"]`);
+        const el = document.querySelector(focused);
         if (el) el.focus();
       }
       toast(`Service mis à jour depuis le poste ${S.data[id].updatedBy || 'distant'}.`);
@@ -643,8 +1032,9 @@ async function renderRecap() {
   const days = await call(api.loadMonth(year, month));
   const parMatiere = Object.fromEntries(M.MATIERES.map((m) => [m, { nb: 0, tonnage: 0 }]));
   const parMotif = {};
-  const tot = { plateaux: 0, pl: 0, entrees: 0, nb: 0, tonnage: 0, absents: 0, clos: 0, saisis: 0 };
+  const tot = { plateaux: 0, pl: 0, entrees: 0, nb: 0, tonnage: 0, absents: 0, clos: 0, saisis: 0, obs: 0 };
   const n = (v) => (typeof v === 'number' ? v : 0);
+  const today = M.toISODate(new Date());
 
   const rows = days.map((d) => {
     const row = { plateaux: 0, pl: 0, nb: 0, tonnage: 0, absents: 0, obs: 0, alerts: 0 };
@@ -667,69 +1057,82 @@ async function renderRecap() {
         const k = a.motif || 'Non précisé';
         parMotif[k] = (parMotif[k] || 0) + 1;
       }
-      row.obs += s.observations.filter((o) => o.texte).length;
-      row.alerts += boxAlerts(s).length;
+      const obs = realObs(s);
+      row.obs += obs.length;
+      row.alerts += boxAlerts(s).length + obs.filter((o) => o.important).length;
       const cls = isClosed(s) ? 'done' : empty ? '' : 'draft';
-      return h('span', { class: `dot ${cls}`, style: { '--c': def.couleur }, title: `${def.label} : ${isClosed(s) ? 'clôturé' : empty ? 'vide' : 'non clôturé'}${s.responsable ? ` — ${s.responsable}` : ''}` });
+      return h('button', {
+        class: `dot ${cls}`, style: { '--c': def.couleur },
+        title: `${def.label} : ${isClosed(s) ? 'clôturé' : empty ? 'vide' : 'non clôturé'}${s.responsable ? ` — ${s.responsable}` : ''} (voir la fiche)`,
+        onclick: (e) => { e.stopPropagation(); openFiche(d.date, def.id); },
+      });
     });
     tot.plateaux += row.plateaux;
     tot.pl += row.pl;
     tot.nb += row.nb;
     tot.tonnage += row.tonnage;
     tot.absents += row.absents;
+    tot.obs += row.obs;
     const wd = M.parseISODate(d.date).getDay();
-    return h('tr', { class: wd === 0 || wd === 6 ? 'weekend' : '', onclick: () => { setView('saisie'); goTo(d.date); } },
-      h('td', {}, fmtShortDate(d.date)),
-      h('td', {}, h('span', { class: 'dots' }, dots)),
-      h('td', {}, row.plateaux || ''), h('td', {}, row.pl || ''), h('td', {}, h('b', {}, row.plateaux + row.pl || '')),
-      h('td', {}, row.nb || ''), h('td', {}, row.tonnage ? fmtTon(row.tonnage) : ''),
-      h('td', {}, row.absents || ''), h('td', {}, row.obs || ''),
-      h('td', {}, row.alerts ? h('span', { class: 'pill alert' }, row.alerts) : ''));
+    const firstFilled = M.SERVICES.find((def) => !M.isEmpty(d.services[def.id]));
+    return h('tr', {
+      class: `${wd === 0 || wd === 6 ? 'weekend' : ''}${d.date === today ? ' today' : ''}`,
+      title: 'Voir le détail de la journée',
+      onclick: () => openFiche(d.date, firstFilled ? firstFilled.id : 'matin'),
+    },
+    h('td', {}, fmtShortDate(d.date)),
+    h('td', {}, h('span', { class: 'dots' }, dots)),
+    h('td', {}, row.plateaux || ''), h('td', {}, row.pl || ''), h('td', {}, h('b', {}, row.plateaux + row.pl || '')),
+    h('td', {}, row.nb || ''), h('td', {}, row.tonnage ? fmtTon(row.tonnage) : ''),
+    h('td', {}, row.absents || ''), h('td', {}, row.obs || ''),
+    h('td', {}, row.alerts ? h('span', { class: 'pill alert' }, row.alerts) : ''));
   });
   tot.entrees = tot.plateaux + tot.pl;
 
-  const prevMonth = () => {
-    const d = new Date(year, month - 2, 1);
+  const moveMonth = (delta) => {
+    const d = new Date(year, month - 1 + delta, 1);
     S.recapMonth = { year: d.getFullYear(), month: d.getMonth() + 1 };
     renderRecap();
   };
-  const nextMonth = () => {
-    const d = new Date(year, month, 1);
-    S.recapMonth = { year: d.getFullYear(), month: d.getMonth() + 1 };
-    renderRecap();
-  };
-  const kpi = (label, value) => h('div', { class: 'kpi' }, h('div', { class: 'k-label' }, label), h('div', { class: 'k-value' }, value));
+  const kpi = (label, value, iconName, color, soft) => h('div', { class: 'kpi', style: { '--k': color, '--k-soft': soft } },
+    h('span', { class: 'k-icon' }, icon(iconName, 20)), h('div', {}, h('div', { class: 'k-label' }, label), h('div', { class: 'k-value' }, value)));
+  const maxTon = Math.max(1, ...M.MATIERES.map((m) => parMatiere[m].tonnage));
+  const maxNb = Math.max(1, ...M.MATIERES.map((m) => parMatiere[m].nb));
 
   $('#recap').replaceChildren(
     h('div', { class: 'recap-head' },
-      h('button', { class: 'icon-btn', onclick: prevMonth, 'aria-label': 'Mois précédent' }, '‹'),
+      h('button', { class: 'icon-btn', onclick: () => moveMonth(-1), 'aria-label': 'Mois précédent' }, icon('chevronLeft')),
       h('h2', {}, fmtMonth(year, month)),
-      h('button', { class: 'icon-btn', onclick: nextMonth, 'aria-label': 'Mois suivant' }, '›'),
-      h('span', { class: 'spacer', style: { flex: 1 } }),
-      h('button', { class: 'btn primary', onclick: () => exportMonth(year, month) }, 'Exporter ce mois en Excel')),
+      h('button', { class: 'icon-btn', onclick: () => moveMonth(1), 'aria-label': 'Mois suivant' }, icon('chevronRight')),
+      h('span', { class: 'spacer' }),
+      h('button', { class: 'btn primary', onclick: () => exportMonth(year, month) }, icon('download', 16), 'Exporter ce mois en Excel')),
     h('div', { class: 'kpis' },
-      kpi('Entrées (passages)', fmtNum(tot.entrees)),
-      kpi('Sorties', fmtNum(tot.nb)),
-      kpi('Tonnage sorti', fmtTon(tot.tonnage)),
-      kpi('Services clôturés', `${tot.clos} / ${days.length * 3}`)),
+      kpi('Entrées (passages)', fmtNum(tot.entrees), 'truck', '#2e75b6', '#e7f1fb'),
+      kpi('Sorties · tonnage', `${fmtNum(tot.nb)} · ${fmtNum(Math.round(tot.tonnage * 10) / 10)} T`, 'upload', '#c55a11', '#fdf0e6'),
+      kpi('Observations', fmtNum(tot.obs), 'note', '#8e44ad', '#f3e8fa'),
+      kpi('Services clôturés', `${tot.clos} / ${days.length * 3}`, 'lock', '#1f8a4c', '#e5f6ec')),
     h('div', { class: 'recap-grid' },
-      h('div', { class: 'card' }, h('div', { class: 'card-head' }, 'Par jour', h('span', { class: 'hint' }, 'Cliquer sur un jour pour l\'ouvrir')),
+      h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('list', 16)), 'Par jour', h('span', { class: 'hint' }, 'Cliquer sur un jour ou une pastille pour voir le détail')),
         h('div', { class: 'card-body' },
           h('table', { class: 'grid recap' },
             h('thead', {}, h('tr', {}, ['Jour', 'Services', 'Plateaux', 'PL', 'Entrées', 'Sorties', 'Tonnage', 'Absents', 'Obs.', 'Alertes'].map((x) => h('th', {}, x)))),
             h('tbody', {}, rows),
             h('tfoot', {}, h('tr', {}, h('td', {}, 'Total'), h('td', {}, `${tot.saisis} saisis`), h('td', {}, fmtNum(tot.plateaux)), h('td', {}, fmtNum(tot.pl)),
-              h('td', {}, fmtNum(tot.entrees)), h('td', {}, fmtNum(tot.nb)), h('td', {}, fmtTon(tot.tonnage)), h('td', {}, tot.absents), h('td', {}), h('td', {})))),
+              h('td', {}, fmtNum(tot.entrees)), h('td', {}, fmtNum(tot.nb)), h('td', {}, fmtTon(tot.tonnage)), h('td', {}, tot.absents), h('td', {}, tot.obs), h('td', {})))),
           h('div', { class: 'legend' },
             M.SERVICES.map((def) => h('span', {}, h('span', { class: 'dot done', style: { '--c': def.couleur } }), ` ${def.label}`)),
             h('span', {}, '● clôturé · ◐ non clôturé · ○ vide')))),
       h('div', { class: 'recap-side' },
-        h('div', { class: 'card' }, h('div', { class: 'card-head' }, 'Sorties par matière'),
-          h('div', { class: 'card-body' }, h('table', { class: 'grid recap' },
-            h('thead', {}, h('tr', {}, h('th', {}, 'Matière'), h('th', {}, 'Nb'), h('th', {}, 'Tonnage'))),
-            h('tbody', {}, M.MATIERES.map((m) => h('tr', { style: { cursor: 'default' } }, h('td', {}, m), h('td', {}, fmtNum(parMatiere[m].nb)),
-              h('td', {}, M.MATIERES_EXTERNES.includes(m) ? h('span', { class: 'muted' }, 'externe') : fmtTon(parMatiere[m].tonnage)))))))),
-        h('div', { class: 'card' }, h('div', { class: 'card-head' }, 'Absences par motif'),
+        h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('upload', 16)), 'Sorties par matière'),
+          h('div', { class: 'card-body' }, M.MATIERES.map((m) => {
+            const ext = M.MATIERES_EXTERNES.includes(m);
+            const ratio = ext ? parMatiere[m].nb / maxNb : parMatiere[m].tonnage / maxTon;
+            return h('div', { class: 'matiere-row' }, h('span', {}, m),
+              h('div', { class: 'bar' }, h('i', { style: { width: `${Math.round(ratio * 100)}%` } })),
+              h('b', {}, fmtNum(parMatiere[m].nb)),
+              h('span', {}, ext ? 'externe' : fmtTon(parMatiere[m].tonnage)));
+          }))),
+        h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('users', 16)), 'Absences par motif'),
           h('div', { class: 'card-body' }, Object.keys(parMotif).length
             ? Object.entries(parMotif).sort((a, b) => b[1] - a[1]).map(([k, v]) => h('div', { class: 'kv' }, h('span', {}, k), h('b', {}, v)))
             : h('div', { class: 'empty' }, 'Aucune absence saisie.'))))));
@@ -788,7 +1191,6 @@ async function doImport() {
     const res = await call(api.runImport(info.file, { overwrite: r === 'overwrite' }));
     toast(`${res.written} service(s) importé(s)${res.skipped ? `, ${res.skipped} conservé(s)` : ''}.`);
     await goTo(S.date);
-    if (S.view === 'recap') await renderRecap();
   } catch (err) {
     ask('Import impossible', err.message, [{ label: 'OK', value: 'ok', cls: 'primary' }]);
   }
@@ -802,16 +1204,15 @@ function buildPrint() {
     const lines = M.layoutObservations(s);
     while (lines.length < M.NB_OBSERVATIONS) lines.push({ heure: '', texte: '' });
     const pctCell = (v) => h('td', { class: `c${v >= M.SEUIL_ALERTE ? ' red' : ''}` }, v == null ? '' : `${fmtNum(v)} %`);
-    const boxRows = Array.from({ length: 8 }, (_, i) => {
-      const m = M.MATIERES[i];
-      const ext = M.MATIERES_EXTERNES.includes(m);
+    const noBorder = () => h('td', { style: { border: 0 } });
+    const boxRows = M.MATIERES.map((m, i) => {
       const b = M.BENNES[i];
       const p = M.PLATEAUX[i];
       return h('tr', {},
         h('td', {}, m), h('td', { class: 'c' }, s.sorties[m].nb ?? ''),
-        ext ? h('td', { class: 'ext' }, 'service externe') : h('td', { class: 'c' }, s.sorties[m].tonnage != null ? fmtTon(s.sorties[m].tonnage) : ''),
-        b ? h('td', {}, b) : h('td', { style: { border: 0 } }), b ? pctCell(s.bennes[b]) : h('td', { style: { border: 0 } }),
-        p ? h('td', {}, p) : h('td', { style: { border: 0 } }), p ? pctCell(s.plateaux[p]) : h('td', { style: { border: 0 } }));
+        M.MATIERES_EXTERNES.includes(m) ? h('td', { class: 'ext' }, 'service externe') : h('td', { class: 'c' }, s.sorties[m].tonnage != null ? fmtTon(s.sorties[m].tonnage) : ''),
+        b ? h('td', {}, b) : noBorder(), b ? pctCell(s.bennes[b]) : noBorder(),
+        p ? h('td', {}, p) : noBorder(), p ? pctCell(s.plateaux[p]) : noBorder());
     });
     return h('div', { class: 'p-page', style: { '--c': def.couleur } },
       h('div', { class: 'p-title' }, 'MAIN COURANTE  ·  TRONC PRINCIPAL'),
@@ -846,33 +1247,65 @@ async function doPrint() {
 
 /* ---------- Paramètres ---------- */
 
-function openSettings() {
-  const dlg = $('#settings');
-  $('#set-poste').value = S.config.poste || '';
-  $('#set-dir').value = S.config.dataDir;
-  dlg.showModal();
+let settingsUsers = [];
+
+function renderSettingsUsers() {
+  $('#set-users').replaceChildren(...(settingsUsers.length
+    ? settingsUsers.map((u, i) => h('span', { class: 'chip' }, u,
+      h('button', { type: 'button', title: `Retirer ${u}`, onclick: () => { settingsUsers.splice(i, 1); renderSettingsUsers(); } }, icon('x', 14))))
+    : [h('span', { class: 'muted' }, 'Aucun responsable.')]));
 }
 
-async function initSettings() {
+function openSettings() {
+  $('#set-poste').value = S.config.poste || '';
+  $('#set-dir').value = S.config.dataDir;
+  settingsUsers = [...S.users];
+  renderSettingsUsers();
+  $('#settings').showModal();
+}
+
+function initSettings() {
   $('#btn-settings').addEventListener('click', openSettings);
+  $('#btn-settings-welcome').addEventListener('click', openSettings);
   $('#set-dir-btn').addEventListener('click', async () => {
     const dir = await call(api.chooseDir());
     if (dir) $('#set-dir').value = dir;
+  });
+  const addUser = () => {
+    const v = $('#set-user-new').value.trim();
+    if (v && !settingsUsers.includes(v)) settingsUsers.push(v);
+    $('#set-user-new').value = '';
+    renderSettingsUsers();
+  };
+  $('#set-user-add').addEventListener('click', addUser);
+  $('#set-user-new').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addUser();
+    }
   });
   $('#set-open').addEventListener('click', () => call(api.openDataDir()));
   $('#settings').addEventListener('close', async () => {
     if ($('#settings').returnValue !== 'save') return;
     await flush();
+    const dirChanged = $('#set-dir').value !== S.config.dataDir;
     S.config = await call(api.setConfig({ poste: $('#set-poste').value.trim(), dataDir: $('#set-dir').value }));
-    await goTo(S.date);
+    // Un dossier partagé qui a déjà sa liste de responsables la garde.
+    const existing = dirChanged ? await call(api.loadUsers()) : [];
+    S.users = await call(api.saveUsers(dirChanged && existing.length ? existing : settingsUsers));
     toast('Paramètres enregistrés.');
+    if (S.screen === 'user') renderUserScreen();
+    else if (S.screen === 'service') renderServiceScreen();
+    else await goTo(S.date);
   });
 }
 
 /* ---------- Démarrage ---------- */
 
 async function init() {
+  decorate();
   S.config = await call(api.getConfig());
+  S.users = await call(api.loadUsers());
   const live = M.currentService();
   S.date = live.date;
   S.service = live.service;
@@ -882,37 +1315,73 @@ async function init() {
   form.addEventListener('focusout', onFormBlur);
   form.addEventListener('keydown', onFormKey);
 
+  // Écran de choix du service
+  const liveFor = () => (M.currentService().date === S.date ? M.currentService().service : 'matin');
+  $('#btn-back-user').addEventListener('click', backToUsers);
+  $('#svc-prev-day').addEventListener('click', () => { S.date = M.addDays(S.date, -1); renderServiceScreen(); });
+  $('#svc-next-day').addEventListener('click', () => { S.date = M.addDays(S.date, 1); renderServiceScreen(); });
+  $('#svc-today').addEventListener('click', () => { S.date = M.currentService().date; renderServiceScreen(); });
+  $('#svc-date-input').addEventListener('change', (e) => { if (e.target.value) { S.date = e.target.value; renderServiceScreen(); } });
+  $('#btn-go-journal').addEventListener('click', async () => {
+    await enterService(liveFor(), 'journal');
+    setView('journal');
+  });
+  $('#btn-go-recap').addEventListener('click', async () => {
+    await enterService(liveFor(), 'recap');
+    setView('recap');
+  });
+
+  // Main courante
   $('#prev-day').addEventListener('click', () => goTo(M.addDays(S.date, -1)));
   $('#next-day').addEventListener('click', () => goTo(M.addDays(S.date, 1)));
   $('#date-input').addEventListener('change', (e) => e.target.value && goTo(e.target.value));
   $('#btn-now').addEventListener('click', () => {
     const l = M.currentService();
-    setView('saisie');
+    setView('saisie', { silent: true });
     goTo(l.date, l.service);
   });
   document.querySelectorAll('.view-btn').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+  $('#btn-user').addEventListener('click', async () => {
+    await flush();
+    renderServiceScreen();
+  });
+  $('#btn-quick-obs').addEventListener('click', openQuickObs);
+  $('#quickobs').addEventListener('close', onQuickObsClose);
+  $('#qo-texte').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      $('#quickobs').close('ok');
+    }
+  });
   $('#btn-export-day').addEventListener('click', exportDay);
   $('#btn-export-month').addEventListener('click', () => exportMonth());
   $('#btn-import').addEventListener('click', doImport);
   $('#btn-print').addEventListener('click', doPrint);
-  await initSettings();
+  $('#fiche').addEventListener('click', (e) => {
+    if (e.target === $('#fiche')) $('#fiche').close(); // clic en dehors de la fiche
+  });
+  initSettings();
 
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const k = e.key.toLowerCase();
+    if (k === 's') {
       e.preventDefault();
       flush();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+    } else if (k === 'p' && S.screen === 'app') {
       e.preventDefault();
       doPrint();
+    } else if (k === 'o' && S.screen === 'app') {
+      e.preventDefault();
+      openQuickObs();
     }
   });
   window.addEventListener('beforeunload', () => {
     if (S.dirty) save();
   });
 
-  await goTo(S.date, S.service);
-  if (S.config.firstRun || !S.config.poste) openSettings();
+  renderUserScreen();
+  if (S.config.firstRun) openSettings();
   setInterval(poll, POLL_MS);
 }
 
