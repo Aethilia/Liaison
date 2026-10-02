@@ -25,11 +25,17 @@ jobs:
         with:
           name: Liaison-windows
           path: dist/*.exe
-      # Sur un tag vX.Y.Z : page de téléchargement (Release) avec les deux exécutables.
+      - id: version
+        shell: bash
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      # Lancement manuel ou tag vX.Y.Z : page de téléchargement (Release) avec les
+      # deux exécutables ; le tag est créé à partir de la version de package.json.
       - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.event_name != 'pull_request'
         with:
-          name: Liaison ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Liaison ${{ steps.version.outputs.tag }}
           files: |
             dist/Liaison-Installation-*.exe
             dist/Liaison-Portable-*.exe
