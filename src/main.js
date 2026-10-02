@@ -7,6 +7,8 @@ const path = require('path');
 const { Store, ConflictError } = require('./core/store');
 const { exportWorkbook, importWorkbook } = require('./core/excel');
 const M = require('./core/model');
+const { spawn } = require('child_process');
+const { UPDATE_DIR, findUpdate } = require('./core/update');
 
 // Interface en français (heures sur 24 h dans les champs horaires).
 app.commandLine.appendSwitch('lang', 'fr-FR');
@@ -159,6 +161,41 @@ handle('excel:import', async (file, { overwrite = false } = {}) => {
     }
   }
   return { written, skipped };
+});
+
+// Mises à jour : nouvel installateur déposé dans <dossier des données>/mises-a-jour.
+const PORTABLE_EXE = process.env.PORTABLE_EXECUTABLE_FILE || null;
+const updateKind = () => (PORTABLE_EXE ? 'portable' : 'installation');
+
+handle('update:check', () => {
+  const dir = path.join(config.dataDir, UPDATE_DIR);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch { /* dossier en lecture seule : on vérifie quand même */ }
+  return { current: app.getVersion(), kind: updateKind(), dir, update: app.isPackaged ? findUpdate(config.dataDir, app.getVersion(), updateKind()) : null };
+});
+
+handle('update:install', () => {
+  const update = findUpdate(config.dataDir, app.getVersion(), updateKind());
+  if (!update) throw new Error('Aucune nouvelle version trouvée dans le dossier des mises à jour.');
+  if (PORTABLE_EXE) {
+    // On ne peut pas remplacer l'exécutable en cours : la nouvelle version est copiée à côté.
+    const target = path.join(path.dirname(PORTABLE_EXE), path.basename(update.file));
+    fs.copyFileSync(update.file, target);
+    spawn(target, [], { detached: true, stdio: 'ignore' }).unref();
+  } else {
+    // Copie locale puis installation silencieuse ; l'application se relance seule.
+    const local = path.join(app.getPath('temp'), path.basename(update.file));
+    fs.copyFileSync(update.file, local);
+    spawn(local, ['/S', '--force-run'], { detached: true, stdio: 'ignore' }).unref();
+  }
+  setTimeout(() => app.quit(), 500);
+  return update.version;
+});
+handle('update:openDir', () => {
+  const dir = path.join(config.dataDir, UPDATE_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  return shell.openPath(dir);
 });
 
 handle('print', () => new Promise((resolve, reject) => {

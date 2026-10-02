@@ -60,6 +60,17 @@ Excel mensuel (**Exporter le mois**) en garde aussi une copie au format habituel
 
 ## 6. Mettre à jour l'application
 
-Une nouvelle version sera publiée sur la même page de téléchargement : il suffit
-de réinstaller par-dessus. Les données (dans le dossier commun) ne sont pas
-touchées.
+À partir de la version 1.1.0, la mise à jour se fait depuis le dossier commun :
+
+1. Télécharger le nouvel installateur `Liaison-Installation-x.y.z.exe` sur la
+   page de téléchargement (<https://github.com/Aethilia/Liaison/releases/latest>).
+2. Le déposer dans le sous-dossier **`mises-a-jour`** du dossier commun (créé
+   automatiquement ; bouton *Dossier des mises à jour* dans les paramètres).
+   Pour les postes en version portable, y déposer aussi `Liaison-Portable-x.y.z.exe`.
+3. Chaque poste affiche « **Nouvelle version disponible** » au démarrage (et
+   toutes les 30 minutes) : cliquer sur **Installer**. L'application enregistre
+   les saisies, se ferme, s'installe et se relance seule.
+
+Les données ne sont jamais touchées par une mise à jour. Les postes encore en
+1.0.0 doivent installer la 1.1.0 une fois à la main (elle apporte cette
+fonction) ; ensuite tout passe par le dossier commun.

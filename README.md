@@ -94,8 +94,10 @@ npm test         # tests du modèle, du stockage et de l'export/import Excel
 npm run dist     # construit l'installateur et la version portable Windows (dossier dist/)
 ```
 
-Le workflow GitHub Actions `Build Windows` (lancé à la main, sur un tag `v*` ou
-sur une pull request) produit les exécutables Windows en artefact téléchargeable.
+Pour publier une version : augmenter `version` dans `package.json`, puis lancer
+le workflow GitHub Actions `Build Windows` (à la main). Il crée la Release `vX.Y.Z`
+avec l'installateur et la version portable, à déposer ensuite dans le dossier
+`mises-a-jour` du dossier commun (voir [PARTAGE.md](PARTAGE.md)).
 
 ### Organisation du code
 
@@ -103,6 +105,7 @@ sur une pull request) produit les exécutables Windows en artefact téléchargea
 | --- | --- |
 | `src/core/model.js` | Structure d'un service, totaux, ordre de relève (partagé avec l'interface) |
 | `src/core/store.js` | Lecture/écriture des fichiers, détection des conflits entre postes |
+| `src/core/update.js` | Détection d'une nouvelle version dans `<dossier des données>/mises-a-jour` |
 | `src/core/excel.js` | Export/import au format du classeur à partir de `assets/modele.xlsx` |
 | `src/main.js`, `src/preload.js` | Processus Electron, dialogues fichiers, configuration |
 | `src/renderer/` | Interface (HTML/CSS/JS sans framework, pictogrammes dans `icons.js`) |

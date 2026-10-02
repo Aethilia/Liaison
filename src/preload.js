@@ -22,4 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   pickImport: call('excel:pick'),
   runImport: call('excel:import'),
   print: call('print'),
+  checkUpdate: call('update:check'),
+  installUpdate: call('update:install'),
+  openUpdateDir: call('update:openDir'),
 });

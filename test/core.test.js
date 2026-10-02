@@ -111,3 +111,17 @@ test('conversion des heures', () => {
   assert.equal(cellToTime(new Date(Date.UTC(1899, 11, 30, 7, 5))), '07:05');
   assert.equal(cellToTime('7h05'), '07:05');
 });
+
+test('mises à jour : détection de la version la plus récente dans le dossier commun', () => {
+  const { findUpdate, compareVersions } = require('../src/core/update');
+  const dir = tmp();
+  assert.equal(findUpdate(dir, '1.0.0'), null);
+  fs.mkdirSync(path.join(dir, 'mises-a-jour'));
+  for (const f of ['Liaison-Installation-1.0.0.exe', 'Liaison-Installation-1.2.0.exe', 'Liaison-Installation-1.10.0.exe', 'Liaison-Portable-1.3.0.exe', 'autre.exe']) {
+    fs.writeFileSync(path.join(dir, 'mises-a-jour', f), '');
+  }
+  assert.equal(compareVersions('1.10.0', '1.9.9'), 1);
+  assert.equal(findUpdate(dir, '1.0.0').version, '1.10.0');
+  assert.equal(findUpdate(dir, '1.10.0'), null);
+  assert.equal(findUpdate(dir, '1.0.0', 'portable').version, '1.3.0');
+});

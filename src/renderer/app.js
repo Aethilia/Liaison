@@ -1245,6 +1245,59 @@ async function doPrint() {
   }
 }
 
+/* ---------- Mises à jour ---------- */
+
+const UPDATE_CHECK_MS = 30 * 60 * 1000;
+let updateInfo = null;
+let updateDismissed = null;
+
+async function checkUpdate() {
+  try {
+    updateInfo = await call(api.checkUpdate());
+  } catch {
+    return;
+  }
+  const u = updateInfo.update;
+  const banner = $('#update-banner');
+  if (!u || updateDismissed === u.version) {
+    banner.hidden = true;
+    return;
+  }
+  $('#update-title').textContent = `Nouvelle version ${u.version} disponible`;
+  $('#update-sub').textContent = `Version actuelle : ${updateInfo.current}. L'installation prend environ 30 secondes.`;
+  banner.hidden = false;
+}
+
+async function installUpdate() {
+  const u = updateInfo && updateInfo.update;
+  if (!u) return;
+  const portable = updateInfo.kind === 'portable';
+  const r = await ask(`Installer la version ${u.version} ?`,
+    portable
+      ? 'Les saisies sont enregistrées, puis la nouvelle version est copiée à côté de celle-ci et lancée. Vous pourrez supprimer l\'ancien fichier.'
+      : 'Les saisies sont enregistrées, puis l\'application se ferme, s\'installe et se relance toute seule. Vos données ne sont pas modifiées.',
+    [{ label: 'Annuler', value: 'no' }, { label: 'Installer maintenant', value: 'yes', cls: 'primary' }]);
+  if (r !== 'yes') return;
+  await flush();
+  try {
+    await call(api.installUpdate());
+    toast('Installation en cours… l\'application va redémarrer.', 10000);
+  } catch (err) {
+    ask('Mise à jour impossible', err.message, [{ label: 'OK', value: 'ok', cls: 'primary' }]);
+  }
+}
+
+function initUpdates() {
+  $('#update-install').addEventListener('click', installUpdate);
+  $('#update-later').addEventListener('click', () => {
+    updateDismissed = updateInfo && updateInfo.update ? updateInfo.update.version : null;
+    $('#update-banner').hidden = true;
+  });
+  $('#set-update-dir').addEventListener('click', () => call(api.openUpdateDir()));
+  checkUpdate();
+  setInterval(checkUpdate, UPDATE_CHECK_MS);
+}
+
 /* ---------- Paramètres ---------- */
 
 let settingsUsers = [];
@@ -1261,6 +1314,7 @@ function openSettings() {
   $('#set-dir').value = S.config.dataDir;
   settingsUsers = [...S.users];
   renderSettingsUsers();
+  $('#set-version').textContent = updateInfo ? `Liaison ${updateInfo.current}${updateInfo.update ? ` — version ${updateInfo.update.version} disponible` : ' — à jour'}` : '';
   $('#settings').showModal();
 }
 
@@ -1294,6 +1348,7 @@ function initSettings() {
     const existing = dirChanged ? await call(api.loadUsers()) : [];
     S.users = await call(api.saveUsers(dirChanged && existing.length ? existing : settingsUsers));
     toast('Paramètres enregistrés.');
+    checkUpdate();
     if (S.screen === 'user') renderUserScreen();
     else if (S.screen === 'service') renderServiceScreen();
     else await goTo(S.date);
@@ -1361,6 +1416,7 @@ async function init() {
     if (e.target === $('#fiche')) $('#fiche').close(); // clic en dehors de la fiche
   });
   initSettings();
+  initUpdates();
 
   document.addEventListener('keydown', (e) => {
     if (!(e.ctrlKey || e.metaKey)) return;

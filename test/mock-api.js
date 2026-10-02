@@ -36,5 +36,8 @@
     pickImport: () => ok(null),
     runImport: () => ok({ written: 0, skipped: 0 }),
     print: () => ok(true),
+    checkUpdate: () => ok({ current: '1.0.0', kind: 'installation', dir: 'C:\\Partage\\Liaison\\mises-a-jour', update: window.__update || null }),
+    installUpdate: () => ok('1.1.0'),
+    openUpdateDir: () => ok(true),
   };
 })();

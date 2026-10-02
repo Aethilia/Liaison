@@ -144,6 +144,14 @@
         </div>
         <small>Liste commune à tous les postes qui utilisent le même dossier.</small>
       </div>
+      <div class="field">
+        <span>Version</span>
+        <div class="row version-row">
+          <span id="set-version" class="muted"></span>
+          <button type="button" id="set-update-dir" class="btn ghost small">Dossier des mises à jour</button>
+        </div>
+        <small>Pour mettre à jour tous les postes, déposez le nouvel installateur (Liaison-Installation-x.y.z.exe) dans ce dossier.</small>
+      </div>
       <div class="dialog-actions">
         <button type="button" id="set-open" class="btn ghost">Ouvrir le dossier</button>
         <span class="spacer"></span>
@@ -196,6 +204,17 @@
   <dialog id="fiche" class="fiche-dialog">
     <div id="fiche-body"></div>
   </dialog>
+
+  <!-- Nouvelle version déposée dans le dossier commun -->
+  <div id="update-banner" class="update-banner" hidden>
+    <span class="ub-icon" data-icon="download"></span>
+    <div>
+      <div class="ub-title" id="update-title"></div>
+      <div class="ub-sub" id="update-sub"></div>
+    </div>
+    <button id="update-later" class="btn ghost small">Plus tard</button>
+    <button id="update-install" class="btn primary small">Installer</button>
+  </div>
 
   <div id="toast" class="toast" hidden></div>
   <div id="print-area" class="print-area"></div>
