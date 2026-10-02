@@ -6,6 +6,9 @@ on:
     tags: ['v*']
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -18,10 +21,18 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run dist
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: Liaison-windows
-          path: |
-            dist/*.exe
+          path: dist/*.exe
+      # Sur un tag vX.Y.Z : page de téléchargement (Release) avec les deux exécutables.
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: Liaison ${{ github.ref_name }}
+          files: |
+            dist/Liaison-Installation-*.exe
+            dist/Liaison-Portable-*.exe
+          body: |
+            **Liaison-Installation** : installateur Windows (recommandé, crée un raccourci).
+            **Liaison-Portable** : s'exécute sans installation (clé USB, poste sans droits admin).

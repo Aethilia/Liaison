@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win --x64",
+    "dist": "electron-builder --win --x64 --publish never",
     "dist:dir": "electron-builder --dir"
   },
   "dependencies": {
@@ -38,10 +38,14 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Liaison"
+      "shortcutName": "Liaison",
+      "artifactName": "Liaison-Installation-${version}.exe"
     },
     "directories": {
       "output": "dist"
+    },
+    "portable": {
+      "artifactName": "Liaison-Portable-${version}.exe"
     }
   }
 }
