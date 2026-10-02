@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <title>Liaison — Main courante</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">L</span>
+      <div>
+        <div class="brand-title">Main courante</div>
+        <div class="brand-sub">Tronc principal · liaison entre services</div>
+      </div>
+    </div>
+    <nav class="views" role="tablist">
+      <button class="view-btn active" data-view="saisie" role="tab">Saisie</button>
+      <button class="view-btn" data-view="recap" role="tab">Récap du mois</button>
+    </nav>
+    <div class="top-actions">
+      <span id="poste" class="poste" title="Nom de ce poste"></span>
+      <button id="btn-settings" class="icon-btn" title="Paramètres" aria-label="Paramètres">⚙</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="datenav">
+      <button id="prev-day" class="icon-btn" title="Jour précédent" aria-label="Jour précédent">‹</button>
+      <label class="date-label">
+        <span id="date-text"></span>
+        <input type="date" id="date-input" aria-label="Choisir la date">
+      </label>
+      <button id="next-day" class="icon-btn" title="Jour suivant" aria-label="Jour suivant">›</button>
+      <button id="btn-now" class="btn ghost">Service en cours</button>
+    </div>
+    <div class="toolbar-actions">
+      <button id="btn-print" class="btn ghost">Imprimer la journée</button>
+      <button id="btn-import" class="btn ghost">Importer Excel</button>
+      <div class="split">
+        <button id="btn-export-day" class="btn primary">Exporter la journée</button>
+        <button id="btn-export-month" class="btn primary">Exporter le mois</button>
+      </div>
+    </div>
+  </div>
+
+  <main id="view-saisie" class="view">
+    <div class="tabs" id="service-tabs"></div>
+    <div id="conflict" class="banner warn" hidden></div>
+    <div class="layout">
+      <section id="form" class="form"></section>
+      <aside id="passation" class="passation"></aside>
+    </div>
+  </main>
+
+  <main id="view-recap" class="view" hidden>
+    <div id="recap"></div>
+  </main>
+
+  <footer class="statusbar">
+    <span id="save-status">—</span>
+    <span id="data-dir" class="muted"></span>
+  </footer>
+
+  <dialog id="settings">
+    <form method="dialog" class="dialog-body">
+      <h2>Paramètres</h2>
+      <label class="field">
+        <span>Nom du poste</span>
+        <input id="set-poste" type="text" placeholder="ex. Pont-bascule, Bureau chef de quai">
+        <small>Affiché à côté de chaque enregistrement pour savoir qui a modifié quoi.</small>
+      </label>
+      <label class="field">
+        <span>Dossier des données</span>
+        <div class="row">
+          <input id="set-dir" type="text" readonly>
+          <button type="button" id="set-dir-btn" class="btn ghost">Choisir…</button>
+        </div>
+        <small>Pour partager la main courante entre plusieurs postes, choisissez un dossier sur un partage réseau commun.</small>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="set-open" class="btn ghost">Ouvrir le dossier</button>
+        <span class="spacer"></span>
+        <button value="cancel" class="btn ghost">Annuler</button>
+        <button id="set-save" value="save" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm">
+    <form method="dialog" class="dialog-body">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-text"></p>
+      <div class="dialog-actions" id="confirm-actions"></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <div id="print-area" class="print-area"></div>
+
+  <script src="../core/model.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
