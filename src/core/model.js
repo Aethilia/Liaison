@@ -52,7 +52,9 @@ function normalize(data, date, service) {
   data = data || {};
   const base = emptyService(date || data.date, service || data.service);
   const out = { ...base, ...data, date: base.date, service: base.service };
-  out.absents = base.absents.map((a, i) => ({ ...a, ...((data.absents || [])[i] || {}) }));
+  // 4 lignes d'absents comme sur la feuille, davantage si besoin.
+  out.absents = (Array.isArray(data.absents) ? data.absents : []).map((a) => ({ nom: (a && a.nom) || '', motif: (a && a.motif) || '' }));
+  while (out.absents.length < NB_ABSENTS) out.absents.push({ nom: '', motif: '' });
   out.entrees = { ...base.entrees, ...(data.entrees || {}) };
   out.sorties = {};
   for (const m of MATIERES) out.sorties[m] = { ...base.sorties[m], ...((data.sorties || {})[m] || {}) };
@@ -93,6 +95,7 @@ function totals(s) {
 const LARGEUR_LIGNE_NB = 95;
 const CONSIGNES_PREFIX = '► Consignes relève :';
 const IMPORTANT_PREFIX = '⚠ ';
+const ABSENTS_PREFIX = '► Autres absents :';
 
 function wrapText(text, width) {
   const out = [];
@@ -120,6 +123,12 @@ function layoutObservations(s, width = LARGEUR_LIGNE_NB) {
   for (const o of s.observations) {
     if (!o.heure && !o.texte) continue;
     wrapText(`${o.important ? IMPORTANT_PREFIX : ''}${o.texte || ''}`, width).forEach((t, i) => lines.push({ heure: i === 0 ? o.heure || '' : '', texte: t }));
+  }
+  // La feuille n'a que 4 cases d'absents : les suivants vont dans les N.B.
+  const autres = s.absents.slice(NB_ABSENTS).filter((a) => a.nom || a.motif);
+  if (autres.length) {
+    const txt = autres.map((a) => `${a.nom || '?'}${a.motif ? ` (${a.motif})` : ''}`).join(', ');
+    wrapText(`${ABSENTS_PREFIX} ${txt}`, width).forEach((t) => lines.push({ heure: '', texte: t }));
   }
   if (s.consignes && s.consignes.trim()) {
     wrapText(`${CONSIGNES_PREFIX} ${s.consignes.trim()}`, width).forEach((t) => lines.push({ heure: '', texte: t }));
@@ -173,7 +182,7 @@ function daysInMonth(year, month) {
 }
 
 const api = {
-  SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX,
+  SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth,
 };

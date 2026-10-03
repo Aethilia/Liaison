@@ -19,6 +19,7 @@ const SAVE_DELAY_MS = 700;
 const S = {
   config: null,
   users: [],
+  agents: [], // agents déjà saisis comme absents (proposés à la saisie)
   user: null,
   screen: 'user',
   view: 'saisie',
@@ -312,6 +313,7 @@ async function save({ force = false } = {}) {
       target.rev = saved.rev;
       target.updatedAt = saved.updatedAt;
       target.updatedBy = saved.updatedBy;
+      rememberAgents(target);
       S.conflict = null;
       renderConflict();
       setStatus(`Enregistré à ${fmtTime(saved.updatedAt)}`, 'saved');
@@ -496,10 +498,20 @@ function renderForm() {
     }))), { wide: true, hint: 'Affichées en priorité au service suivant' });
 
   const motifs = h('datalist', { id: 'motifs' }, M.MOTIFS.map((m) => h('option', { value: m })));
-  const absents = card('Agents absents', 'users', h('div', { class: 'absents' },
-    s.absents.map((_, i) => h('div', { class: 'absent' },
-      field(`absents.${i}.nom`, 'text', { placeholder: 'Nom de l\'agent' }),
-      field(`absents.${i}.motif`, 'text', { placeholder: 'Motif', list: 'motifs' })))), { hint: 'Motif : liste ou texte libre' });
+  const agentsList = h('datalist', { id: 'agents-list' }, S.agents.map((a) => h('option', { value: a })));
+  const prevAbsents = S.prev ? S.prev.absents.filter((a) => a.nom) : [];
+  const absents = card('Agents absents', 'users', [
+    h('div', { class: 'absents' },
+      s.absents.map((_, i) => h('div', { class: `absent${i >= M.NB_ABSENTS ? ' extra' : ''}` },
+        field(`absents.${i}.nom`, 'text', { placeholder: 'Nom de l\'agent', list: 'agents-list', autocomplete: 'off' }),
+        field(`absents.${i}.motif`, 'text', { placeholder: 'Motif', list: 'motifs' }),
+        i >= M.NB_ABSENTS && !closed
+          ? h('button', { class: 'o-btn rm', title: 'Retirer cette ligne', 'aria-label': 'Retirer cette ligne', onclick: () => removeAbsent(i) }, icon('x', 15))
+          : h('span')))),
+    closed ? null : h('div', { class: 'absents-foot' },
+      h('button', { class: 'btn small', onclick: addAbsent }, icon('plus', 14), 'Ajouter un agent'),
+      prevAbsents.length ? h('button', { class: 'btn small ghost', title: prevAbsents.map((a) => `${a.nom}${a.motif ? ` (${a.motif})` : ''}`).join(', '), onclick: takeOverAbsents }, icon('send', 14), `Reprendre les absents du service précédent (${prevAbsents.length})`) : null),
+  ], { hint: s.absents.length > M.NB_ABSENTS ? 'À partir du 5e : reportés en N.B. sur Excel' : 'Noms proposés au fil de la frappe' });
 
   const entrees = card('Entrées — passages de véhicules', 'truck', h('div', { class: 'entrees' },
     h('label', { class: 'field' }, h('span', {}, 'Plateaux'), field('entrees.plateaux', 'int')),
@@ -526,7 +538,7 @@ function renderForm() {
     h('div', {}, h('h4', {}, 'Plateaux'), M.PLATEAUX.map((p) => boxRow('plateaux', p)))),
   { hint: `Remplissage en % · alerte à ${M.SEUIL_ALERTE} %` });
 
-  $('#form').replaceChildren(...[banner, closedNote, obs, consignes, motifs, absents, entrees, sorties, boxs].filter(Boolean));
+  $('#form').replaceChildren(...[banner, closedNote, obs, consignes, motifs, agentsList, absents, entrees, sorties, boxs].filter(Boolean));
   $('#form').querySelectorAll('textarea').forEach(fitTextarea);
   updateComputed();
 }
@@ -618,6 +630,52 @@ function submitQuickAdd() {
   renderForm();
   renderTabs();
   $('#qa-texte').focus();
+}
+
+function addAbsent() {
+  const s = cur();
+  // On réutilise d'abord une des 4 lignes de la feuille si elle est vide.
+  let i = s.absents.findIndex((a) => !a.nom && !a.motif);
+  if (i === -1) {
+    s.absents.push({ nom: '', motif: '' });
+    i = s.absents.length - 1;
+    markDirty();
+  }
+  renderForm();
+  const el = document.querySelector(`[data-bind="absents.${i}.nom"]`);
+  if (el) el.focus();
+}
+
+function removeAbsent(i) {
+  cur().absents.splice(i, 1);
+  renderForm();
+  markDirty();
+}
+
+// Les absences durent souvent plusieurs services (CP, maladie…).
+function takeOverAbsents() {
+  const s = cur();
+  const known = new Set(s.absents.filter((a) => a.nom).map((a) => a.nom.toLowerCase()));
+  const toAdd = S.prev.absents.filter((a) => a.nom && !known.has(a.nom.toLowerCase()));
+  if (!toAdd.length) {
+    toast('Ces agents sont déjà dans la liste.');
+    return;
+  }
+  const filled = s.absents.filter((a) => a.nom || a.motif);
+  s.absents = [...filled, ...toAdd.map((a) => ({ nom: a.nom, motif: a.motif }))];
+  while (s.absents.length < M.NB_ABSENTS) s.absents.push({ nom: '', motif: '' });
+  renderForm();
+  markDirty();
+  toast(`${toAdd.length} agent(s) repris du service précédent — vérifiez les motifs.`);
+}
+
+function rememberAgents(s) {
+  const lower = new Set(S.agents.map((a) => a.toLowerCase()));
+  const fresh = s.absents.map((a) => a.nom.trim()).filter((n) => n && !lower.has(n.toLowerCase()));
+  if (!fresh.length) return;
+  S.agents = [...S.agents, ...fresh].sort((a, b) => a.localeCompare(b, 'fr'));
+  const list = document.getElementById('agents-list');
+  if (list) list.replaceChildren(...S.agents.map((n) => h('option', { value: n })));
 }
 
 function toggleImportant(i) {
@@ -1220,7 +1278,11 @@ function buildPrint() {
         h('span', { class: 'p-rl' }, 'Responsable'), h('span', { class: 'p-resp' }, s.responsable || '')),
       h('div', { class: 'p-sec' }, 'AGENTS ABSENTS'),
       h('table', {}, h('tr', {}, h('th', {}, 'Nom'), h('th', {}, 'Motif'), h('th', {}, 'Nom'), h('th', {}, 'Motif')),
-        [0, 2].map((i) => h('tr', {}, h('td', {}, s.absents[i].nom), h('td', { class: 'c' }, s.absents[i].motif), h('td', {}, s.absents[i + 1].nom), h('td', { class: 'c' }, s.absents[i + 1].motif)))),
+        Array.from({ length: Math.ceil(s.absents.length / 2) }, (_, r) => {
+          const a = s.absents[2 * r];
+          const b = s.absents[2 * r + 1] || { nom: '', motif: '' };
+          return h('tr', {}, h('td', {}, a.nom), h('td', { class: 'c' }, a.motif), h('td', {}, b.nom), h('td', { class: 'c' }, b.motif));
+        })),
       h('div', { class: 'p-sec' }, 'ENTRÉES  —  passages de véhicules'),
       h('table', {}, h('tr', {}, h('td', {}, 'Plateaux'), h('td', { class: 'c' }, s.entrees.plateaux ?? ''), h('td', {}, 'Poids lourds (PL)'),
         h('td', { class: 'c' }, s.entrees.pl ?? ''), h('td', { class: 'c' }, h('b', {}, 'TOTAL')), h('td', { class: 'c' }, h('b', {}, t.entrees)))),
@@ -1301,6 +1363,14 @@ function initUpdates() {
 /* ---------- Paramètres ---------- */
 
 let settingsUsers = [];
+let settingsAgents = [];
+
+function renderSettingsAgents() {
+  $('#set-agents').replaceChildren(...(settingsAgents.length
+    ? settingsAgents.map((u, i) => h('span', { class: 'chip' }, u,
+      h('button', { type: 'button', title: `Retirer ${u}`, onclick: () => { settingsAgents.splice(i, 1); renderSettingsAgents(); } }, icon('x', 14))))
+    : [h('span', { class: 'muted' }, 'Aucun agent mémorisé pour l\'instant : ils s\'ajoutent tout seuls à la saisie des absents.')]));
+}
 
 function renderSettingsUsers() {
   $('#set-users').replaceChildren(...(settingsUsers.length
@@ -1314,6 +1384,8 @@ function openSettings() {
   $('#set-dir').value = S.config.dataDir;
   settingsUsers = [...S.users];
   renderSettingsUsers();
+  settingsAgents = [...S.agents];
+  renderSettingsAgents();
   $('#set-version').textContent = updateInfo ? `Liaison ${updateInfo.current}${updateInfo.update ? ` — version ${updateInfo.update.version} disponible` : ' — à jour'}` : '';
   $('#settings').showModal();
 }
@@ -1332,6 +1404,20 @@ function initSettings() {
     renderSettingsUsers();
   };
   $('#set-user-add').addEventListener('click', addUser);
+  const addAgent = () => {
+    const v = $('#set-agent-new').value.trim();
+    if (v && !settingsAgents.some((a) => a.toLowerCase() === v.toLowerCase())) settingsAgents.push(v);
+    settingsAgents.sort((a, b) => a.localeCompare(b, 'fr'));
+    $('#set-agent-new').value = '';
+    renderSettingsAgents();
+  };
+  $('#set-agent-add').addEventListener('click', addAgent);
+  $('#set-agent-new').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addAgent();
+    }
+  });
   $('#set-user-new').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -1347,6 +1433,7 @@ function initSettings() {
     // Un dossier partagé qui a déjà sa liste de responsables la garde.
     const existing = dirChanged ? await call(api.loadUsers()) : [];
     S.users = await call(api.saveUsers(dirChanged && existing.length ? existing : settingsUsers));
+    S.agents = dirChanged ? await call(api.loadAgents()) : await call(api.saveAgents(settingsAgents));
     toast('Paramètres enregistrés.');
     checkUpdate();
     if (S.screen === 'user') renderUserScreen();
@@ -1361,6 +1448,7 @@ async function init() {
   decorate();
   S.config = await call(api.getConfig());
   S.users = await call(api.loadUsers());
+  S.agents = await call(api.loadAgents());
   const live = M.currentService();
   S.date = live.date;
   S.service = live.service;

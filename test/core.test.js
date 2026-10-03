@@ -125,3 +125,29 @@ test('mises à jour : détection de la version la plus récente dans le dossier 
   assert.equal(findUpdate(dir, '1.10.0'), null);
   assert.equal(findUpdate(dir, '1.0.0', 'portable').version, '1.3.0');
 });
+
+test('absents au-delà des 4 cases : reportés dans les N.B. puis relus', async () => {
+  const s = M.emptyService('2026-10-05', 'matin');
+  s.absents = [
+    { nom: 'A', motif: 'CP' }, { nom: 'B', motif: 'RTT' }, { nom: 'C', motif: 'CP' }, { nom: 'D', motif: 'Maladie' },
+    { nom: 'Élodie Martin', motif: 'Formation' }, { nom: 'F', motif: '' },
+  ];
+  s.observations = [{ heure: '06:00', texte: 'RAS', important: false, auteur: '' }];
+  s.consignes = 'Rien de spécial';
+  const file = path.join(tmp(), 'absents.xlsx');
+  await exportWorkbook([{ date: s.date, services: { matin: s } }], file);
+  const [day] = await importWorkbook(file);
+  assert.deepEqual(day.services.matin.absents, s.absents);
+  assert.equal(day.services.matin.consignes, 'Rien de spécial');
+  assert.equal(day.services.matin.observations.length, 1);
+  assert.equal(M.normalize({ absents: [{ nom: 'X' }] }, '2026-10-05', 'matin').absents.length, 4);
+});
+
+test('mémoire des agents : ajout automatique sans doublon', () => {
+  const store = new Store(tmp());
+  const s = M.emptyService('2026-10-05', 'matin');
+  s.absents[0] = { nom: 'Martin', motif: 'CP' };
+  s.absents.push({ nom: ' martin ', motif: 'CP' }, { nom: 'Bernard', motif: '' });
+  assert.deepEqual(store.rememberAgents(s), ['Bernard', 'Martin']);
+  assert.deepEqual(store.rememberAgents(s), ['Bernard', 'Martin']);
+});

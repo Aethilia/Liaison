@@ -109,7 +109,7 @@ function fillService(ws, s, def) {
   set(`A${ROWS.bandeau + o}`, utcDate(s.date));
   set(`G${ROWS.bandeau + o}`, s.responsable);
 
-  s.absents.forEach((a, i) => {
+  s.absents.slice(0, ABSENT_CELLS.length).forEach((a, i) => {
     const [cn, cm, dr] = ABSENT_CELLS[i];
     const r = ROWS.absents[dr] + o;
     set(`${cn}${r}`, a.nom);
@@ -191,21 +191,28 @@ function readService(ws, def, date) {
   M.PLATEAUX.forEach((p, i) => {
     s.plateaux[p] = pct(v(`H${ROWS.sortiesStart + i + o}`));
   });
-  // Les lignes sans heure prolongent l'observation précédente ; les consignes
-  // de relève écrites par l'application sont reconnues à leur préfixe.
-  let consignes = null;
+  // Les lignes sans heure prolongent l'observation précédente ; les autres
+  // absents et les consignes écrits par l'application sont reconnus à leur préfixe.
+  const blocks = {};
+  let block = null;
   for (let i = 0; i < M.NB_OBSERVATIONS; i++) {
     const r = ROWS.obsStart + i + o;
     const heure = cellToTime(v(`A${r}`));
     const texte = cellText(v(`B${r}`));
     if (!heure && !texte) continue;
-    if (consignes == null && !heure && texte.startsWith(CONSIGNES_PREFIX)) {
-      consignes = texte.slice(CONSIGNES_PREFIX.length).trim();
-      continue;
-    }
-    if (consignes != null && !heure) {
-      consignes = `${consignes} ${texte}`.trim();
-      continue;
+    if (!heure) {
+      const prefix = [[CONSIGNES_PREFIX, 'consignes'], [M.ABSENTS_PREFIX, 'absents']].find(([p]) => texte.startsWith(p));
+      if (prefix) {
+        block = prefix[1];
+        blocks[block] = texte.slice(prefix[0].length).trim();
+        continue;
+      }
+      if (block) {
+        blocks[block] = `${blocks[block]} ${texte}`.trim();
+        continue;
+      }
+    } else {
+      block = null;
     }
     const last = s.observations[s.observations.length - 1];
     if (!heure && last) last.texte = last.texte ? `${last.texte} ${texte}` : texte;
@@ -217,7 +224,12 @@ function readService(ws, def, date) {
       obs.texte = obs.texte.slice(M.IMPORTANT_PREFIX.length);
     }
   }
-  if (consignes) s.consignes = consignes;
+  if (blocks.consignes) s.consignes = blocks.consignes;
+  if (blocks.absents) {
+    for (const m of blocks.absents.matchAll(/\s*([^,(]+?)\s*(?:\(([^)]*)\))?\s*(?:,|$)/g)) {
+      if (m[1] || m[2]) s.absents.push({ nom: m[1] === '?' ? '' : m[1], motif: m[2] || '' });
+    }
+  }
   return s;
 }
 

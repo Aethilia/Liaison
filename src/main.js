@@ -89,7 +89,13 @@ handle('config:openDir', () => {
 });
 
 handle('service:load', (date, service) => store.load(date, service));
-handle('service:save', (data, opts = {}) => store.save(data, { ...opts, by: config.poste }));
+handle('service:save', (data, opts = {}) => {
+  const saved = store.save(data, { ...opts, by: config.poste });
+  try {
+    store.rememberAgents(saved);
+  } catch { /* la liste d'agents est un confort : ne bloque pas l'enregistrement */ }
+  return saved;
+});
 handle('day:load', (date) => store.loadDay(date));
 handle('day:revs', (date) => {
   const day = store.loadDay(date);
@@ -105,6 +111,8 @@ handle('range:load', (from, to) => {
 });
 handle('users:load', () => store.loadUsers());
 handle('users:save', (users) => store.saveUsers(users));
+handle('agents:load', () => store.loadAgents());
+handle('agents:save', (agents) => store.saveAgents(agents));
 
 handle('excel:export', async ({ from, to, suggestedName }) => {
   const r = await dialog.showSaveDialog(win, {

@@ -89,6 +89,41 @@ class Store {
     return clean;
   }
 
+  // Agents déjà saisis comme absents, proposés ensuite à la saisie.
+  loadAgents() {
+    try {
+      const agents = JSON.parse(fs.readFileSync(path.join(this.dir, 'agents.json'), 'utf8')).agents;
+      return Array.isArray(agents) ? agents.filter((a) => typeof a === 'string' && a.trim()) : [];
+    } catch (err) {
+      if (err.code === 'ENOENT') return [];
+      throw err;
+    }
+  }
+
+  saveAgents(agents) {
+    const seen = new Set();
+    const clean = agents.map((a) => String(a).trim().replace(/\s+/g, ' ')).filter((a) => {
+      const k = a.toLowerCase();
+      if (!a || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).sort((a, b) => a.localeCompare(b, 'fr'));
+    fs.mkdirSync(this.dir, { recursive: true });
+    const file = path.join(this.dir, 'agents.json');
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ agents: clean }, null, 2), 'utf8');
+    fs.renameSync(tmp, file);
+    return clean;
+  }
+
+  // Ajoute à la liste les agents absents d'un service qui n'y sont pas encore.
+  rememberAgents(service) {
+    const known = this.loadAgents();
+    const lower = new Set(known.map((a) => a.toLowerCase()));
+    const fresh = service.absents.map((a) => a.nom.trim()).filter((n) => n && !lower.has(n.toLowerCase()));
+    return fresh.length ? this.saveAgents([...known, ...fresh]) : known;
+  }
+
   loadMonth(year, month) {
     return this.loadRange(daysInMonth(year, month));
   }

@@ -32,6 +32,14 @@ la relève, la fiche et le journal, et est précédée de « ⚠ » dans l'expor
   sur la journée, 7 jours ou le mois, avec recherche, filtre par service et
   filtre « importantes ».
 
+## Agents absents
+
+Quatre lignes comme sur la feuille, et **« Ajouter un agent »** pour en mettre
+davantage (à partir du 5e, ils sont reportés dans les N.B. de l'export Excel).
+Les noms déjà saisis sont **mémorisés** et proposés au fil de la frappe (liste
+commune, modifiable dans les paramètres). « Reprendre les absents du service
+précédent » recopie les absences en cours (CP, maladie…).
+
 ## Fiche détaillée d'un service
 
 L'icône « œil » (onglets de service, cartes de l'étape 2, panneau de relève,

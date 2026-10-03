@@ -7,6 +7,7 @@
   const load = (d, s) => (db[key(d, s)] ? JSON.parse(JSON.stringify(db[key(d, s)])) : M().emptyService(d, s));
   let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule' };
   let users = window.__users || [];
+  let agents = window.__agents || [];
   window.__db = db;
   window.api = {
     getConfig: () => ok(config),
@@ -19,6 +20,7 @@
       if (!force && expectedRev != null && current.rev !== expectedRev) return Promise.resolve({ ok: false, code: 'CONFLICT', error: 'conflit', current });
       const out = { ...data, rev: current.rev + 1, updatedAt: new Date().toISOString(), updatedBy: config.poste };
       db[key(data.date, data.service)] = out;
+      for (const a of out.absents) if (a.nom && !agents.includes(a.nom)) agents.push(a.nom);
       return ok(out);
     },
     loadDay: (d) => ok({ matin: load(d, 'matin'), apresmidi: load(d, 'apresmidi'), nuit: load(d, 'nuit') }),
@@ -31,6 +33,8 @@
     },
     loadUsers: () => ok(users),
     saveUsers: (u) => { users = [...new Set(u.map((x) => x.trim()).filter(Boolean))]; return ok(users); },
+    loadAgents: () => ok(agents),
+    saveAgents: (a) => { agents = [...new Set(a.map((x) => x.trim()).filter(Boolean))].sort(); return ok(agents); },
     exportExcel: () => ok(null),
     openFile: () => ok(true),
     pickImport: () => ok(null),

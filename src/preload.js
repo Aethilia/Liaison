@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('api', {
   loadRange: call('range:load'),
   loadUsers: call('users:load'),
   saveUsers: call('users:save'),
+  loadAgents: call('agents:load'),
+  saveAgents: call('agents:save'),
   exportExcel: call('excel:export'),
   openFile: call('excel:open'),
   pickImport: call('excel:pick'),
