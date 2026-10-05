@@ -124,6 +124,111 @@ class Store {
     return fresh.length ? this.saveAgents([...known, ...fresh]) : known;
   }
 
+  // Petits fichiers JSON communs au site (écriture atomique).
+  readJson(name, fallback) {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(this.dir, name), 'utf8'));
+    } catch (err) {
+      if (err.code === 'ENOENT') return fallback;
+      throw err;
+    }
+  }
+
+  writeJson(name, value) {
+    const file = path.join(this.dir, name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
+    fs.renameSync(tmp, file);
+    return value;
+  }
+
+  // Réglages du site : couleurs des matières en sortie.
+  loadSite() {
+    const site = this.readJson('site.json', {});
+    return { couleurs: {}, ...site };
+  }
+
+  saveSite(site) {
+    return this.writeJson('site.json', site);
+  }
+
+  // Types de déchets non conformes déjà saisis, avec leur dernière unité.
+  loadNcTypes() {
+    const list = this.readJson('types-non-conformes.json', { types: [] }).types;
+    return Array.isArray(list) ? list.filter((t) => t && typeof t.nom === 'string' && t.nom.trim()) : [];
+  }
+
+  saveNcTypes(types) {
+    const seen = new Map();
+    for (const t of types) {
+      const nom = String(t.nom || '').trim().replace(/\s+/g, ' ');
+      if (nom) seen.set(nom.toLowerCase(), { nom, unite: t.unite || '' });
+    }
+    const clean = [...seen.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    this.writeJson('types-non-conformes.json', { types: clean });
+    return clean;
+  }
+
+  rememberNcTypes(service) {
+    const known = this.loadNcTypes();
+    const fresh = (service.nonConformes || []).filter((x) => x.type.trim()).map((x) => ({ nom: x.type.trim(), unite: x.unite }));
+    const changed = fresh.some((f) => {
+      const k = known.find((t) => t.nom.toLowerCase() === f.nom.toLowerCase());
+      return !k || k.unite !== f.unite;
+    });
+    return changed ? this.saveNcTypes([...known, ...fresh]) : known;
+  }
+
+  // Tâches de relève : un fichier par tâche, pour que deux postes puissent en
+  // créer ou en valider en même temps sans se gêner.
+  taskFile(id) {
+    if (!/^[a-z0-9-]+$/i.test(id)) throw new Error(`Identifiant de tâche invalide : ${id}`);
+    return path.join(this.dir, 'taches', `${id}.json`);
+  }
+
+  listTasks() {
+    let names;
+    try {
+      names = fs.readdirSync(path.join(this.dir, 'taches'));
+    } catch (err) {
+      if (err.code === 'ENOENT') return [];
+      throw err;
+    }
+    const out = [];
+    for (const name of names) {
+      if (!name.endsWith('.json')) continue;
+      try {
+        out.push(JSON.parse(fs.readFileSync(path.join(this.dir, 'taches', name), 'utf8')));
+      } catch { /* fichier en cours d'écriture : relu au prochain passage */ }
+    }
+    return out.sort((a, b) => String(a.creeLe).localeCompare(String(b.creeLe)));
+  }
+
+  saveTask(task) {
+    this.taskFile(task.id);
+    const out = { ...task, majLe: new Date().toISOString() };
+    this.writeJson(path.join('taches', `${task.id}.json`), out);
+    return out;
+  }
+
+  deleteTask(id) {
+    try {
+      fs.unlinkSync(this.taskFile(id));
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+    return true;
+  }
+
+  // Chemin absolu d'une photo à partir de son chemin relatif (photos/AAAA/MM/…).
+  photoPath(rel) {
+    const abs = path.resolve(this.dir, rel);
+    const root = path.resolve(this.dir, 'photos') + path.sep;
+    if (!abs.startsWith(root)) throw new Error('Chemin de photo invalide.');
+    return abs;
+  }
+
   loadMonth(year, month) {
     return this.loadRange(daysInMonth(year, month));
   }

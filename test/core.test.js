@@ -8,7 +8,7 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const M = require('../src/core/model');
 const { Store } = require('../src/core/store');
-const { exportWorkbook, importWorkbook, timeToFraction, cellToTime } = require('../src/core/excel');
+const { exportWorkbook, importWorkbook, importWorkbookFull, timeToFraction, cellToTime } = require('../src/core/excel');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'liaison-'));
 
@@ -73,31 +73,57 @@ test('liste des responsables partagée dans le dossier des données', () => {
   assert.deepEqual(new Store(store.dir).loadUsers(), ['Marie Dupont', 'Karim Benali']);
 });
 
-test('export Excel au format du modèle puis réimport', async () => {
+test('export Excel : onglet par jour à hauteur variable, puis réimport fidèle', async () => {
   const dir = tmp();
   const file = path.join(dir, 'export.xlsx');
   const s = sample();
-  await exportWorkbook([{ date: '2026-10-02', services: { nuit: s } }, { date: '2026-10-03', services: {} }], file);
+  s.sorties.Fer = { nb: 2, tonnage: 10.28, pesees: [5.54, 4.74] };
+  s.sortiesExtra = [{ nom: 'Sapins', nb: 1, tonnage: 0.8, pesees: [], couleur: '#2f9e44' }];
+  s.nonConformes = [{ type: 'Frigo', quantite: 1, unite: 'pièce(s)', provenance: 'Particulier', commentaire: '', photos: [] }];
+  const tasks = [{ id: 'a1', texte: 'Vider la benne fer', creeLe: '2026-10-02T20:10:00Z', creePar: 'DUPONT', origine: { date: '2026-10-02', service: 'nuit' }, faite: null }];
+  await exportWorkbook([{ date: '2026-10-02', services: { nuit: s } }, { date: '2026-10-03', services: {} }], file, { tasks, site: { couleurs: { Fer: { couleur: '#1971c2', mode: 'ligne' } } } });
 
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
-  assert.deepEqual(wb.worksheets.map((w) => w.name), ['Légende', 'Modèle', '02-10', '03-10']);
+  assert.deepEqual(wb.worksheets.filter((w) => w.state !== 'veryHidden').map((w) => w.name), ['Légende', 'Modèle', '02-10', '03-10']);
   const ws = wb.getWorksheet('02-10');
-  assert.equal(ws.getCell('C77').value, 'SERVICE NUIT  ·  20H - 4H');
-  assert.equal(ws.getCell('G77').value, 'DUPONT');
-  assert.equal(ws.getCell('C85').value, 12);
-  assert.equal(ws.getCell('D92').value, 5.54);
-  assert.equal(ws.getCell('F90').value, 0.85);
-  assert.equal(ws.getCell('H85').formula, 'SUM(C85,F85)');
-  assert.equal(ws.getCell('B101').value, '⚠ Benne fer pleine, appel prestataire.');
-
-  const [day] = await importWorkbook(file);
-  assert.equal(day.date, '2026-10-02');
-  const back = day.services.nuit;
-  for (const k of ['responsable', 'absents', 'entrees', 'sorties', 'bennes', 'plateaux', 'observations', 'consignes']) {
-    assert.deepEqual(back[k], s[k], k);
+  const values = [];
+  ws.eachRow((row) => row.eachCell((c) => values.push(c.value)));
+  const texts = values.map((v) => (v && v.formula ? `=${v.formula}` : String(v)));
+  for (const expected of ['SERVICE NUIT  ·  20H - 4H', 'DUPONT', 'Sapins *', '=5.54+4.74', 'DÉCHETS NON CONFORMES', 'Frigo', 'TÂCHES POUR LA RELÈVE', 'Vider la benne fer', '⚠ Benne fer pleine, appel prestataire.']) {
+    assert.ok(texts.includes(expected), expected);
   }
-  assert.equal(M.isEmpty(day.services.matin), true);
+
+  const { days, tasks: back } = await importWorkbookFull(file);
+  assert.deepEqual(days.map((d) => d.date), ['2026-10-02']);
+  const nuit = days[0].services.nuit;
+  for (const k of ['responsable', 'absents', 'entrees', 'sorties', 'sortiesExtra', 'nonConformes', 'bennes', 'plateaux', 'observations', 'consignes']) {
+    assert.deepEqual(nuit[k], M.normalize(s)[k], k);
+  }
+  assert.equal(back[0].texte, 'Vider la benne fer');
+});
+
+test('import d\'un classeur rempli à la main au format d\'origine', async () => {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(path.join(__dirname, '..', 'assets', 'modele.xlsx'));
+  const ws = wb.addWorksheet('02-10');
+  ws.getCell('A3').value = new Date(Date.UTC(2026, 9, 2));
+  ws.getCell('G77').value = 'DUPONT';
+  ws.getCell('C85').value = 12;
+  ws.getCell('D92').value = 5.54;
+  ws.getCell('F90').value = 0.85;
+  ws.getCell('A101').value = (22 * 60 + 15) / 1440;
+  ws.getCell('B101').value = 'Benne fer pleine';
+  const file = path.join(tmp(), 'main.xlsx');
+  await wb.xlsx.writeFile(file);
+  const [day] = await importWorkbook(file);
+  const nuit = day.services.nuit;
+  assert.equal(day.date, '2026-10-02');
+  assert.equal(nuit.responsable, 'DUPONT');
+  assert.equal(nuit.entrees.plateaux, 12);
+  assert.equal(nuit.sorties.DIB.tonnage, 5.54);
+  assert.equal(nuit.bennes.Fer, 85);
+  assert.deepEqual(nuit.observations[0], { heure: '22:15', texte: 'Benne fer pleine', important: false, auteur: '', photos: [] });
 });
 
 test('import du modèle vierge fourni', async () => {

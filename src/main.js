@@ -1,11 +1,11 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { Store, ConflictError } = require('./core/store');
-const { exportWorkbook, importWorkbook } = require('./core/excel');
+const { exportWorkbook, importWorkbookFull } = require('./core/excel');
 const M = require('./core/model');
 const { spawn } = require('child_process');
 const { UPDATE_DIR, findUpdate } = require('./core/update');
@@ -93,7 +93,8 @@ handle('service:save', (data, opts = {}) => {
   const saved = store.save(data, { ...opts, by: config.poste });
   try {
     store.rememberAgents(saved);
-  } catch { /* la liste d'agents est un confort : ne bloque pas l'enregistrement */ }
+    store.rememberNcTypes(saved);
+  } catch { /* ces listes sont un confort : elles ne bloquent pas l'enregistrement */ }
   return saved;
 });
 handle('day:load', (date) => store.loadDay(date));
@@ -112,6 +113,44 @@ handle('range:load', (from, to) => {
 handle('users:load', () => store.loadUsers());
 handle('users:save', (users) => store.saveUsers(users));
 handle('agents:load', () => store.loadAgents());
+handle('site:load', () => store.loadSite());
+handle('site:save', (site) => store.saveSite(site));
+handle('nc:load', () => store.loadNcTypes());
+handle('nc:save', (types) => store.saveNcTypes(types));
+handle('tasks:list', () => store.listTasks());
+handle('tasks:save', (task) => store.saveTask(task));
+handle('tasks:delete', (id) => store.deleteTask(id));
+
+// Photos : réduites (1600 px max, JPEG) et rangées dans <données>/photos/AAAA/MM/.
+const PHOTO_MAX = 1600;
+function storePhoto(img, date) {
+  if (img.isEmpty()) throw new Error('Image illisible.');
+  const { width, height } = img.getSize();
+  const scale = Math.min(1, PHOTO_MAX / Math.max(width, height));
+  const resized = scale < 1 ? img.resize({ width: Math.round(width * scale), height: Math.round(height * scale), quality: 'good' }) : img;
+  const [y, m] = String(date).split('-');
+  const rel = path.posix.join('photos', y, m, `${date}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.jpg`);
+  const abs = store.photoPath(rel);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, resized.toJPEG(82));
+  return rel;
+}
+handle('photo:pick', async (date) => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Ajouter des photos',
+    filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'webp'] }],
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (r.canceled) return [];
+  return r.filePaths.map((f) => storePhoto(nativeImage.createFromPath(f), date));
+});
+handle('photo:saveData', (dataUrl, date) => storePhoto(nativeImage.createFromDataURL(dataUrl), date));
+handle('photo:read', (rel, thumb = false) => {
+  const img = nativeImage.createFromPath(store.photoPath(rel));
+  if (img.isEmpty()) throw new Error('Photo introuvable.');
+  return (thumb ? img.resize({ height: 160, quality: 'good' }) : img).toDataURL();
+});
+handle('photo:open', (rel) => shell.openPath(store.photoPath(rel)));
 handle('agents:save', (agents) => store.saveAgents(agents));
 
 handle('excel:export', async ({ from, to, suggestedName }) => {
@@ -123,7 +162,19 @@ handle('excel:export', async ({ from, to, suggestedName }) => {
   if (r.canceled || !r.filePath) return null;
   const dates = [];
   for (let d = from; d <= to; d = M.addDays(d, 1)) dates.push(d);
-  await exportWorkbook(store.loadRange(dates), r.filePath);
+  // Miniatures des photos pour l'onglet « Photos » du classeur.
+  const loadPhoto = (rel) => {
+    try {
+      const img = nativeImage.createFromPath(store.photoPath(rel));
+      if (img.isEmpty()) return null;
+      const small = img.resize({ height: 300, quality: 'good' });
+      const { width, height } = small.getSize();
+      return { buffer: small.toJPEG(80), width, height };
+    } catch {
+      return null;
+    }
+  };
+  await exportWorkbook(store.loadRange(dates), r.filePath, { tasks: store.listTasks(), site: store.loadSite(), loadPhoto });
   return r.filePath;
 });
 handle('excel:open', (file) => shell.openPath(file));
@@ -139,7 +190,7 @@ handle('excel:pick', async () => {
   if (r.canceled || !r.filePaths[0]) return null;
   const file = r.filePaths[0];
   const yearMatch = /(20\d{2})/.exec(path.basename(file));
-  const days = await importWorkbook(file, { year: yearMatch ? yearMatch[1] : new Date().getFullYear() });
+  const { days } = await importWorkbookFull(file, { year: yearMatch ? yearMatch[1] : new Date().getFullYear() });
   let filled = 0;
   let conflicts = 0;
   for (const d of days) {
@@ -153,7 +204,7 @@ handle('excel:pick', async () => {
 });
 handle('excel:import', async (file, { overwrite = false } = {}) => {
   const yearMatch = /(20\d{2})/.exec(path.basename(file));
-  const days = await importWorkbook(file, { year: yearMatch ? yearMatch[1] : new Date().getFullYear() });
+  const { days, tasks } = await importWorkbookFull(file, { year: yearMatch ? yearMatch[1] : new Date().getFullYear() });
   let written = 0;
   let skipped = 0;
   for (const d of days) {
@@ -168,6 +219,9 @@ handle('excel:import', async (file, { overwrite = false } = {}) => {
       written++;
     }
   }
+  // Tâches contenues dans un classeur exporté par l'application : on ajoute celles qui manquent.
+  const known = new Set(store.listTasks().map((t) => t.id));
+  for (const t of tasks) if (t && t.id && !known.has(t.id)) store.saveTask(t);
   return { written, skipped };
 });
 

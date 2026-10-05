@@ -18,13 +18,18 @@ const MATIERES_EXTERNES = ['Bois', 'Matelas'];
 const BENNES = ['Matelas', 'Fer', 'Bois', 'DIB', 'UVE'];
 const PLATEAUX = ['Sport', 'Fer', 'Bois', 'DIB'];
 
+const UNITES = ['pièce(s)', 'kg', 'T'];
+// Couleur par défaut des matières en sortie (les externes en vert) ; modifiable par site.
+const COULEURS_DEFAUT = { Bois: { couleur: '#2f9e44', mode: 'nom' }, Matelas: { couleur: '#2f9e44', mode: 'nom' } };
+const PALETTE = ['#2f9e44', '#1971c2', '#e8590c', '#c2255c', '#7048e8', '#f08c00', '#0c8599', '#868e96'];
+
 const NB_ABSENTS = 4;
 const NB_OBSERVATIONS = 12;
 const SEUIL_ALERTE = 80; // % de remplissage à partir duquel la case passe en rouge
 
 function emptyService(date, service) {
   const sorties = {};
-  for (const m of MATIERES) sorties[m] = MATIERES_EXTERNES.includes(m) ? { nb: null } : { nb: null, tonnage: null };
+  for (const m of MATIERES) sorties[m] = MATIERES_EXTERNES.includes(m) ? { nb: null } : { nb: null, tonnage: null, pesees: [] };
   const bennes = {};
   for (const b of BENNES) bennes[b] = null;
   const plateaux = {};
@@ -36,8 +41,10 @@ function emptyService(date, service) {
     absents: Array.from({ length: NB_ABSENTS }, () => ({ nom: '', motif: '' })),
     entrees: { plateaux: null, pl: null },
     sorties,
+    sortiesExtra: [], // sorties ponctuelles (ex. sapins) : { nom, nb, tonnage, pesees, couleur }
     bennes,
     plateaux,
+    nonConformes: [], // { type, quantite, unite, provenance, commentaire, photos }
     observations: [],
     consignes: '',
     cloture: null,
@@ -57,11 +64,21 @@ function normalize(data, date, service) {
   while (out.absents.length < NB_ABSENTS) out.absents.push({ nom: '', motif: '' });
   out.entrees = { ...base.entrees, ...(data.entrees || {}) };
   out.sorties = {};
-  for (const m of MATIERES) out.sorties[m] = { ...base.sorties[m], ...((data.sorties || {})[m] || {}) };
+  for (const m of MATIERES) {
+    out.sorties[m] = { ...base.sorties[m], ...((data.sorties || {})[m] || {}) };
+    if (!MATIERES_EXTERNES.includes(m)) out.sorties[m].pesees = cleanPesees(out.sorties[m].pesees);
+  }
+  out.sortiesExtra = (Array.isArray(data.sortiesExtra) ? data.sortiesExtra : []).map((x) => ({
+    nom: (x && x.nom) || '', nb: numOrNull(x && x.nb), tonnage: numOrNull(x && x.tonnage), pesees: cleanPesees(x && x.pesees), couleur: (x && x.couleur) || '',
+  }));
+  out.nonConformes = (Array.isArray(data.nonConformes) ? data.nonConformes : []).map((x) => ({
+    type: (x && x.type) || '', quantite: numOrNull(x && x.quantite), unite: (x && x.unite) || UNITES[0],
+    provenance: (x && x.provenance) || '', commentaire: (x && x.commentaire) || '', photos: cleanList(x && x.photos),
+  }));
   out.bennes = { ...base.bennes, ...(data.bennes || {}) };
   out.plateaux = { ...base.plateaux, ...(data.plateaux || {}) };
   out.observations = Array.isArray(data.observations)
-    ? data.observations.map((o) => ({ heure: o.heure || '', texte: o.texte || '', important: !!o.important, auteur: o.auteur || '' }))
+    ? data.observations.map((o) => ({ heure: o.heure || '', texte: o.texte || '', important: !!o.important, auteur: o.auteur || '', photos: cleanList(o.photos) }))
     : [];
   return out;
 }
@@ -74,7 +91,55 @@ function isEmpty(s) {
   if (Object.values(s.sorties).some((v) => v.nb != null || v.tonnage != null)) return false;
   if (Object.values(s.bennes).some((v) => v != null)) return false;
   if (Object.values(s.plateaux).some((v) => v != null)) return false;
-  return !s.observations.some((o) => o.heure || o.texte);
+  if ((s.sortiesExtra || []).some((x) => x.nom || x.nb != null || x.tonnage != null)) return false;
+  if ((s.nonConformes || []).some((x) => x.type || x.quantite != null)) return false;
+  return !s.observations.some((o) => o.heure || o.texte || (o.photos && o.photos.length));
+}
+
+function numOrNull(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+function cleanPesees(list) {
+  return Array.isArray(list) ? list.map(numOrNull).filter((v) => v != null) : [];
+}
+function cleanList(list) {
+  return Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x) : [];
+}
+
+// Tonnage saisi : « 5,54 », « 5T540 » ou plusieurs bennes « 5,54+4T740+3 ».
+function parsePoids(str) {
+  const s = String(str).trim();
+  const m = /^(\d+)\s*[tT]\s*(\d{1,3})$/.exec(s);
+  if (m) return Number(m[1]) + Number(m[2].padEnd(3, '0')) / 1000;
+  const n = Number(s.replace(/\s/g, '').replace(/[tT]$/, '').replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 && s !== '' ? n : null;
+}
+
+function parseTonnage(str) {
+  const parts = String(str).split('+').map((p) => p.trim());
+  if (parts.length === 1 && parts[0] === '') return { ok: true, total: null, pesees: [] };
+  const values = parts.filter((p) => p !== '').map(parsePoids);
+  if (!values.length || values.some((v) => v == null)) return { ok: false };
+  const total = Math.round(values.reduce((a, b) => a + b, 0) * 1000) / 1000;
+  return { ok: true, total, pesees: values.length > 1 ? values : [] };
+}
+
+// Toutes les lignes de sorties : matières habituelles puis ponctuelles.
+function allSorties(s) {
+  return [
+    ...MATIERES.map((m) => ({ nom: m, externe: MATIERES_EXTERNES.includes(m), data: s.sorties[m], extra: false })),
+    ...(s.sortiesExtra || []).map((x, i) => ({ nom: x.nom, externe: false, data: x, extra: true, index: i })),
+  ];
+}
+
+// Couleur de remplissage d'un box : vert (vide) → orange → rouge (plein).
+function fillColor(v) {
+  const p = Math.max(0, Math.min(100, Number(v) || 0));
+  return `hsl(${Math.round(120 - 1.2 * p)}, 70%, ${p > 50 ? 45 : 40}%)`;
+}
+
+function newTaskId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 const num = (v) => (typeof v === 'number' && !Number.isNaN(v) ? v : 0);
@@ -83,9 +148,9 @@ function totals(s) {
   const entrees = num(s.entrees.plateaux) + num(s.entrees.pl);
   let nb = 0;
   let tonnage = 0;
-  for (const m of MATIERES) {
-    nb += num(s.sorties[m].nb);
-    tonnage += num(s.sorties[m].tonnage);
+  for (const row of allSorties(s)) {
+    nb += num(row.data.nb);
+    tonnage += num(row.data.tonnage);
   }
   return { entrees, sortiesNb: nb, tonnage: Math.round(tonnage * 1000) / 1000 };
 }
@@ -182,6 +247,7 @@ function daysInMonth(year, month) {
 }
 
 const api = {
+  UNITES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
   SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth,

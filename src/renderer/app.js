@@ -20,6 +20,9 @@ const S = {
   config: null,
   users: [],
   agents: [], // agents déjà saisis comme absents (proposés à la saisie)
+  ncTypes: [], // types de déchets non conformes déjà saisis
+  site: { couleurs: {} }, // réglages communs au site (couleurs des sorties)
+  tasks: [], // tâches de relève du site
   user: null,
   screen: 'user',
   view: 'saisie',
@@ -33,6 +36,8 @@ const S = {
   conflict: null,
   qa: { texte: '', heure: '', important: false }, // saisie rapide d'observation
   recapMonth: null,
+  recapDays: null,
+  recapSearch: { q: '', mode: 'mois', from: null, to: null, timer: null },
   journal: { period: 'jour', q: '', hidden: new Set(), importantOnly: false, days: null, key: null },
   fiche: null,
 };
@@ -282,6 +287,9 @@ async function backToUsers() {
 
 async function loadDay() {
   S.data = await call(api.loadDay(S.date));
+  try {
+    S.site = await call(api.loadSite());
+  } catch { /* on garde les couleurs déjà connues */ }
   await loadPrev();
 }
 
@@ -358,6 +366,12 @@ function renderHeader() {
 }
 
 function renderTabs() {
+  const badge = document.getElementById('tasks-badge');
+  if (badge) {
+    const n = pendingTasks(S.tasks).length;
+    badge.hidden = !n;
+    badge.textContent = n;
+  }
   const tabs = M.SERVICES.map((def) => {
     const s = S.data[def.id];
     if (!s) return null;
@@ -420,7 +434,7 @@ function field(bind, type, attrs = {}) {
     readOnly: isClosed(s),
     ...attrs,
   });
-  if (['int', 'dec', 'ton', 'pct'].includes(type)) {
+  if (['int', 'dec', 'ton', 'pct', 'pesee', 'tonexpr'].includes(type)) {
     el.inputMode = 'decimal';
     el.classList.add('num');
   }
@@ -477,33 +491,33 @@ function renderForm() {
     }, icon('flag', 15), 'Importante'),
     h('button', { class: 'btn accent', onclick: submitQuickAdd }, icon('plus', 16), 'Ajouter'));
 
-  const obsRows = s.observations.map((o, i) => h('div', { class: `obs${o.important ? ' important' : ''}` },
-    field(`observations.${i}.heure`, 'time', { 'aria-label': 'Heure' }),
-    autoGrow(h('textarea', { 'data-bind': `observations.${i}.texte`, 'data-type': 'text', rows: 1, readOnly: closed, placeholder: 'Observation', value: o.texte })),
-    h('div', { class: 'o-tools' },
-      o.auteur ? h('span', { class: 'o-author', title: 'Saisie par' }, o.auteur) : null,
-      closed ? null : h('button', { class: `o-btn flag${o.important ? ' on' : ''}`, title: o.important ? 'Retirer « importante »' : 'Marquer comme importante', onclick: () => toggleImportant(i) }, icon('flag', 16)),
-      closed ? null : h('button', { class: 'o-btn rm', title: 'Supprimer', 'aria-label': 'Supprimer l\'observation', onclick: () => removeObservation(i) }, icon('trash', 16)))));
+  const obsRows = s.observations.map((o, i) => {
+    const row = h('div', { class: `obs${o.important ? ' important' : ''}` },
+      field(`observations.${i}.heure`, 'time', { 'aria-label': 'Heure' }),
+      h('div', { class: 'obs-main' },
+        autoGrow(h('textarea', { 'data-bind': `observations.${i}.texte`, 'data-type': 'text', rows: 1, readOnly: closed, placeholder: 'Observation', value: o.texte })),
+        photoStrip(o.photos, { editable: !closed, onRemove: (k) => removeItemPhoto(o, k) })),
+      h('div', { class: 'o-tools' },
+        o.auteur ? h('span', { class: 'o-author', title: 'Saisie par' }, o.auteur) : null,
+        closed ? null : photoButton((rels) => addItemPhotos(o, rels)),
+        closed ? null : h('button', { class: `o-btn flag${o.important ? ' on' : ''}`, title: o.important ? 'Retirer « importante »' : 'Marquer comme importante', onclick: () => toggleImportant(i) }, icon('flag', 16)),
+        closed ? null : h('button', { class: 'o-btn rm', title: 'Supprimer', 'aria-label': 'Supprimer l\'observation', onclick: () => removeObservation(i) }, icon('trash', 16))));
+    return closed ? row : photoTarget(row, (rels) => addItemPhotos(o, rels));
+  });
 
   const obs = card('Observations', 'note', [
     quickAdd,
-    h('div', { class: 'obs-list', id: 'obs-list' }, obsRows.length ? obsRows : h('div', { class: 'empty' }, 'Aucune observation pour ce service.')),
-    h('div', { class: 'obs-foot' }, h('span', { class: 'usage', id: 'calc-usage' }))],
-  { wide: true, cls: 'obs-card', hint: 'Ctrl+O depuis n\'importe quel écran' });
+    h('div', { class: 'obs-list', id: 'obs-list' }, obsRows.length ? obsRows : h('div', { class: 'empty' }, 'Aucune observation pour ce service.'))],
+  { wide: true, cls: 'obs-card', hint: 'Ctrl+O depuis n\'importe quel écran · photos : bouton, glisser-déposer ou Ctrl+V' });
 
-  const consignes = card('Consignes pour la relève', 'send', h('div', { class: 'consignes' },
-    autoGrow(h('textarea', {
-      'data-bind': 'consignes', 'data-type': 'text', readOnly: closed, value: s.consignes,
-      placeholder: 'Ce que le service suivant doit savoir ou faire : rotations à prévoir, matériel en panne, consignes du chef…',
-    }))), { wide: true, hint: 'Affichées en priorité au service suivant' });
+  const taches = tasksCard();
 
   const motifs = h('datalist', { id: 'motifs' }, M.MOTIFS.map((m) => h('option', { value: m })));
-  const agentsList = h('datalist', { id: 'agents-list' }, S.agents.map((a) => h('option', { value: a })));
   const prevAbsents = S.prev ? S.prev.absents.filter((a) => a.nom) : [];
   const absents = card('Agents absents', 'users', [
     h('div', { class: 'absents' },
       s.absents.map((_, i) => h('div', { class: `absent${i >= M.NB_ABSENTS ? ' extra' : ''}` },
-        field(`absents.${i}.nom`, 'text', { placeholder: 'Nom de l\'agent', list: 'agents-list', autocomplete: 'off' }),
+        field(`absents.${i}.nom`, 'text', { placeholder: 'Nom de l\'agent', 'data-agent': '1' }),
         field(`absents.${i}.motif`, 'text', { placeholder: 'Motif', list: 'motifs' }),
         i >= M.NB_ABSENTS && !closed
           ? h('button', { class: 'o-btn rm', title: 'Retirer cette ligne', 'aria-label': 'Retirer cette ligne', onclick: () => removeAbsent(i) }, icon('x', 15))
@@ -518,16 +532,36 @@ function renderForm() {
     h('label', { class: 'field' }, h('span', {}, 'Poids lourds (PL)'), field('entrees.pl', 'int')),
     h('div', { class: 'total-box' }, h('span', {}, 'TOTAL'), h('b', { id: 'calc-entrees' }, '0'))));
 
-  const sorties = card('Sorties', 'upload', h('table', { class: 'grid' },
-    h('thead', {}, h('tr', {}, h('th', {}, 'Matière'), h('th', {}, 'Nb sorties'), h('th', {}, 'Tonnage (T)'))),
-    h('tbody', {}, M.MATIERES.map((m) => h('tr', {},
-      h('td', { class: 'label' }, m),
-      h('td', {}, field(`sorties.${m}.nb`, 'int')),
-      M.MATIERES_EXTERNES.includes(m)
-        ? h('td', { class: 'ext' }, 'service externe')
-        : h('td', {}, field(`sorties.${m}.tonnage`, 'ton', { title: 'En tonnes : 5,54 ou 5T540' }))))),
-    h('tfoot', {}, h('tr', { class: 'total' }, h('td', {}, 'TOTAL'), h('td', { id: 'calc-nb' }), h('td', { id: 'calc-ton' })))),
-  { hint: 'Tonnage : 5,54 ou 5T540' });
+  const sortieRows = [];
+  for (const row of M.allSorties(s)) {
+    const base = row.extra ? `sortiesExtra.${row.index}` : `sorties.${row.nom}`;
+    const col = sortieColor(row);
+    sortieRows.push(h('tr', { class: `${col && col.mode === 'ligne' ? 'row-colored' : ''}${row.extra ? ' extra' : ''}`, style: col ? { '--mc': col.couleur } : null },
+      h('td', { class: `label${col ? ' colored' : ''}` },
+        h('div', { class: 'mat-name' },
+          h('button', {
+            class: 'swatch-btn', title: 'Couleur de la ligne', 'aria-label': `Couleur de ${row.nom || 'la sortie'}`, disabled: closed && row.extra,
+            style: { '--sw': col ? col.couleur : 'transparent' }, onclick: (e) => openColorPicker(e.currentTarget, row),
+          }),
+          row.extra ? field(`${base}.nom`, 'text', { placeholder: 'Matière ponctuelle', class: 'extra-name' }) : h('span', {}, row.nom),
+          row.extra && !closed ? h('button', { class: 'o-btn rm', title: 'Supprimer cette sortie', 'aria-label': 'Supprimer cette sortie', onclick: () => removeExtraSortie(row.index) }, icon('x', 14)) : null)),
+      h('td', {}, field(`${base}.nb`, 'int', { 'data-nb': base })),
+      row.externe ? h('td', { class: 'ext' }, 'service externe') : h('td', {}, tonField(base, row.data))));
+    const n = peseeCount(row);
+    if (n >= 2) {
+      sortieRows.push(h('tr', { class: 'pesees-row' }, h('td', { colspan: 3 },
+        h('div', { class: 'pesees' }, h('span', { class: 'muted' }, 'Pesées'),
+          Array.from({ length: n }, (_, k) => h('label', { class: 'pesee' }, h('span', {}, `${k + 1}`), field(`${base}.pesees.${k}`, 'pesee', { placeholder: 'T' }))),
+          h('b', { class: 'pesee-total', 'data-ptotal': base })))));
+    }
+  }
+  const sorties = card('Sorties', 'upload', [
+    h('table', { class: 'grid sorties-grid' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Matière'), h('th', {}, 'Nb sorties'), h('th', {}, 'Tonnage (T)'))),
+      h('tbody', {}, sortieRows),
+      h('tfoot', {}, h('tr', { class: 'total' }, h('td', {}, 'TOTAL'), h('td', { id: 'calc-nb' }), h('td', { id: 'calc-ton' })))),
+    closed ? null : h('div', { class: 'absents-foot' }, h('button', { class: 'btn small', onclick: addExtraSortie }, icon('plus', 14), 'Sortie ponctuelle')),
+  ], { hint: 'Plusieurs bennes : 5,54+4,74' });
 
   const boxRow = (group, nom) => h('div', { class: 'box-row' },
     h('span', {}, nom),
@@ -538,9 +572,203 @@ function renderForm() {
     h('div', {}, h('h4', {}, 'Plateaux'), M.PLATEAUX.map((p) => boxRow('plateaux', p)))),
   { hint: `Remplissage en % · alerte à ${M.SEUIL_ALERTE} %` });
 
-  $('#form').replaceChildren(...[banner, closedNote, obs, consignes, motifs, agentsList, absents, entrees, sorties, boxs].filter(Boolean));
+  const ncRows = s.nonConformes.map((x, i) => {
+    const base = `nonConformes.${i}`;
+    const row = h('div', { class: 'nc-row' },
+      h('div', { class: 'nc-main' },
+        field(`${base}.type`, 'text', { placeholder: 'Déchet (ex. Frigo, Pneus…)', 'data-nc-type': String(i) }),
+        field(`${base}.quantite`, 'dec', { placeholder: 'Qté' }),
+        h('select', { 'data-bind': `${base}.unite`, 'data-type': 'text', disabled: closed, 'aria-label': 'Unité' },
+          M.UNITES.map((u) => h('option', { value: u, selected: x.unite === u }, u))),
+        field(`${base}.provenance`, 'text', { placeholder: 'Provenance' }),
+        closed ? h('span') : photoButton((rels) => addItemPhotos(x, rels)),
+        closed ? h('span') : h('button', { class: 'o-btn rm', title: 'Supprimer ce déchet', 'aria-label': 'Supprimer ce déchet', onclick: () => removeNonConforme(i) }, icon('trash', 15))),
+      field(`${base}.commentaire`, 'text', { placeholder: 'Commentaire (facultatif)', class: 'nc-comment' }),
+      photoStrip(x.photos, { editable: !closed, onRemove: (k) => removeItemPhoto(x, k) }));
+    return closed ? row : photoTarget(row, (rels) => addItemPhotos(x, rels));
+  });
+  const nonConformes = card('Déchets non conformes', 'recycle', [
+    ncRows.length ? h('div', { class: 'nc-list' }, ncRows) : h('div', { class: 'empty' }, 'Aucun déchet non conforme.'),
+    closed ? null : h('div', { class: 'absents-foot' }, h('button', { class: 'btn small', onclick: addNonConforme }, icon('plus', 14), 'Ajouter un déchet')),
+  ], { wide: true, hint: 'Ex. Frigo = 1, Pneus = 20 · en pièces, kg ou T' });
+
+  $('#form').replaceChildren(...[banner, closedNote, obs, taches, motifs, absents, entrees, sorties, boxs, nonConformes].filter(Boolean));
   $('#form').querySelectorAll('textarea').forEach(fitTextarea);
+  $('#form').querySelectorAll('[data-agent]').forEach((input) => Suggest.attach(input, {
+    items: () => S.agents.map((a) => ({ label: a })),
+    onDelete: forgetAgent,
+  }));
+  $('#form').querySelectorAll('[data-nc-type]').forEach((input) => Suggest.attach(input, {
+    items: () => S.ncTypes.map((t) => ({ label: t.nom, meta: t.unite, data: t })),
+    onPick: (it, el) => {
+      const x = cur().nonConformes[Number(el.dataset.ncType)];
+      if (x && it.data.unite) {
+        x.unite = it.data.unite;
+        const sel = el.closest('.nc-main').querySelector('select');
+        if (sel) sel.value = x.unite;
+        markDirty();
+      }
+    },
+    onDelete: forgetNcType,
+  }));
   updateComputed();
+}
+
+// Re-dessine le formulaire en gardant le champ actif (ex. après un changement du nombre de bennes).
+function rerenderKeepFocus() {
+  const a = document.activeElement;
+  const bind = a && a.dataset ? a.dataset.bind : null;
+  renderForm();
+  if (bind) {
+    const el = document.querySelector(`#form [data-bind="${bind}"]`);
+    if (el) el.focus();
+  }
+}
+
+/* ---------- Sorties : bennes multiples, sorties ponctuelles, couleurs ---------- */
+
+function peseeCount(row) {
+  if (row.externe) return 0;
+  const nb = row.data.nb || 0;
+  const p = (row.data.pesees || []).length;
+  if (nb >= 2) return Math.max(nb, p);
+  return p >= 2 ? p : 0;
+}
+
+// Le détail des bennes s'affiche sur la ligne « Pesées » : la case montre le total.
+const tonDisplay = (d) => display('dec', d.tonnage);
+
+function tonField(base, data) {
+  const el = field(`${base}.tonnage`, 'tonexpr', { title: 'En tonnes : 5,54 ou 5T540 ; plusieurs bennes : 5,54+4,74' });
+  el.value = tonDisplay(data);
+  return el;
+}
+
+function sortieColor(row) {
+  if (row.extra) return row.data.couleur ? { couleur: row.data.couleur, mode: 'nom' } : null;
+  const c = Object.prototype.hasOwnProperty.call(S.site.couleurs || {}, row.nom) ? S.site.couleurs[row.nom] : M.COULEURS_DEFAUT[row.nom];
+  return c && c.couleur ? c : null;
+}
+
+function addExtraSortie() {
+  cur().sortiesExtra.push({ nom: '', nb: null, tonnage: null, pesees: [], couleur: '' });
+  renderForm();
+  markDirty();
+  const inputs = document.querySelectorAll('#form .extra-name');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+async function removeExtraSortie(i) {
+  const x = cur().sortiesExtra[i];
+  if ((x.nb != null || x.tonnage != null) && await ask('Supprimer cette sortie ?', `« ${x.nom || 'Sortie ponctuelle'} » et ses chiffres seront retirés de ce service.`,
+    [{ label: 'Annuler', value: 'no' }, { label: 'Supprimer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+  cur().sortiesExtra.splice(i, 1);
+  renderForm();
+  markDirty();
+}
+
+let colorPop = null;
+function closeColorPicker() {
+  if (colorPop) colorPop.remove();
+  colorPop = null;
+}
+
+function openColorPicker(anchor, row) {
+  closeColorPicker();
+  const current = sortieColor(row);
+  let mode = current ? current.mode : 'nom';
+  const apply = async (couleur) => {
+    if (row.extra) {
+      cur().sortiesExtra[row.index].couleur = couleur;
+      markDirty();
+    } else {
+      S.site = { ...S.site, couleurs: { ...(S.site.couleurs || {}), [row.nom]: { couleur, mode } } };
+      try {
+        S.site = await call(api.saveSite(S.site));
+      } catch (err) {
+        toast(`Couleur non enregistrée : ${err.message}`);
+      }
+    }
+    closeColorPicker();
+    renderForm();
+  };
+  const modeSeg = row.extra ? null : h('div', { class: 'seg' }, [['nom', 'Nom seul'], ['ligne', 'Ligne entière']].map(([m, label]) => h('button', {
+    class: m === mode ? 'on' : '', onclick: (e) => {
+      mode = m;
+      e.currentTarget.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === e.currentTarget));
+      if (current) apply(current.couleur);
+    },
+  }, label)));
+  colorPop = h('div', { class: 'color-pop' },
+    h('div', { class: 'cp-title' }, `Couleur : ${row.nom || 'sortie ponctuelle'}`),
+    h('div', { class: 'cp-swatches' },
+      M.PALETTE.map((c) => h('button', { class: `cp-sw${current && current.couleur === c ? ' on' : ''}`, style: { '--sw': c }, title: c, onclick: () => apply(c) })),
+      h('label', { class: 'cp-sw cp-custom', title: 'Autre couleur' }, '+', h('input', { type: 'color', value: current ? current.couleur : '#2f9e44', onchange: (e) => apply(e.target.value) }))),
+    modeSeg,
+    h('button', { class: 'btn small ghost', onclick: () => apply('') }, 'Aucune couleur'),
+    row.extra ? null : h('div', { class: 'cp-hint' }, 'Couleur commune à tous les postes du site.'));
+  document.body.append(colorPop);
+  const r = anchor.getBoundingClientRect();
+  colorPop.style.left = `${r.left + window.scrollX}px`;
+  colorPop.style.top = `${r.bottom + window.scrollY + 6}px`;
+  setTimeout(() => document.addEventListener('mousedown', function outside(e) {
+    if (colorPop && !colorPop.contains(e.target)) {
+      closeColorPicker();
+      document.removeEventListener('mousedown', outside);
+    }
+  }), 0);
+}
+
+/* ---------- Déchets non conformes et photos ---------- */
+
+function addNonConforme() {
+  cur().nonConformes.push({ type: '', quantite: null, unite: M.UNITES[0], provenance: '', commentaire: '', photos: [] });
+  renderForm();
+  markDirty();
+  const inputs = document.querySelectorAll('#form [data-nc-type]');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+async function removeNonConforme(i) {
+  const x = cur().nonConformes[i];
+  if ((x.type || x.quantite != null) && await ask('Supprimer ce déchet ?', `« ${x.type || 'Déchet non conforme'} » sera retiré de ce service.`,
+    [{ label: 'Annuler', value: 'no' }, { label: 'Supprimer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+  cur().nonConformes.splice(i, 1);
+  renderForm();
+  markDirty();
+}
+
+function addItemPhotos(item, rels) {
+  item.photos = [...(item.photos || []), ...rels];
+  rerenderKeepFocus();
+  markDirty();
+  toast(rels.length > 1 ? `${rels.length} photos ajoutées.` : 'Photo ajoutée.');
+}
+
+function removeItemPhoto(item, k) {
+  item.photos.splice(k, 1);
+  rerenderKeepFocus();
+  markDirty();
+}
+
+async function forgetAgent(it) {
+  S.agents = S.agents.filter((a) => a !== it.label);
+  try {
+    S.agents = await call(api.saveAgents(S.agents));
+  } catch (err) {
+    toast(`Liste non enregistrée : ${err.message}`);
+  }
+  toast(`« ${it.label} » retiré des agents mémorisés.`);
+}
+
+async function forgetNcType(it) {
+  S.ncTypes = S.ncTypes.filter((t) => t.nom !== it.label);
+  try {
+    S.ncTypes = await call(api.saveNcTypes(S.ncTypes));
+  } catch (err) {
+    toast(`Liste non enregistrée : ${err.message}`);
+  }
+  toast(`« ${it.label} » retiré des déchets mémorisés.`);
 }
 
 function autoGrow(el) {
@@ -567,23 +795,27 @@ function updateComputed() {
     const v = getPath(s, bar.dataset.bar);
     const alert = v != null && v >= M.SEUIL_ALERTE;
     bar.firstChild.style.width = `${Math.min(100, v || 0)}%`;
+    bar.firstChild.style.background = v == null ? '' : M.fillColor(v);
     bar.classList.toggle('alert', alert);
     const input = bar.parentElement.querySelector('input');
     if (input) input.classList.toggle('alert', alert);
   });
-  const usage = document.getElementById('calc-usage');
-  if (usage) {
-    const n = M.layoutObservations(s).length;
-    usage.textContent = `${n} / ${M.NB_OBSERVATIONS} lignes de la feuille Excel`;
-    usage.classList.toggle('over', n > M.NB_OBSERVATIONS);
-    usage.title = n > M.NB_OBSERVATIONS ? 'Au-delà de 12 lignes, la fin sera coupée à l\'export Excel (elle reste dans l\'application).' : '';
-  }
+  document.querySelectorAll('#form [data-ptotal]').forEach((el) => {
+    el.textContent = `= ${fmtTon(getPath(s, el.dataset.ptotal).tonnage)}`;
+  });
+  document.querySelectorAll('#form [data-type="tonexpr"]').forEach((el) => {
+    if (el !== document.activeElement) el.value = tonDisplay(getPath(s, el.dataset.bind.replace(/\.tonnage$/, '')));
+  });
 }
 
 function onFormInput(e) {
   const el = e.target;
   const bind = el.dataset && el.dataset.bind;
-  if (!bind || el.readOnly) return;
+  if (!bind || el.readOnly || el.disabled) return;
+  if (el.dataset.type === 'tonexpr' || el.dataset.type === 'pesee') {
+    onTonnageInput(el);
+    return;
+  }
   const r = parseValue(el.dataset.type, el.value);
   el.classList.toggle('invalid', !r.ok);
   if (!r.ok) return;
@@ -593,11 +825,56 @@ function onFormInput(e) {
   markDirty();
 }
 
+// Tonnage d'une sortie : expression « 5,54+4,74 » ou pesées benne par benne.
+function onTonnageInput(el) {
+  const bind = el.dataset.bind;
+  if (el.dataset.type === 'tonexpr') {
+    const r = M.parseTonnage(el.value);
+    el.classList.toggle('invalid', !r.ok);
+    if (!r.ok) return;
+    const obj = getPath(cur(), bind.replace(/\.tonnage$/, ''));
+    obj.tonnage = r.total;
+    obj.pesees = r.pesees;
+  } else {
+    const v = el.value.trim() === '' ? null : M.parsePoids(el.value);
+    const bad = el.value.trim() !== '' && v == null;
+    el.classList.toggle('invalid', bad);
+    if (bad) return;
+    const parts = bind.split('.');
+    const k = Number(parts.pop());
+    parts.pop();
+    const obj = getPath(cur(), parts.join('.'));
+    const pesees = [...(obj.pesees || [])];
+    while (pesees.length <= k) pesees.push(null);
+    pesees[k] = v;
+    obj.pesees = pesees;
+    const vals = pesees.filter((x) => x != null);
+    obj.tonnage = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) * 1000) / 1000 : null;
+  }
+  updateComputed();
+  markDirty();
+}
+
+// Après saisie du nombre de sorties ou d'un tonnage à plusieurs bennes, on
+// affiche (ou retire) les cases de pesées.
+function onFormChange(e) {
+  const el = e.target;
+  if (!el.dataset || !(el.dataset.nb || el.dataset.type === 'tonexpr')) return;
+  const base = el.dataset.nb || el.dataset.bind.replace(/\.tonnage$/, '');
+  if (base.startsWith('sorties.') && M.MATIERES_EXTERNES.includes(base.split('.')[1])) return;
+  const wanted = peseeCount({ externe: false, data: getPath(cur(), base) });
+  const shown = document.querySelectorAll(`#form [data-bind^="${base}.pesees."]`).length;
+  // Différé : on laisse le focus arriver sur le champ cliqué avant de redessiner.
+  if (wanted !== shown) setTimeout(rerenderKeepFocus, 0);
+}
+
 function onFormBlur(e) {
   const el = e.target;
   if (!el.dataset || !el.dataset.bind || el.classList.contains('invalid')) return;
   const type = el.dataset.type;
-  if (type !== 'text' && type !== 'time') el.value = display(type, getPath(cur(), el.dataset.bind));
+  if (type === 'tonexpr') el.value = tonDisplay(getPath(cur(), el.dataset.bind.replace(/\.tonnage$/, '')));
+  else if (type === 'pesee') el.value = display('dec', getPath(cur(), el.dataset.bind));
+  else if (type !== 'text' && type !== 'time') el.value = display(type, getPath(cur(), el.dataset.bind));
 }
 
 function onFormKey(e) {
@@ -613,7 +890,7 @@ function onFormKey(e) {
 function addObservation({ heure, texte, important }) {
   const s = cur();
   if (isClosed(s) || !texte.trim()) return false;
-  s.observations.push({ heure: heure || nowHHMM(), texte: texte.trim(), important: !!important, auteur: S.user || '' });
+  s.observations.push({ heure: heure || nowHHMM(), texte: texte.trim(), important: !!important, auteur: S.user || '', photos: [] });
   markDirty();
   return true;
 }
@@ -725,7 +1002,8 @@ async function closeService() {
   if (!s.responsable) warnings.push('• Le responsable n\'est pas renseigné.');
   if (M.BENNES.every((b) => s.bennes[b] == null) && M.PLATEAUX.every((p) => s.plateaux[p] == null)) warnings.push('• L\'état des boxs n\'est pas renseigné.');
   if (!realObs(s).length) warnings.push('• Aucune observation saisie.');
-  if (!s.consignes) warnings.push('• Aucune consigne pour la relève.');
+  const pending = tasksForService(S.tasks, S.date, S.service).filter((t) => !t.faite).length;
+  if (pending) warnings.push(`• ${plural(pending, 'tâche')} encore en attente (elles restent affichées au service suivant).`);
   const text = `Le service ${SVC[S.service].label.toLowerCase()} du ${fmtLongDate(S.date)} sera marqué comme terminé et transmis au service suivant.${warnings.length ? `\n\nÀ vérifier :\n${warnings.join('\n')}` : ''}`;
   const r = await ask('Clôturer le service ?', text, [
     { label: 'Annuler', value: 'no' },
@@ -762,8 +1040,16 @@ function renderPassation() {
     h('div', {}, h('div', { class: 'ph-title' }, `Relève · ${def.label}`), h('div', { class: 'ph-sub' }, fmtLongDate(p.date))),
     h('button', { class: 'btn small', onclick: () => openFiche(p.date, p.service) }, icon('eye', 14), 'Détail'));
 
+  // Les tâches en attente s'affichent même si le service précédent n'a rien saisi.
+  const pend = tasksForService(S.tasks, S.date, S.service).filter((t) => !t.faite && !(t.origine.date === S.date && t.origine.service === S.service));
+  const tasksSection = h('div', { class: 'pass-section' }, h('h5', {}, icon('checkSquare', 13), `Tâches en attente (${pend.length})`),
+    pend.length
+      ? h('div', { class: 'task-list' }, pend.map((t) => taskItem(t, { date: S.date, service: S.service, compact: true })))
+      : h('div', { class: 'empty' }, 'Aucune tâche en attente.'),
+    prev && prev.consignes ? h('div', { class: 'pass-consignes', style: { marginTop: '8px' } }, prev.consignes) : null);
+
   if (!prev || M.isEmpty(prev)) {
-    $('#passation').replaceChildren(h('div', { class: 'card', style }, head,
+    $('#passation').replaceChildren(h('div', { class: 'card', style }, head, tasksSection,
       h('div', { class: 'pass-section' }, h('div', { class: 'empty' }, 'Le service précédent n\'a rien saisi.'))));
     return;
   }
@@ -779,8 +1065,7 @@ function renderPassation() {
     h('div', { class: 'pass-section' },
       h('div', { class: 'kv' }, h('span', {}, 'Responsable'), h('b', {}, prev.responsable || '—')),
       h('div', { class: 'kv' }, h('span', {}, 'État'), isClosed(prev) ? h('span', { class: 'pill done' }, icon('lock', 12), `Clôturé ${fmtDateTime(prev.cloture.at)}`) : h('span', { class: 'pill draft' }, 'Non clôturé'))),
-    h('div', { class: 'pass-section' }, h('h5', {}, icon('send', 13), 'Consignes'),
-      prev.consignes ? h('div', { class: 'pass-consignes' }, prev.consignes) : h('div', { class: 'empty' }, 'Aucune consigne transmise.')),
+    tasksSection,
     important.length ? h('div', { class: 'pass-section' }, h('h5', {}, icon('flag', 13), `Observations importantes (${important.length})`),
       h('ul', { class: 'pass-obs' }, important.map(obsItem))) : null,
     h('div', { class: 'pass-section' }, h('h5', {}, icon('box', 13), `Boxs à ${M.SEUIL_ALERTE} % ou plus`),
@@ -788,6 +1073,8 @@ function renderPassation() {
         ? h('div', { class: 'alert-list' }, alerts.map((a) => h('span', { class: 'pill alert' }, `${a.type} ${a.nom} : ${fmtNum(a.v)} %`)))
         : h('div', { class: 'empty' }, 'Aucun box en alerte.'),
       isClosed(cur()) ? null : h('button', { class: 'btn small', style: { marginTop: '8px' }, onclick: takeOverBoxes }, 'Reprendre l\'état des boxs')),
+    prev.nonConformes.length ? h('div', { class: 'pass-section' }, h('h5', {}, icon('recycle', 13), `Déchets non conformes (${prev.nonConformes.length})`),
+      h('ul', { class: 'pass-obs nc' }, prev.nonConformes.map((x) => h('li', {}, h('b', {}, fmtQte(x)), h('span', {}, x.type, x.provenance ? ` — ${x.provenance}` : ''))))) : null,
     h('div', { class: 'pass-section' }, h('h5', {}, icon('note', 13), `Toutes les observations (${obs.length})`),
       obs.length ? h('ul', { class: 'pass-obs' }, obs.map(obsItem)) : h('div', { class: 'empty' }, 'Aucune observation.')),
     h('div', { class: 'pass-section' }, h('h5', {}, icon('chart', 13), 'Activité'),
@@ -842,10 +1129,12 @@ function highlight(text, q) {
   return out;
 }
 
+const fmtQte = (x) => (x.quantite == null ? '?' : `${fmtNum(x.quantite)} ${x.unite === 'pièce(s)' ? (x.quantite > 1 ? 'pièces' : 'pièce') : x.unite}`);
+
 function obsEntry(o, q = '') {
   return h('div', { class: `j-entry${o.important ? ' important' : ''}` },
     h('span', { class: 'je-time' }, o.heure || '—'),
-    h('span', { class: 'je-text' }, o.important ? h('b', {}, '⚠ ') : null, highlight(o.texte, q)),
+    h('span', { class: 'je-text' }, o.important ? h('b', {}, '⚠ ') : null, highlight(o.texte, q), photoStrip(o.photos)),
     o.auteur ? h('span', { class: 'je-author' }, o.auteur) : h('span'));
 }
 
@@ -860,7 +1149,7 @@ function renderFiche() {
     return openFiche(n.date, n.service);
   };
   const miniBar = (nom, v) => h('div', { class: 'mini-bar' }, h('span', {}, nom),
-    h('div', { class: `bar${v >= M.SEUIL_ALERTE ? ' alert' : ''}` }, h('i', { style: { width: `${Math.min(100, v || 0)}%` } })),
+    h('div', { class: 'bar' }, h('i', { style: { width: `${Math.min(100, v || 0)}%`, background: v == null ? '' : M.fillColor(v) } })),
     h('span', { class: v >= M.SEUIL_ALERTE ? 'red' : '' }, v == null ? '—' : `${fmtNum(v)} %`));
   const ficheCard = (title, iconName, body) => h('div', { class: 'card' },
     h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon(iconName, 16)), title), h('div', { class: 'card-body' }, body));
@@ -881,7 +1170,16 @@ function renderFiche() {
     h('div', { class: 'fiche-content' },
       h('div', { class: 'fiche-col' },
         ficheCard(`Observations (${obs.length})`, 'note', obs.length ? h('div', { class: 'fiche-obs' }, obs.map((o) => obsEntry(o))) : h('div', { class: 'empty' }, 'Aucune observation.')),
-        ficheCard('Consignes pour la relève', 'send', s.consignes ? h('div', { class: 'pass-consignes' }, s.consignes) : h('div', { class: 'empty' }, 'Aucune consigne.'))),
+        ficheCard('Tâches pour la relève', 'checkSquare', [
+          ...(() => {
+            const list = tasksForService(S.tasks, date, service);
+            return list.length ? [h('div', { class: 'task-list' }, list.map((tk) => taskItem(tk, { date, service, compact: true })))] : [h('div', { class: 'empty' }, 'Aucune tâche.')];
+          })(),
+          s.consignes ? h('div', { class: 'pass-consignes', style: { marginTop: '8px' } }, s.consignes) : null]),
+        s.nonConformes.length ? ficheCard(`Déchets non conformes (${s.nonConformes.length})`, 'recycle', h('div', { class: 'nc-view' }, s.nonConformes.map((x) => h('div', { class: 'ncv-row' },
+          h('div', {}, h('b', {}, x.type || '?'), ` : ${fmtQte(x)}`, x.provenance ? h('span', { class: 'muted' }, ` — ${x.provenance}`) : null),
+          x.commentaire ? h('div', { class: 'muted' }, x.commentaire) : null,
+          photoStrip(x.photos))))) : null),
       h('div', { class: 'fiche-col' },
         ficheCard('Service', 'user', [
           h('div', { class: 'kv' }, h('span', {}, 'Responsable'), h('b', {}, s.responsable || '—')),
@@ -895,9 +1193,9 @@ function renderFiche() {
             h('div', {}, h('b', {}, fmtNum(t.sortiesNb)), h('span', {}, 'Sorties')),
             h('div', {}, h('b', {}, fmtNum(t.tonnage)), h('span', {}, 'Tonnes'))),
           h('table', { class: 'simple', style: { marginTop: '10px' } },
-            h('tbody', {}, M.MATIERES.filter((m) => s.sorties[m].nb != null || s.sorties[m].tonnage != null).map((m) => h('tr', {},
-              h('td', {}, m), h('td', {}, plural(s.sorties[m].nb || 0, 'sortie')),
-              h('td', {}, M.MATIERES_EXTERNES.includes(m) ? 'externe' : fmtTon(s.sorties[m].tonnage))))),
+            h('tbody', {}, M.allSorties(s).filter((r) => r.data.nb != null || r.data.tonnage != null).map((r) => h('tr', {},
+              h('td', {}, r.nom || 'Sortie ponctuelle', r.extra ? h('span', { class: 'muted' }, ' (ponctuelle)') : null), h('td', {}, plural(r.data.nb || 0, 'sortie')),
+              h('td', { title: (r.data.pesees || []).length > 1 ? r.data.pesees.map((v) => fmtNum(v)).join(' + ') : '' }, r.externe ? 'externe' : fmtTon(r.data.tonnage))))),
             h('tfoot', {}, h('tr', { class: 'tot' }, h('td', {}, 'Total'), h('td', {}, plural(t.sortiesNb, 'sortie')), h('td', {}, fmtTon(t.tonnage))))),
         ]),
         ficheCard('État des boxs', 'box', [
@@ -958,7 +1256,8 @@ async function renderJournal({ reload = false } = {}) {
       if (J.importantOnly) obs = obs.filter((o) => o.important);
       if (ql) obs = obs.filter((o) => o.texte.toLowerCase().includes(ql) || (o.auteur || '').toLowerCase().includes(ql));
       const showConsignes = s.consignes && !J.importantOnly && (!ql || s.consignes.toLowerCase().includes(ql));
-      if (!obs.length && !showConsignes) return null;
+      const tasks = J.importantOnly ? [] : S.tasks.filter((t) => t.origine.date === day.date && t.origine.service === d.id && (!ql || t.texte.toLowerCase().includes(ql)));
+      if (!obs.length && !showConsignes && !tasks.length) return null;
       count += obs.length;
       return h('div', { class: 'j-svc', style: svcStyle(d.id) },
         h('div', { class: 'j-svc-head' },
@@ -969,6 +1268,7 @@ async function renderJournal({ reload = false } = {}) {
           h('button', { class: 'btn small ghost', onclick: () => openFiche(day.date, d.id) }, icon('eye', 14), 'Fiche'),
           h('button', { class: 'btn small ghost', onclick: () => { setView('saisie', { silent: true }); goTo(day.date, d.id); } }, icon('edit', 14), 'Saisie')),
         obs.map((o) => obsEntry(o, q)),
+        tasks.length ? h('div', { class: 'j-consignes task-list' }, tasks.map((t) => taskItem(t, { date: day.date, service: d.id, compact: true }))) : null,
         showConsignes ? h('div', { class: 'j-consignes' }, h('div', { class: 'pass-consignes' }, h('b', {}, 'Consignes relève : '), highlight(s.consignes, q))) : null);
     }).filter(Boolean);
     if (!svcs.length) return null;
@@ -984,7 +1284,7 @@ function buildJournalBar() {
   const J = S.journal;
   const bar = h('div', { class: 'journal-bar', id: 'journal-bar' },
     h('div', { class: 'search' }, icon('search', 16),
-      h('input', { type: 'text', id: 'j-search', placeholder: 'Rechercher dans les observations et consignes…', value: J.q, oninput: (e) => { J.q = e.target.value; renderJournal(); } })),
+      h('input', { type: 'text', id: 'j-search', placeholder: 'Rechercher dans les observations et tâches…', value: J.q, oninput: (e) => { J.q = e.target.value; renderJournal(); } })),
     h('div', { class: 'seg' }, [['jour', 'Journée'], ['semaine', '7 jours'], ['mois', 'Mois']].map(([p, label]) => h('button', {
       'data-period': p, onclick: () => { J.period = p; renderJournal(); },
     }, label))),
@@ -1042,7 +1342,15 @@ function setView(view, { silent = false } = {}) {
 
 // Recharge les services modifiés depuis un autre poste.
 async function poll() {
-  if (document.hidden || S.screen !== 'app' || S.view !== 'saisie' || S.saving || $('#fiche').open) return;
+  if (document.hidden || S.screen !== 'app') return;
+  // Tâches : alerte discrète quand un autre poste en ajoute ou en valide une.
+  if (await loadTasks({ notify: true })) {
+    renderTasksCard();
+    renderPassation();
+    renderTabs();
+    if ($('#fiche').open && S.fiche) renderFiche();
+  }
+  if (S.view !== 'saisie' || S.saving || $('#fiche').open) return;
   let revs;
   try {
     revs = await call(api.dayRevs(S.date));
@@ -1089,6 +1397,8 @@ async function renderRecap() {
   const { year, month } = S.recapMonth;
   const days = await call(api.loadMonth(year, month));
   const parMatiere = Object.fromEntries(M.MATIERES.map((m) => [m, { nb: 0, tonnage: 0 }]));
+  const ponctuelles = new Set();
+  const parNc = {};
   const parMotif = {};
   const tot = { plateaux: 0, pl: 0, entrees: 0, nb: 0, tonnage: 0, absents: 0, clos: 0, saisis: 0, obs: 0 };
   const n = (v) => (typeof v === 'number' ? v : 0);
@@ -1103,11 +1413,19 @@ async function renderRecap() {
       if (isClosed(s)) tot.clos++;
       row.plateaux += n(s.entrees.plateaux);
       row.pl += n(s.entrees.pl);
-      for (const m of M.MATIERES) {
-        row.nb += n(s.sorties[m].nb);
-        row.tonnage += n(s.sorties[m].tonnage);
-        parMatiere[m].nb += n(s.sorties[m].nb);
-        parMatiere[m].tonnage += n(s.sorties[m].tonnage);
+      for (const r of M.allSorties(s)) {
+        const nom = r.nom || 'Sortie ponctuelle';
+        if (r.extra) ponctuelles.add(nom);
+        if (!parMatiere[nom]) parMatiere[nom] = { nb: 0, tonnage: 0 };
+        row.nb += n(r.data.nb);
+        row.tonnage += n(r.data.tonnage);
+        parMatiere[nom].nb += n(r.data.nb);
+        parMatiere[nom].tonnage += n(r.data.tonnage);
+      }
+      for (const x of s.nonConformes) {
+        if (!x.type) continue;
+        const k = `${x.type}|${x.unite}`;
+        parNc[k] = (parNc[k] || 0) + n(x.quantite);
       }
       for (const a of s.absents) {
         if (!a.nom) continue;
@@ -1154,10 +1472,13 @@ async function renderRecap() {
   };
   const kpi = (label, value, iconName, color, soft) => h('div', { class: 'kpi', style: { '--k': color, '--k-soft': soft } },
     h('span', { class: 'k-icon' }, icon(iconName, 20)), h('div', {}, h('div', { class: 'k-label' }, label), h('div', { class: 'k-value' }, value)));
-  const maxTon = Math.max(1, ...M.MATIERES.map((m) => parMatiere[m].tonnage));
-  const maxNb = Math.max(1, ...M.MATIERES.map((m) => parMatiere[m].nb));
+  const matieres = Object.keys(parMatiere);
+  const maxTon = Math.max(1, ...matieres.map((m) => parMatiere[m].tonnage));
+  const maxNb = Math.max(1, ...matieres.map((m) => parMatiere[m].nb));
 
-  $('#recap').replaceChildren(
+  if (!$('#recap-search')) buildRecapSearch();
+  S.recapDays = days;
+  $('#recap-body').replaceChildren(
     h('div', { class: 'recap-head' },
       h('button', { class: 'icon-btn', onclick: () => moveMonth(-1), 'aria-label': 'Mois précédent' }, icon('chevronLeft')),
       h('h2', {}, fmtMonth(year, month)),
@@ -1182,18 +1503,131 @@ async function renderRecap() {
             h('span', {}, '● clôturé · ◐ non clôturé · ○ vide')))),
       h('div', { class: 'recap-side' },
         h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('upload', 16)), 'Sorties par matière'),
-          h('div', { class: 'card-body' }, M.MATIERES.map((m) => {
+          h('div', { class: 'card-body' }, matieres.map((m) => {
             const ext = M.MATIERES_EXTERNES.includes(m);
             const ratio = ext ? parMatiere[m].nb / maxNb : parMatiere[m].tonnage / maxTon;
-            return h('div', { class: 'matiere-row' }, h('span', {}, m),
+            return h('div', { class: 'matiere-row' }, h('span', { title: ponctuelles.has(m) ? 'Sortie ponctuelle' : '' }, m, ponctuelles.has(m) ? '*' : ''),
               h('div', { class: 'bar' }, h('i', { style: { width: `${Math.round(ratio * 100)}%` } })),
               h('b', {}, fmtNum(parMatiere[m].nb)),
               h('span', {}, ext ? 'externe' : fmtTon(parMatiere[m].tonnage)));
           }))),
+        h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('recycle', 16)), 'Déchets non conformes'),
+          h('div', { class: 'card-body' }, Object.keys(parNc).length
+            ? Object.entries(parNc).sort((a, b) => a[0].localeCompare(b[0], 'fr')).map(([k, v]) => {
+              const [type, unite] = k.split('|');
+              return h('div', { class: 'kv' }, h('span', {}, type), h('b', {}, fmtQte({ quantite: v, unite })));
+            })
+            : h('div', { class: 'empty' }, 'Aucun déchet non conforme.'))),
         h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('users', 16)), 'Absences par motif'),
           h('div', { class: 'card-body' }, Object.keys(parMotif).length
             ? Object.entries(parMotif).sort((a, b) => b[1] - a[1]).map(([k, v]) => h('div', { class: 'kv' }, h('span', {}, k), h('b', {}, v)))
             : h('div', { class: 'empty' }, 'Aucune absence saisie.'))))));
+  if (S.recapSearch.q.trim()) runRecapSearch();
+}
+
+/* ---------- Recherche dans le récap ---------- */
+
+const normTxt = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// Tout ce qui est cherchable dans un service : une entrée par élément.
+function searchItems(date, svcId, s) {
+  const items = [];
+  const add = (type, text, extra = '') => { if (text) items.push({ date, service: svcId, type, text, extra }); };
+  add('Responsable', s.responsable);
+  for (const o of realObs(s)) add(o.important ? 'Observation importante' : 'Observation', o.texte, [o.heure, o.auteur].filter(Boolean).join(' · '));
+  for (const a of s.absents) if (a.nom) add('Absent', `${a.nom}${a.motif ? ` (${a.motif})` : ''}`);
+  for (const x of s.nonConformes) if (x.type) add('Non conforme', `${x.type} : ${fmtQte(x)}${x.provenance ? ` — ${x.provenance}` : ''}${x.commentaire ? ` — ${x.commentaire}` : ''}`);
+  for (const x of s.sortiesExtra) if (x.nom) add('Sortie ponctuelle', `${x.nom}${x.nb ? ` · ${plural(x.nb, 'sortie')}` : ''}${x.tonnage ? ` · ${fmtTon(x.tonnage)}` : ''}`);
+  if (s.consignes) add('Consigne', s.consignes);
+  for (const t of S.tasks) {
+    if (t.origine.date === date && t.origine.service === svcId) add(t.faite ? 'Tâche faite' : 'Tâche en attente', t.texte, `créée par ${t.creePar || '?'}${t.faite ? ` · faite par ${t.faite.par || '?'}` : ''}`);
+  }
+  return items;
+}
+
+function buildRecapSearch() {
+  const R = S.recapSearch;
+  const range = () => {
+    const { year, month } = S.recapMonth;
+    const days = M.daysInMonth(year, month);
+    return [days[0], days[days.length - 1]];
+  };
+  const [d0, d1] = range();
+  if (!R.from) { R.from = d0; R.to = d1; }
+  const run = () => {
+    clearTimeout(R.timer);
+    R.timer = setTimeout(runRecapSearch, 200);
+  };
+  const periodInputs = h('span', { class: 'rs-period', hidden: R.mode !== 'periode' },
+    'du', h('input', { type: 'date', value: R.from, onchange: (e) => { R.from = e.target.value; run(); } }),
+    'au', h('input', { type: 'date', value: R.to, onchange: (e) => { R.to = e.target.value; run(); } }));
+  $('#recap').replaceChildren(
+    h('div', { class: 'journal-bar', id: 'recap-search' },
+      h('div', { class: 'search' }, icon('search', 16),
+        h('input', { type: 'text', id: 'rs-q', value: R.q, placeholder: 'Rechercher par mots-clés : observations, tâches, absents, déchets, responsables…', oninput: (e) => { R.q = e.target.value; run(); } })),
+      h('div', { class: 'seg' }, [['mois', 'Mois affiché'], ['periode', 'Période']].map(([m, label]) => h('button', {
+        class: R.mode === m ? 'on' : '', onclick: (e) => {
+          R.mode = m;
+          e.currentTarget.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === e.currentTarget));
+          periodInputs.hidden = m !== 'periode';
+          run();
+        },
+      }, label))),
+      periodInputs),
+    h('div', { id: 'recap-results' }),
+    h('div', { id: 'recap-body' }));
+}
+
+async function runRecapSearch() {
+  const R = S.recapSearch;
+  const box = $('#recap-results');
+  if (!box) return;
+  const words = normTxt(R.q).split(/\s+/).filter(Boolean);
+  if (!words.length) {
+    box.replaceChildren();
+    return;
+  }
+  let days = S.recapDays || [];
+  if (R.mode === 'periode' && R.from && R.to && R.from <= R.to) {
+    days = await call(api.loadRange(R.from, R.to));
+  }
+  const results = [];
+  for (const d of days) {
+    for (const def of M.SERVICES) {
+      for (const it of searchItems(d.date, def.id, d.services[def.id])) {
+        const hay = normTxt(`${it.type} ${it.text} ${it.extra}`);
+        if (words.every((w) => hay.includes(w))) results.push(it);
+      }
+    }
+  }
+  const first = normTxt(R.q).split(/\s+/).filter(Boolean)[0];
+  box.replaceChildren(h('div', { class: 'card rs-card' },
+    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('search', 16)), `Résultats (${results.length})`,
+      h('span', { class: 'hint' }, results.length ? 'Cliquer sur un résultat pour ouvrir la fiche du service' : '')),
+    h('div', { class: 'card-body' }, results.length
+      ? h('div', { class: 'rs-list' }, results.slice(0, 300).map((it) => h('button', { class: 'rs-item', style: svcStyle(it.service), onclick: () => openFiche(it.date, it.service) },
+        h('span', { class: 'rs-when' }, h('b', {}, fmtShortDate(it.date)), h('span', {}, SVC[it.service].label)),
+        h('span', { class: `rs-type${/important|attente/i.test(it.type) ? ' hot' : ''}` }, it.type),
+        h('span', { class: 'rs-text' }, highlightNorm(it.text, words), it.extra ? h('span', { class: 'muted' }, ` · ${it.extra}`) : null))))
+      : h('div', { class: 'empty' }, `Aucun résultat pour « ${R.q.trim()} »${first ? '' : ''}.`))));
+}
+
+// Surligne les mots recherchés sans tenir compte des accents ni des majuscules.
+function highlightNorm(text, words) {
+  const n = normTxt(text);
+  const marks = new Array(text.length).fill(false);
+  for (const w of words) {
+    for (let i = n.indexOf(w); i !== -1; i = n.indexOf(w, i + 1)) for (let k = i; k < i + w.length; k++) marks[k] = true;
+  }
+  const out = [];
+  let i = 0;
+  while (i < text.length) {
+    let j = i;
+    while (j < text.length && marks[j] === marks[i]) j++;
+    out.push(marks[i] ? h('mark', {}, text.slice(i, j)) : text.slice(i, j));
+    i = j;
+  }
+  return out;
 }
 
 /* ---------- Export / import / impression ---------- */
@@ -1259,19 +1693,26 @@ function buildPrint() {
   const pages = M.SERVICES.map((def) => {
     const s = S.data[def.id];
     const t = M.totals(s);
-    const lines = M.layoutObservations(s);
+    const obs = realObs(s);
+    const lines = obs.map((o) => ({ heure: o.heure, texte: `${o.important ? '⚠ ' : ''}${o.texte}${o.photos.length ? ` (📷 ${o.photos.length})` : ''}` }));
     while (lines.length < M.NB_OBSERVATIONS) lines.push({ heure: '', texte: '' });
-    const pctCell = (v) => h('td', { class: `c${v >= M.SEUIL_ALERTE ? ' red' : ''}` }, v == null ? '' : `${fmtNum(v)} %`);
+    const pctCell = (v) => h('td', { class: `c${v >= M.SEUIL_ALERTE ? ' red' : ''}`, style: v == null ? null : { background: M.fillColor(v), color: '#fff' } }, v == null ? '' : `${fmtNum(v)} %`);
     const noBorder = () => h('td', { style: { border: 0 } });
-    const boxRows = M.MATIERES.map((m, i) => {
+    const rowsSorties = M.allSorties(s);
+    const boxRows = Array.from({ length: Math.max(rowsSorties.length, M.BENNES.length) }, (_, i) => {
+      const r = rowsSorties[i];
       const b = M.BENNES[i];
       const p = M.PLATEAUX[i];
+      const col = r ? sortieColor(r) : null;
+      const ton = r && r.data.tonnage != null ? `${fmtTon(r.data.tonnage)}${(r.data.pesees || []).length > 1 ? ` (${r.data.pesees.map((v) => fmtNum(v)).join('+')})` : ''}` : '';
       return h('tr', {},
-        h('td', {}, m), h('td', { class: 'c' }, s.sorties[m].nb ?? ''),
-        M.MATIERES_EXTERNES.includes(m) ? h('td', { class: 'ext' }, 'service externe') : h('td', { class: 'c' }, s.sorties[m].tonnage != null ? fmtTon(s.sorties[m].tonnage) : ''),
+        r ? h('td', { style: col ? { color: col.couleur, fontWeight: '700' } : null }, r.nom || 'Ponctuelle') : noBorder(),
+        r ? h('td', { class: 'c' }, r.data.nb ?? '') : noBorder(),
+        !r ? noBorder() : r.externe ? h('td', { class: 'ext' }, 'service externe') : h('td', { class: 'c' }, ton),
         b ? h('td', {}, b) : noBorder(), b ? pctCell(s.bennes[b]) : noBorder(),
         p ? h('td', {}, p) : noBorder(), p ? pctCell(s.plateaux[p]) : noBorder());
     });
+    const tasks = tasksForService(S.tasks, S.date, def.id);
     return h('div', { class: 'p-page', style: { '--c': def.couleur } },
       h('div', { class: 'p-title' }, 'MAIN COURANTE  ·  TRONC PRINCIPAL'),
       h('div', { class: 'p-band' }, h('span', { style: { textTransform: 'capitalize' } }, fmtShortDate(S.date)), h('span', { class: 'p-st' }, def.titre),
@@ -1290,6 +1731,12 @@ function buildPrint() {
       h('table', {}, h('tr', {}, ['Matière', 'Nb sorties', 'Tonnage', 'Bennes', 'Remplissage', 'Plateaux', 'Remplissage'].map((x) => h('th', {}, x))),
         boxRows,
         h('tr', { class: 'tot' }, h('td', {}, 'TOTAL'), h('td', { class: 'c' }, t.sortiesNb), h('td', { class: 'c' }, fmtTon(t.tonnage)), h('td', { colspan: 4, style: { background: 'transparent', border: 0 } }))),
+      s.nonConformes.length ? h('div', { class: 'p-sec' }, 'DÉCHETS NON CONFORMES') : null,
+      s.nonConformes.length ? h('table', {}, h('tr', {}, ['Déchet', 'Quantité', 'Provenance', 'Commentaire'].map((x) => h('th', {}, x))),
+        s.nonConformes.map((x) => h('tr', {}, h('td', {}, x.type), h('td', { class: 'c' }, fmtQte(x)), h('td', {}, x.provenance), h('td', {}, x.commentaire, x.photos.length ? ` (📷 ${x.photos.length})` : '')))) : null,
+      tasks.length ? h('div', { class: 'p-sec' }, 'TÂCHES POUR LA RELÈVE') : null,
+      tasks.length ? h('table', {}, tasks.map((tk) => h('tr', {}, h('td', { class: 'c', style: { width: '6%' } }, tk.faite ? '☑' : '☐'),
+        h('td', {}, tk.texte, h('span', { style: { color: '#888', fontSize: '8pt' } }, ` — ${tk.creePar || ''}${tk.faite ? ` · fait par ${tk.faite.par || ''} ${fmtDateTime(tk.faite.le)}` : ''}`))))) : null,
       h('div', { class: 'p-sec' }, 'N.B.  —  observations'),
       h('table', {}, h('tr', {}, h('th', {}, 'Heure'), h('th', {}, 'Observation')),
         lines.map((l) => h('tr', {}, h('td', { class: 'h' }, l.heure), h('td', {}, l.texte)))));
@@ -1433,7 +1880,8 @@ function initSettings() {
     // Un dossier partagé qui a déjà sa liste de responsables la garde.
     const existing = dirChanged ? await call(api.loadUsers()) : [];
     S.users = await call(api.saveUsers(dirChanged && existing.length ? existing : settingsUsers));
-    S.agents = dirChanged ? await call(api.loadAgents()) : await call(api.saveAgents(settingsAgents));
+    if (dirChanged) await loadSiteData();
+    else S.agents = await call(api.saveAgents(settingsAgents));
     toast('Paramètres enregistrés.');
     checkUpdate();
     if (S.screen === 'user') renderUserScreen();
@@ -1442,13 +1890,28 @@ function initSettings() {
   });
 }
 
+// Listes et réglages communs au site (dossier des données).
+async function loadSiteData() {
+  const safe = async (p, fallback) => {
+    try {
+      return await call(p);
+    } catch {
+      return fallback;
+    }
+  };
+  S.agents = await safe(api.loadAgents(), []);
+  S.ncTypes = await safe(api.loadNcTypes(), []);
+  S.site = await safe(api.loadSite(), { couleurs: {} });
+  await loadTasks();
+}
+
 /* ---------- Démarrage ---------- */
 
 async function init() {
   decorate();
   S.config = await call(api.getConfig());
   S.users = await call(api.loadUsers());
-  S.agents = await call(api.loadAgents());
+  await loadSiteData();
   const live = M.currentService();
   S.date = live.date;
   S.service = live.service;
@@ -1456,6 +1919,7 @@ async function init() {
   const form = $('#form');
   form.addEventListener('input', onFormInput);
   form.addEventListener('focusout', onFormBlur);
+  form.addEventListener('change', onFormChange);
   form.addEventListener('keydown', onFormKey);
 
   // Écran de choix du service

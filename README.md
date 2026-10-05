@@ -6,8 +6,12 @@ après-midi (13H-20H) et nuit (20H-4H).
 
 Elle reprend exactement la structure de l'onglet « Modèle » du classeur
 (agents absents, entrées, sorties, état des boxs, N.B.) et sait **exporter vers
-un classeur Excel identique** (un onglet `JJ-MM` par jour, mise en forme,
-listes déroulantes, barres de remplissage et sauts de page compris).
+un classeur Excel au même format** (un onglet `JJ-MM` par jour, mise en forme
+du modèle, listes déroulantes, remplissage coloré du vert au rouge, une page A4
+par service). Les sections s'allongent selon le contenu (absents, sorties
+ponctuelles, déchets non conformes, tâches, observations). Un onglet masqué
+garde toutes les données pour que le réimport soit fidèle ; les classeurs
+remplis à la main à l'ancien format restent importables.
 
 ## Parcours
 
@@ -39,6 +43,41 @@ davantage (à partir du 5e, ils sont reportés dans les N.B. de l'export Excel).
 Les noms déjà saisis sont **mémorisés** et proposés au fil de la frappe (liste
 commune, modifiable dans les paramètres). « Reprendre les absents du service
 précédent » recopie les absences en cours (CP, maladie…).
+
+## Tâches pour la relève
+
+Les anciennes « consignes » sont devenues des **tâches à cocher**. Une tâche non
+faite reste affichée aux services suivants (et dans le panneau de relève)
+jusqu'à ce qu'un responsable la valide ; on voit qui l'a créée, qui l'a faite et
+quand. Les autres postes reçoivent une alerte discrète à chaque ajout ou
+validation, et le nombre de tâches en attente s'affiche à côté de « Saisie ».
+
+## Sorties
+
+- **Plusieurs bennes** : taper `5,54+4,74` dans la case tonnage, ou indiquer le
+  nombre de sorties (2 ou plus) pour faire apparaître une case par pesée. Le
+  total se calcule seul ; dans Excel la cellule contient la formule `=5.54+4.74`.
+- **Sorties ponctuelles** (ex. sapins en hiver) : « + Sortie ponctuelle »,
+  supprimables, comptées dans les totaux et le récap.
+- **Couleurs** : la pastille devant chaque matière choisit sa couleur (nom seul
+  ou ligne entière) ; les sorties externes sont en vert par défaut. Les couleurs
+  sont communes au site (`site.json`) et reprises dans l'export Excel.
+
+## Déchets non conformes et photos
+
+Sous l'état des boxs : type, quantité (pièces, kg ou T), provenance,
+commentaire et photos. Les types déjà saisis sont proposés avec leur unité.
+Les **photos** s'ajoutent aux observations et aux déchets non conformes (bouton
+appareil photo, glisser-déposer ou Ctrl+V) ; elles sont réduites et rangées dans
+`photos/` du dossier commun, et reprises en miniature dans l'onglet « Photos »
+de l'export Excel. Dans les listes de suggestions (agents, déchets), la croix
+retire une entrée mémorisée par erreur.
+
+## Récap du mois : recherche
+
+Recherche par mots-clés (sans tenir compte des accents) dans les observations,
+tâches, absents, déchets non conformes, sorties ponctuelles et responsables,
+sur le mois affiché ou une période au choix. Un clic ouvre la fiche du service.
 
 ## Fiche détaillée d'un service
 
@@ -88,8 +127,10 @@ Voir [PARTAGE.md](PARTAGE.md) : téléchargement, dossier commun, configuration 
 5. **Exporter la journée / le mois** produit un classeur au format habituel
    (nommé par défaut `OCTOBRE_2026.xlsx` pour un mois).
 
-Les données sont stockées en JSON lisible : `AAAA/MM/AAAA-MM-JJ_service.json`,
-et la liste des responsables dans `responsables.json`.
+Les données sont stockées en JSON lisible dans le dossier commun :
+`AAAA/MM/AAAA-MM-JJ_service.json` (un fichier par service), `taches/` (un fichier
+par tâche), `photos/`, `responsables.json`, `agents.json`,
+`types-non-conformes.json` et `site.json` (couleurs).
 
 ## Développement
 
@@ -114,9 +155,10 @@ avec l'installateur et la version portable, à déposer ensuite dans le dossier
 | `src/core/model.js` | Structure d'un service, totaux, ordre de relève (partagé avec l'interface) |
 | `src/core/store.js` | Lecture/écriture des fichiers, détection des conflits entre postes |
 | `src/core/update.js` | Détection d'une nouvelle version dans `<dossier des données>/mises-a-jour` |
+| `src/core/excel-sheet.js` | Construction d'un onglet jour à hauteur variable (styles repris du modèle) |
 | `src/core/excel.js` | Export/import au format du classeur à partir de `assets/modele.xlsx` |
 | `src/main.js`, `src/preload.js` | Processus Electron, dialogues fichiers, configuration |
-| `src/renderer/` | Interface (HTML/CSS/JS sans framework, pictogrammes dans `icons.js`) |
+| `src/renderer/` | Interface (HTML/CSS/JS sans framework) : `app.js`, `taches.js`, `photos.js`, `suggest.js`, `icons.js` |
 | `assets/modele.xlsx` | Onglets « Légende » et « Modèle » du classeur d'origine |
 
 Pour modifier les matières, bennes, plateaux ou motifs d'absence, mettre à jour

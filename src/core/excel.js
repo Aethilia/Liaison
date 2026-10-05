@@ -1,12 +1,13 @@
 'use strict';
 
 // Export / import au format du classeur « main courante » (onglets JJ-MM).
-// L'export part du fichier assets/modele.xlsx (onglets Légende + Modèle d'origine)
-// et recopie l'onglet Modèle pour chaque jour, mise en forme comprise.
+// L'export part du fichier assets/modele.xlsx (onglets Légende + Modèle
+// d'origine) dont il reprend la mise en forme ; voir excel-sheet.js.
 
 const path = require('path');
 const ExcelJS = require('exceljs');
 const M = require('./model');
+const { buildDaySheet, timeToFraction } = require('./excel-sheet');
 
 const TEMPLATE = path.join(__dirname, '..', '..', 'assets', 'modele.xlsx');
 const MODEL_SHEET = 'Modèle';
@@ -25,16 +26,7 @@ const ABSENT_CELLS = [['A', 'C', 0], ['E', 'G', 0], ['A', 'C', 1], ['E', 'G', 1]
 const CONSIGNES_PREFIX = M.CONSIGNES_PREFIX;
 
 const sheetName = (iso) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}`;
-const utcDate = (iso) => {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-};
 
-function timeToFraction(hhmm) {
-  const m = /^(\d{1,2})[:hH](\d{2})$/.exec(String(hhmm || '').trim());
-  if (!m) return null;
-  return (Number(m[1]) * 60 + Number(m[2])) / 1440;
-}
 
 function cellToTime(v) {
   if (v == null || v === '') return '';
@@ -67,103 +59,104 @@ function cellNumber(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
+// Données complètes de l'application, dans un onglet masqué : l'import relit
+// exactement ce qui a été saisi, quelle que soit la mise en page.
+const DATA_SHEET = '_donnees';
+const CHUNK = 30000;
 
-// Recopie l'onglet Modèle dans un nouvel onglet (ExcelJS n'a pas de copie native).
-function copySheet(wb, src, name) {
-  const ws = wb.addWorksheet(name, {
-    pageSetup: clone(src.pageSetup),
-    views: clone(src.views),
-    properties: clone(src.properties),
-  });
-  src.columns.forEach((col, i) => {
-    ws.getColumn(i + 1).width = col.width;
-  });
-  src.eachRow({ includeEmpty: true }, (row, r) => {
-    const dst = ws.getRow(r);
-    if (row.height) dst.height = row.height;
-    row.eachCell({ includeEmpty: true }, (cell, c) => {
-      const d = dst.getCell(c);
-      d.style = clone(cell.style);
-      if (cell.type === ExcelJS.ValueType.Formula) d.value = { formula: cell.formula };
-      else if (cell.type !== ExcelJS.ValueType.Merge) d.value = clone(cell.value);
-    });
-  });
-  for (const range of src.model.merges) ws.mergeCells(range);
-  for (const [addr, dv] of Object.entries(src.dataValidations.model)) ws.getCell(addr).dataValidation = clone(dv);
-  for (const cf of src.conditionalFormattings || []) {
-    const copy = clone(cf);
-    // Un identifiant x14 neuf par onglet, sinon Excel signale le fichier comme à réparer.
-    for (const rule of copy.rules) delete rule.x14Id;
-    ws.addConditionalFormatting(copy);
-  }
-  for (const s of M.SERVICES) if (s.offset > 0) ws.getRow(s.offset + 2).addPageBreak();
-  return ws;
-}
-
-function fillService(ws, s, def) {
-  const o = def.offset;
-  const set = (addr, value) => {
-    ws.getCell(addr).value = value === '' || value === undefined ? null : value;
+function writeDataSheet(wb, days, tasks) {
+  const ws = wb.addWorksheet(DATA_SHEET, { state: 'veryHidden' });
+  const putJson = (key, value) => {
+    const json = JSON.stringify(value);
+    const parts = [];
+    for (let i = 0; i < json.length; i += CHUNK) parts.push(json.slice(i, i + CHUNK));
+    ws.addRow([key, ...parts]);
   };
-  set(`A${ROWS.bandeau + o}`, utcDate(s.date));
-  set(`G${ROWS.bandeau + o}`, s.responsable);
-
-  s.absents.slice(0, ABSENT_CELLS.length).forEach((a, i) => {
-    const [cn, cm, dr] = ABSENT_CELLS[i];
-    const r = ROWS.absents[dr] + o;
-    set(`${cn}${r}`, a.nom);
-    set(`${cm}${r}`, a.motif);
-  });
-
-  set(`C${ROWS.entrees + o}`, s.entrees.plateaux);
-  set(`F${ROWS.entrees + o}`, s.entrees.pl);
-
-  M.MATIERES.forEach((m, i) => {
-    const r = ROWS.sortiesStart + i + o;
-    set(`C${r}`, s.sorties[m].nb);
-    if (!M.MATIERES_EXTERNES.includes(m)) set(`D${r}`, s.sorties[m].tonnage);
-  });
-
-  M.BENNES.forEach((b, i) => {
-    const v = s.bennes[b];
-    set(`F${ROWS.sortiesStart + i + o}`, v == null ? null : v / 100);
-  });
-  M.PLATEAUX.forEach((p, i) => {
-    const v = s.plateaux[p];
-    set(`H${ROWS.sortiesStart + i + o}`, v == null ? null : v / 100);
-  });
-
-  const lines = M.layoutObservations(s);
-  if (lines.length > M.NB_OBSERVATIONS) {
-    const kept = lines.slice(0, M.NB_OBSERVATIONS);
-    kept[M.NB_OBSERVATIONS - 1] = { ...kept[M.NB_OBSERVATIONS - 1], texte: `${kept[M.NB_OBSERVATIONS - 1].texte.slice(0, 80)} … (suite dans l'application)` };
-    lines.length = 0;
-    lines.push(...kept);
+  ws.addRow(['format', 'liaison-1.3']);
+  for (const day of days) {
+    for (const def of M.SERVICES) {
+      const sv = day.services[def.id];
+      if (sv && !M.isEmpty(M.normalize(sv, day.date, def.id))) putJson(`${day.date}|${def.id}`, sv);
+    }
   }
-  lines.forEach((l, i) => {
-    const r = ROWS.obsStart + i + o;
-    const t = timeToFraction(l.heure);
-    set(`A${r}`, t != null ? t : l.heure);
-    set(`B${r}`, l.texte);
-  });
+  if (tasks.length) putJson('taches', tasks);
 }
 
-// days : [{ date: 'AAAA-MM-JJ', services: { matin, apresmidi, nuit } }]
-async function exportWorkbook(days, file) {
+function readDataSheet(ws) {
+  const services = {};
+  let tasks = [];
+  ws.eachRow((row) => {
+    const values = row.values.slice(1).map((v) => (v == null ? '' : String(v)));
+    const [key, ...parts] = values;
+    if (!key || key === 'format') return;
+    const data = JSON.parse(parts.join(''));
+    if (key === 'taches') tasks = data;
+    else services[key] = data;
+  });
+  const byDate = {};
+  for (const [key, sv] of Object.entries(services)) {
+    const [date, service] = key.split('|');
+    if (!byDate[date]) byDate[date] = {};
+    byDate[date][service] = M.normalize(sv, date, service);
+  }
+  const days = Object.keys(byDate).sort().map((date) => {
+    const out = {};
+    for (const def of M.SERVICES) out[def.id] = byDate[date][def.id] || M.emptyService(date, def.id);
+    return { date, services: out };
+  });
+  return { days, tasks };
+}
+
+// Onglet « Photos » : une miniature par photo, avec sa date, son service et ce qu'elle illustre.
+function writePhotosSheet(wb, days, loadPhoto) {
+  const entries = [];
+  for (const day of days) {
+    for (const def of M.SERVICES) {
+      const sv = M.normalize(day.services[def.id], day.date, def.id);
+      for (const o of sv.observations) for (const rel of o.photos) entries.push({ day, def, quoi: `Observation ${o.heure || ''} : ${o.texte}`, rel });
+      for (const x of sv.nonConformes) for (const rel of x.photos) entries.push({ day, def, quoi: `Non conforme : ${x.type}${x.provenance ? ` — ${x.provenance}` : ''}`, rel });
+    }
+  }
+  if (!entries.length) return;
+  const ws = wb.addWorksheet('Photos', { views: [{ showGridLines: false }] });
+  ws.columns = [{ width: 12 }, { width: 12 }, { width: 44 }, { width: 46 }];
+  const head = ws.addRow(['Date', 'Service', 'Élément', 'Photo']);
+  head.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  head.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2F4F' } };
+  for (const e of entries) {
+    const row = ws.addRow([sheetName(e.day.date), e.def.label, e.quoi, '']);
+    row.alignment = { vertical: 'top', wrapText: true };
+    const img = loadPhoto ? loadPhoto(e.rel) : null;
+    if (!img) {
+      row.getCell(4).value = `Photo introuvable (${e.rel})`;
+      row.height = 20;
+      continue;
+    }
+    const h = 150;
+    const w = Math.round((img.width / img.height) * h);
+    row.height = h * 0.78;
+    const id = wb.addImage({ buffer: img.buffer, extension: 'jpeg' });
+    ws.addImage(id, { tl: { col: 3, row: row.number - 1 }, ext: { width: Math.min(w, 320), height: h } });
+  }
+}
+
+// days : [{ date, services }] ; options : { tasks, site, siteName, loadPhoto(rel) → { buffer, width, height } }
+async function exportWorkbook(days, file, { tasks = [], site = {}, siteName = '', loadPhoto = null } = {}) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(TEMPLATE);
   const model = wb.getWorksheet(MODEL_SHEET);
   for (const day of days) {
-    const ws = copySheet(wb, model, sheetName(day.date));
-    for (const def of M.SERVICES) fillService(ws, M.normalize(day.services[def.id], day.date, def.id), def);
+    buildDaySheet(wb.addWorksheet(sheetName(day.date)), model, day, { tasks, site, siteName });
   }
+  writePhotosSheet(wb, days, loadPhoto);
+  writeDataSheet(wb, days, tasks);
   wb.calcProperties = { fullCalcOnLoad: true };
   if (days.length) wb.views = [{ activeTab: 2, firstSheet: 0 }];
   await wb.xlsx.writeFile(file);
   return file;
 }
 
+// Lecture d'un classeur rempli à la main au format d'origine (cases fixes).
 function readService(ws, def, date) {
   const o = def.offset;
   const v = (addr) => ws.getCell(addr).value;
@@ -243,19 +236,31 @@ function sheetDate(ws, year) {
 
 // Lit un classeur au format main courante. `year` sert de repli si la date
 // n'est pas renseignée dans le bandeau (A3).
-async function importWorkbook(file, { year } = {}) {
+// Lit un classeur : celui exporté par l'application (onglet de données masqué)
+// ou un classeur rempli à la main au format d'origine.
+async function importWorkbookFull(file, { year } = {}) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
+  const data = wb.getWorksheet(DATA_SHEET);
+  if (data) return readDataSheet(data);
+  return { days: readLegacy(wb, year), tasks: [] };
+}
+
+async function importWorkbook(file, opts) {
+  return (await importWorkbookFull(file, opts)).days;
+}
+
+function readLegacy(wb, year) {
   const out = [];
   wb.eachSheet((ws) => {
     if (!/^\d{2}-\d{2}$/.test(ws.name)) return;
     const date = sheetDate(ws, year);
     if (!date) return;
     const services = {};
-    for (const def of M.SERVICES) services[def.id] = readService(ws, def, date);
+    for (const def of M.SERVICES) services[def.id] = M.normalize(readService(ws, def, date), date, def.id);
     out.push({ date, services });
   });
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-module.exports = { exportWorkbook, importWorkbook, sheetName, timeToFraction, cellToTime };
+module.exports = { exportWorkbook, importWorkbook, importWorkbookFull, sheetName, timeToFraction, cellToTime };
