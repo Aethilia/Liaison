@@ -5,7 +5,7 @@
   const ok = (value) => Promise.resolve({ ok: true, value: JSON.parse(JSON.stringify(value)) });
   const M = () => window.LiaisonModel;
   const load = (d, s) => (db[key(d, s)] ? JSON.parse(JSON.stringify(db[key(d, s)])) : M().emptyService(d, s));
-  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule' };
+  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.4.0' };
   let users = window.__users || [];
   let agents = window.__agents || [];
   let site = window.__site || { couleurs: {} };
@@ -53,6 +53,29 @@
     savePhotoData: (d) => { photos['photos/x' + Object.keys(photos).length + '.jpg'] = d; return ok('photos/x' + (Object.keys(photos).length - 1) + '.jpg'); },
     readPhoto: (rel) => ok(photos[rel] || SAMPLE_IMG),
     openPhoto: () => ok(true),
+    sitesOverview: () => ok((window.__sites || [{ dataDir: config.dataDir, nom: 'Tronc principal', superviseurs: [] }]).map((x) => ({
+      responsables: users, superviseurs: [], ...x, actif: x.dataDir === config.dataDir,
+    }))),
+    renameSite: () => ok({}),
+    siteInfo: () => ok({}),
+    selectSite: (d) => { config = { ...config, dataDir: d }; return ok(config); },
+    listSupervisors: () => ok(((window.__sites || [])[0] || {}).superviseurs || []),
+    saveSupervisor: () => ok([]),
+    removeSupervisor: () => ok([]),
+    verifyPin: (d, n, pin) => ok(pin === '1234'),
+    siteDashboard: (d) => {
+      const live = M().currentService();
+      const day = { matin: load(live.date, 'matin'), apresmidi: load(live.date, 'apresmidi'), nuit: load(live.date, 'nuit') };
+      const imp = [];
+      Object.values(db).forEach((sv) => (sv.observations || []).forEach((o) => { if (o.important) imp.push({ date: sv.date, service: sv.service, heure: o.heure, texte: o.texte }); }));
+      return ok({
+        site: '', live,
+        today: M().SERVICES.map((def) => ({ service: def.id, etat: day[def.id].cloture ? 'clos' : def.id === live.service ? 'en-cours' : M().isEmpty(day[def.id]) ? 'vide' : 'ouvert', responsable: day[def.id].responsable, observations: day[def.id].observations.length, importantes: day[def.id].observations.filter((o) => o.important).length, alertes: 0, totaux: {} })),
+        taches: Object.values(tasks).filter((t) => !t.faite),
+        nonClotures: [], vides: 3,
+        importantes: imp, nonConformes: [], boxs: null,
+      });
+    },
     exportExcel: () => ok(null),
     openFile: () => ok(true),
     pickImport: () => ok(null),

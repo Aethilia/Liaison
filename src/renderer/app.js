@@ -19,6 +19,9 @@ const SAVE_DELAY_MS = 700;
 const S = {
   config: null,
   users: [],
+  sites: [], // sites connus de ce poste : { dataDir, nom, responsables, superviseurs, actif }
+  role: 'responsable', // ou 'superviseur'
+  siteName: '',
   agents: [], // agents déjà saisis comme absents (proposés à la saisie)
   ncTypes: [], // types de déchets non conformes déjà saisis
   site: { couleurs: {} }, // réglages communs au site (couleurs des sorties)
@@ -145,10 +148,14 @@ function ask(title, text, buttons) {
   });
 }
 
-function promptText(title, placeholder = '') {
+function promptText(title, placeholder = '', { type = 'text', text = '' } = {}) {
   const dlg = $('#prompt');
   $('#prompt-title').textContent = title;
+  $('#prompt-text').textContent = text;
+  $('#prompt-text').hidden = !text;
   const input = $('#prompt-input');
+  input.type = type;
+  input.inputMode = type === 'password' ? 'numeric' : 'text';
   input.value = '';
   input.placeholder = placeholder;
   dlg.returnValue = '';
@@ -171,6 +178,9 @@ async function call(promise) {
 
 const cur = () => S.data[S.service];
 const isClosed = (s) => !!(s && s.cloture);
+// Service enregistré par une version plus récente de l'application : lecture seule.
+const isTooNew = (s) => !!(s && s.appVersion && S.config && M.compareVersions(s.appVersion, S.config.appVersion) > 0);
+const isLocked = (s) => isClosed(s) || isTooNew(s);
 const realObs = (s) => s.observations.filter((o) => o.heure || o.texte);
 const boxAlerts = (s) => [
   ...M.BENNES.filter((b) => s.bennes[b] >= M.SEUIL_ALERTE).map((b) => ({ type: 'Benne', nom: b, v: s.bennes[b] })),
@@ -194,9 +204,47 @@ const svcStyle = (id) => ({ '--c': SVC[id].couleur, '--c2': SVC[id].c2 });
 
 function showScreen(name) {
   S.screen = name;
+  $('#screen-site').hidden = name !== 'site';
   $('#screen-user').hidden = name !== 'user';
   $('#screen-service').hidden = name !== 'service';
   $('#screen-app').hidden = name !== 'app';
+}
+
+// Étapes affichées en haut des écrans d'accueil (le choix du site n'apparaît
+// que si ce poste connaît plusieurs sites).
+function renderSteps(active) {
+  const steps = [['user', 'Responsable'], ...(S.sites.length > 1 ? [['site', 'Site']] : []), ['service', 'Service'], ['app', 'Main courante']];
+  const idx = steps.findIndex(([k]) => k === active);
+  document.querySelectorAll(`[data-steps="${active}"]`).forEach((el) => el.replaceChildren(...steps.map(([, label], i) => h('span', { class: `step${i === idx ? ' active' : i < idx ? ' done' : ''}` }, `${i + 1}. ${label}`))));
+}
+
+// Tous les responsables et superviseurs des sites de ce poste.
+function knownUsers() {
+  const map = new Map();
+  for (const site of S.sites) {
+    for (const nom of site.responsables) {
+      const u = map.get(nom) || { nom, sites: [], superviseur: false, supSites: [] };
+      u.sites.push(site.dataDir);
+      map.set(nom, u);
+    }
+    for (const nom of site.superviseurs) {
+      const u = map.get(nom) || { nom, sites: [], superviseur: false, supSites: [] };
+      u.superviseur = true;
+      u.supSites.push(site.dataDir);
+      map.set(nom, u);
+    }
+  }
+  return [...map.values()];
+}
+
+async function loadSites() {
+  try {
+    S.sites = await call(api.sitesOverview());
+  } catch {
+    S.sites = [];
+  }
+  const actif = S.sites.find((x) => x.actif);
+  S.siteName = actif ? actif.nom : '';
 }
 
 // Étape 1 : choix du responsable
@@ -205,29 +253,91 @@ function renderUserScreen() {
   try {
     last = localStorage.getItem('liaison.lastUser');
   } catch { /* stockage indisponible */ }
-  const cards = S.users.map((name) => h('button', { class: `user-card${name === last ? ' last' : ''}`, onclick: () => chooseUser(name) },
-    avatar(name), h('span', {}, name), name === last ? h('span', { class: 'u-hint' }, 'Dernière connexion sur ce poste') : null));
+  renderSteps('user');
+  $('#welcome-sub').textContent = S.sites.length > 1 ? `${S.sites.map((x) => x.nom).join(' · ')}` : `${S.siteName || 'Main courante'} · liaison entre services`;
+  const users = knownUsers();
+  const multi = S.sites.length > 1;
+  const cards = users.map((u) => h('button', { class: `user-card${u.nom === last ? ' last' : ''}${u.superviseur ? ' sup' : ''}`, onclick: () => chooseUser(u) },
+    avatar(u.nom), h('span', {}, u.nom),
+    u.superviseur ? h('span', { class: 'pill sup-pill' }, icon('lock', 12), 'Superviseur')
+      : multi ? h('span', { class: 'u-hint' }, S.sites.filter((x) => u.sites.includes(x.dataDir)).map((x) => x.nom).join(' · ')) : null,
+    u.nom === last ? h('span', { class: 'u-hint' }, 'Dernière connexion sur ce poste') : null));
   cards.push(h('button', { class: 'user-card add', onclick: addUserFromWelcome },
     h('span', { class: 'avatar' }, icon('plus', 24)), h('span', {}, 'Ajouter un responsable')));
-  $('#user-list').replaceChildren(...(S.users.length ? [] : [h('div', { class: 'empty-users' }, 'Commencez par ajouter les responsables (une seule fois, la liste est partagée entre les postes).')]), ...cards);
+  $('#user-list').replaceChildren(...(users.length ? [] : [h('div', { class: 'empty-users' }, 'Commencez par ajouter les responsables (une seule fois, la liste est partagée entre les postes).')]), ...cards);
   $('#welcome-poste').textContent = S.config.poste ? `Poste : ${S.config.poste}` : '';
   showScreen('user');
 }
 
 async function addUserFromWelcome() {
-  const name = await promptText('Nouveau responsable', 'Prénom Nom');
+  const name = await promptText('Nouveau responsable', 'Prénom Nom', { text: S.sites.length > 1 ? `Il sera ajouté au site « ${S.siteName} ».` : '' });
   if (!name) return;
   S.users = await call(api.saveUsers([...S.users, name]));
+  await loadSites();
   renderUserScreen();
 }
 
-async function chooseUser(name) {
-  S.user = name;
+// Sites accessibles : tous pour un superviseur, sinon ceux où la personne est responsable.
+const userSites = (u) => (S.role === 'superviseur' ? S.sites : S.sites.filter((x) => u.sites.includes(x.dataDir)));
+
+async function chooseUser(u) {
+  if (u.superviseur) {
+    const pin = await promptText(`Code PIN de ${u.nom}`, '••••', { type: 'password', text: 'Le profil superviseur donne accès à tous les sites et services.' });
+    if (pin == null) return;
+    const ok = await call(api.verifyPin(u.supSites[0], u.nom, pin)).catch(() => false);
+    if (!ok) {
+      toast('Code PIN incorrect.');
+      return;
+    }
+    S.role = 'superviseur';
+  } else {
+    S.role = 'responsable';
+  }
+  S.user = u.nom;
+  S.userEntry = u;
   try {
-    localStorage.setItem('liaison.lastUser', name);
+    localStorage.setItem('liaison.lastUser', u.nom);
   } catch { /* stockage indisponible */ }
   S.date = M.currentService().date;
-  await renderServiceScreen();
+  document.querySelectorAll('[data-view="dashboard"], #btn-go-dashboard').forEach((el) => { el.hidden = S.role !== 'superviseur'; });
+  const sites = userSites(u);
+  if (sites.length > 1) await renderSiteScreen();
+  else await useSite(sites[0] ? sites[0].dataDir : S.config.dataDir);
+}
+
+// Étape 2 bis : choix du site (seulement si plusieurs sont accessibles)
+async function renderSiteScreen() {
+  renderSteps('site');
+  $('#site-hello').textContent = `${S.user}, sur quel site ?`;
+  const sites = userSites(S.userEntry);
+  $('#site-cards').replaceChildren(...sites.map((site) => {
+    const stats = h('div', { class: 'site-stats muted' }, 'Chargement…');
+    call(api.siteDashboard(site.dataDir)).then((d) => {
+      stats.replaceChildren(
+        h('div', { class: 'site-dots' }, d.today.map((t) => h('span', { class: `dot ${t.etat === 'clos' ? 'done' : t.etat === 'vide' ? '' : 'draft'}`, style: { '--c': SVC[t.service].couleur }, title: `${SVC[t.service].label} : ${t.etat}` }))),
+        h('span', {}, plural(d.taches.length, 'tâche'), ' en attente'),
+        d.importantes.length ? h('span', { class: 'pill alert' }, icon('alert', 12), plural(d.importantes.length, 'obs. importante')) : null);
+    }).catch((err) => stats.replaceChildren(h('span', { class: 'red' }, `Dossier inaccessible : ${err.message}`)));
+    return h('button', { class: `site-card${site.actif ? ' actif' : ''}`, onclick: () => useSite(site.dataDir) },
+      h('span', { class: 'site-icon' }, icon('box', 24)),
+      h('div', { class: 'site-main' }, h('div', { class: 'site-name' }, site.nom), h('div', { class: 'site-dir' }, site.dataDir), stats),
+      icon('arrowRight', 18));
+  }));
+  showScreen('site');
+}
+
+// Active un site (dossier de données) puis passe au choix du service.
+async function useSite(dataDir, { thenService = true } = {}) {
+  if (dataDir && dataDir !== S.config.dataDir) {
+    await flush();
+    S.config = await call(api.selectSite(dataDir));
+    await loadSites();
+    await loadSiteData();
+    S.users = await call(api.loadUsers());
+    S.journal.days = null;
+    checkUpdate();
+  }
+  if (thenService) await renderServiceScreen();
 }
 
 // Étape 2 : choix du service
@@ -235,7 +345,10 @@ async function renderServiceScreen() {
   await flush();
   S.data = await call(api.loadDay(S.date));
   const live = M.currentService();
+  renderSteps('service');
   $('#service-hello').textContent = `${S.user}, sur quel service travaillez-vous ?`;
+  $('#service-site').textContent = S.sites.length > 1 ? `Site : ${S.siteName}` : '';
+  $('#btn-change-site').hidden = !(S.userEntry && userSites(S.userEntry).length > 1);
   $('#svc-date-text').textContent = fmtLongDate(S.date);
   $('#svc-date-input').value = S.date;
   const cards = M.SERVICES.map((def) => {
@@ -280,6 +393,8 @@ async function enterService(id, view = 'saisie') {
 async function backToUsers() {
   await flush();
   S.users = await call(api.loadUsers());
+  await loadSites();
+  S.role = 'responsable';
   renderUserScreen();
 }
 
@@ -328,7 +443,13 @@ async function save({ force = false } = {}) {
       renderTabs();
     } catch (err) {
       S.dirty = true;
-      if (err.code === 'CONFLICT') {
+      if (err.code === 'VERSION') {
+        S.dirty = false;
+        target.appVersion = err.version;
+        setStatus('Non enregistré : version plus récente sur un autre poste', 'error');
+        ask('Mise à jour nécessaire', err.message, [{ label: 'OK', value: 'ok', cls: 'primary' }]);
+        renderForm();
+      } else if (err.code === 'CONFLICT') {
         S.conflict = { service: target.service, date: target.date, current: err.current };
         renderConflict();
         setStatus('Conflit : modifié sur un autre poste', 'error');
@@ -361,7 +482,8 @@ function renderHeader() {
   av.textContent = initials(S.user || '?');
   av.style.setProperty('--av', avatarColor(S.user || '?'));
   $('#user-name').textContent = S.user || '';
-  $('#user-service').textContent = `Service ${SVC[S.service].label.toLowerCase()}`;
+  $('#user-service').textContent = `${S.role === 'superviseur' ? 'Superviseur · ' : ''}${S.sites.length > 1 ? `${S.siteName} · ` : ''}Service ${SVC[S.service].label.toLowerCase()}`;
+  $('#brand-site').textContent = S.siteName;
   document.body.dataset.service = S.service;
 }
 
@@ -431,7 +553,7 @@ function field(bind, type, attrs = {}) {
     type: type === 'time' ? 'time' : 'text',
     'data-bind': bind,
     'data-type': type,
-    readOnly: isClosed(s),
+    readOnly: isLocked(s),
     ...attrs,
   });
   if (['int', 'dec', 'ton', 'pct', 'pesee', 'tonexpr'].includes(type)) {
@@ -459,7 +581,7 @@ function renderSaisie() {
 function renderForm() {
   const s = cur();
   const def = SVC[S.service];
-  const closed = isClosed(s);
+  const closed = isLocked(s);
 
   const banner = h('div', { class: 'service-banner' },
     h('span', { class: 'sb-icon' }, icon(def.icon, 26)),
@@ -467,11 +589,14 @@ function renderForm() {
     h('label', { class: 'sb-resp' }, 'Responsable', field('responsable', 'text', { placeholder: 'Nom du chef de service', list: 'users-list', 'aria-label': 'Responsable' })),
     h('datalist', { id: 'users-list' }, S.users.map((u) => h('option', { value: u }))),
     h('button', { class: 'btn', title: 'Fiche détaillée du service', onclick: () => openFiche(S.date, S.service) }, icon('eye', 16)),
-    closed
+    isTooNew(s) ? null : closed
       ? h('button', { class: 'btn', onclick: reopenService }, icon('unlock', 16), 'Rouvrir')
       : h('button', { class: 'btn solid', onclick: closeService }, icon('lock', 16), 'Clôturer le service'));
 
-  const closedNote = closed
+  const closedNote = isTooNew(s)
+    ? h('div', { class: 'closed-note warn' }, icon('alert'), h('span', {}, h('b', {}, 'Lecture seule'),
+      ` : ce service a été enregistré avec la version ${s.appVersion} de Liaison, plus récente que celle de ce poste (${S.config.appVersion}). Mettez à jour l'application pour le modifier.`))
+    : isClosed(s)
     ? h('div', { class: 'closed-note' }, icon('lock'), h('span', {}, h('b', {}, 'Service clôturé'), ` le ${fmtDateTime(s.cloture.at)}`,
       s.cloture.par ? ` par ${s.cloture.par}` : '', s.cloture.poste ? ` (poste ${s.cloture.poste})` : '',
       '. Les informations sont transmises au service suivant. « Rouvrir » pour corriger.'))
@@ -889,7 +1014,7 @@ function onFormKey(e) {
 // Ajoute une observation au service affiché (saisie rapide ou fenêtre Ctrl+O).
 function addObservation({ heure, texte, important }) {
   const s = cur();
-  if (isClosed(s) || !texte.trim()) return false;
+  if (isLocked(s) || !texte.trim()) return false;
   s.observations.push({ heure: heure || nowHHMM(), texte: texte.trim(), important: !!important, auteur: S.user || '', photos: [] });
   markDirty();
   return true;
@@ -972,8 +1097,8 @@ function removeObservation(i) {
 
 function openQuickObs() {
   if (S.screen !== 'app') return;
-  if (isClosed(cur())) {
-    toast('Ce service est clôturé : rouvrez-le pour ajouter une observation.');
+  if (isLocked(cur())) {
+    toast(isTooNew(cur()) ? 'Ce service vient d\'une version plus récente : mettez à jour l\'application.' : 'Ce service est clôturé : rouvrez-le pour ajouter une observation.');
     return;
   }
   const dlg = $('#quickobs');
@@ -1331,7 +1456,9 @@ function setView(view, { silent = false } = {}) {
   $('#view-saisie').hidden = view !== 'saisie';
   $('#view-journal').hidden = view !== 'journal';
   $('#view-recap').hidden = view !== 'recap';
+  $('#view-dashboard').hidden = view !== 'dashboard';
   if (silent) return;
+  if (view === 'dashboard') renderDashboard();
   if (view === 'recap') {
     const d = M.parseISODate(S.date);
     S.recapMonth = { year: d.getFullYear(), month: d.getMonth() + 1 };
@@ -1350,6 +1477,7 @@ async function poll() {
     renderTabs();
     if ($('#fiche').open && S.fiche) renderFiche();
   }
+  if (S.view === 'dashboard' && Date.now() - (S.dashAt || 0) > 60000 && !$('#fiche').open) renderDashboard();
   if (S.view !== 'saisie' || S.saving || $('#fiche').open) return;
   let revs;
   try {
@@ -1490,6 +1618,7 @@ async function renderRecap() {
       kpi('Sorties · tonnage', `${fmtNum(tot.nb)} · ${fmtNum(Math.round(tot.tonnage * 10) / 10)} T`, 'upload', '#c55a11', '#fdf0e6'),
       kpi('Observations', fmtNum(tot.obs), 'note', '#8e44ad', '#f3e8fa'),
       kpi('Services clôturés', `${tot.clos} / ${days.length * 3}`, 'lock', '#1f8a4c', '#e5f6ec')),
+    recapCharts(days),
     h('div', { class: 'recap-grid' },
       h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('list', 16)), 'Par jour', h('span', { class: 'hint' }, 'Cliquer sur un jour ou une pastille pour voir le détail')),
         h('div', { class: 'card-body' },
@@ -1523,6 +1652,147 @@ async function renderRecap() {
             ? Object.entries(parMotif).sort((a, b) => b[1] - a[1]).map(([k, v]) => h('div', { class: 'kv' }, h('span', {}, k), h('b', {}, v)))
             : h('div', { class: 'empty' }, 'Aucune absence saisie.'))))));
   if (S.recapSearch.q.trim()) runRecapSearch();
+}
+
+/* ---------- Graphiques du récap ---------- */
+
+// Histogramme SVG (une série, couleur unique) avec info-bulle au survol.
+function columnChart(points, { color = '#2a78d6', unit = '', format = (v) => fmtNum(v) } = {}) {
+  const W = 1000;
+  const H = 230;
+  const pad = { l: 46, r: 10, t: 12, b: 28 };
+  const max = Math.max(1, ...points.map((p) => p.value));
+  const step = niceStep(max / 4);
+  const top = Math.ceil(max / step) * step;
+  const iw = W - pad.l - pad.r;
+  const ih = H - pad.t - pad.b;
+  const bw = iw / points.length;
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, text) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart-svg', role: 'img', 'aria-label': points.map((p) => `${p.label} : ${format(p.value)}${unit}`).join(', ') });
+  for (let v = 0; v <= top + 1e-9; v += step) {
+    const y = pad.t + ih - (v / top) * ih;
+    svg.append(el('line', { x1: pad.l, x2: W - pad.r, y1: y, y2: y, class: v === 0 ? 'axis' : 'grid' }));
+    svg.append(el('text', { x: pad.l - 8, y: y + 4, class: 'tick', 'text-anchor': 'end' }, fmtNum(v, 1)));
+  }
+  const tip = h('div', { class: 'chart-tip', hidden: true });
+  const labelEvery = Math.ceil(points.length / 16);
+  points.forEach((p, i) => {
+    const x = pad.l + i * bw;
+    const bh = (p.value / top) * ih;
+    const w = Math.max(2, bw - Math.min(8, bw * 0.3));
+    const bx = x + (bw - w) / 2;
+    const y = pad.t + ih - bh;
+    if (bh > 0) {
+      const r = Math.min(4, w / 2, bh);
+      svg.append(el('path', { class: 'bar-mark', fill: color, d: `M${bx},${pad.t + ih} V${y + r} Q${bx},${y} ${bx + r},${y} H${bx + w - r} Q${bx + w},${y} ${bx + w},${y + r} V${pad.t + ih} Z` }));
+    }
+    if (i % labelEvery === 0) svg.append(el('text', { x: x + bw / 2, y: H - 8, class: 'tick', 'text-anchor': 'middle' }, p.short));
+    const hit = el('rect', { x, y: pad.t, width: bw, height: ih, class: 'hit' });
+    hit.addEventListener('mouseenter', () => {
+      tip.replaceChildren(h('b', {}, p.label), h('span', {}, `${format(p.value)}${unit}`));
+      tip.hidden = false;
+      tip.style.left = `${((x + bw / 2) / W) * 100}%`;
+    });
+    hit.addEventListener('mouseleave', () => { tip.hidden = true; });
+    svg.append(hit);
+  });
+  return h('div', { class: 'chart-box' }, svg, tip);
+}
+
+function niceStep(raw) {
+  const p = 10 ** Math.floor(Math.log10(raw || 1));
+  const m = raw / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+}
+
+function recapCharts(days) {
+  const st = M.stats(days);
+  const totalEnt = st.entrees.reduce((a, e) => a + e.plateaux + e.pl, 0) || 1;
+  return h('div', { class: 'recap-charts' },
+    h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('chart', 16)), 'Tonnage sorti par jour',
+      h('span', { class: 'hint' }, `Total ${fmtTon(st.kpis.tonnage)} · survoler une barre pour le détail`)),
+    h('div', { class: 'card-body' }, columnChart(st.parJour.map((j) => ({
+      value: j.tonnage, label: fmtLongDate(j.date), short: String(Number(j.date.slice(8, 10))),
+    })), { unit: ' T', format: (v) => fmtNum(v) }))),
+    h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('truck', 16)), 'Entrées par service'),
+      h('div', { class: 'card-body' }, st.entrees.map((e) => {
+        const t = e.plateaux + e.pl;
+        return h('div', { class: 'svc-share', style: svcStyle(e.service) },
+          h('div', { class: 'ss-top' }, h('span', { class: 'ss-name' }, SVC[e.service].label), h('b', {}, fmtNum(t)), h('span', { class: 'muted' }, ` · ${Math.round((t / totalEnt) * 100)} %`)),
+          h('div', { class: 'bar' }, h('i', { style: { width: `${(t / totalEnt) * 100}%`, background: SVC[e.service].couleur } })),
+          h('div', { class: 'ss-sub muted' }, `${fmtNum(e.plateaux)} plateaux · ${fmtNum(e.pl)} PL`));
+      }))));
+}
+
+/* ---------- Tableau de bord du superviseur ---------- */
+
+async function renderDashboard() {
+  const box = $('#dashboard');
+  S.dashAt = Date.now();
+  if (!box.childElementCount) box.replaceChildren(h('div', { class: 'empty' }, 'Chargement…'));
+  await loadSites();
+  const cards = await Promise.all(S.sites.map(async (site) => {
+    try {
+      return dashSiteCard(site, await call(api.siteDashboard(site.dataDir)));
+    } catch (err) {
+      return h('div', { class: 'card dash-site' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('alert', 16)), site.nom),
+        h('div', { class: 'card-body' }, h('div', { class: 'empty' }, `Dossier inaccessible : ${err.message}`)));
+    }
+  }));
+  box.replaceChildren(
+    h('div', { class: 'recap-head' }, h('h2', {}, 'Tableau de bord'), h('span', { class: 'muted' }, `Mis à jour à ${nowHHMM()}`),
+      h('span', { class: 'spacer' }), h('button', { class: 'btn', onclick: renderDashboard }, icon('clock', 15), 'Actualiser')),
+    h('div', { class: `dash-grid${cards.length > 1 ? ' multi' : ''}` }, cards));
+}
+
+function dashSiteCard(site, d) {
+  const open = async (date, service) => {
+    if (!site.actif) {
+      await useSite(site.dataDir, { thenService: false });
+      await goTo(date, service);
+      setView('dashboard');
+    }
+    openFiche(date, service);
+  };
+  const section = (title, iconName, count, content) => h('div', { class: 'pass-section' },
+    h('h5', {}, icon(iconName, 13), `${title}${count != null ? ` (${count})` : ''}`), content);
+  const line = (date, service, text, extra = null) => h('button', { class: 'dash-line', style: svcStyle(service), onclick: () => open(date, service) },
+    h('span', { class: 'dl-when' }, h('span', { class: 'dl-date' }, fmtShortDate(date)), ` · ${SVC[service].label}`), h('span', { class: 'dl-text' }, text), extra);
+  const empty = (t) => h('div', { class: 'empty' }, t);
+  return h('div', { class: 'card dash-site' },
+    h('div', { class: 'dash-head' }, h('span', { class: 'site-icon' }, icon('box', 20)), h('div', {}, h('div', { class: 'site-name' }, site.nom), h('div', { class: 'site-dir' }, site.dataDir)),
+      h('span', { class: 'spacer' }),
+      site.actif ? h('span', { class: 'pill live' }, 'Site affiché') : h('button', { class: 'btn small', onclick: () => useSite(site.dataDir, { thenService: false }).then(() => goTo(S.date)).then(renderDashboard) }, 'Ouvrir ce site')),
+    h('div', { class: 'dash-today' }, d.today.map((t) => h('button', { class: `dash-svc etat-${t.etat}`, style: svcStyle(t.service), onclick: () => open(d.live.date, t.service) },
+      h('div', { class: 'ds-top' }, icon(SVC[t.service].icon, 16), h('b', {}, SVC[t.service].label),
+        h('span', { class: `pill ${t.etat === 'clos' ? 'done' : t.etat === 'en-cours' ? 'live' : t.etat === 'ouvert' ? 'draft' : ''}` }, { clos: 'Clôturé', 'en-cours': 'En cours', ouvert: 'Non clôturé', vide: 'Vide' }[t.etat])),
+      h('div', { class: 'ds-resp' }, t.responsable || '—'),
+      h('div', { class: 'ds-nums' }, `${t.observations} obs.`, t.importantes ? h('span', { class: 'red' }, ` · ${t.importantes} ⚠`) : null,
+        t.alertes ? h('span', { class: 'red' }, ` · ${plural(t.alertes, 'box')} ≥ ${M.SEUIL_ALERTE} %`) : null)))),
+    section('Tâches en attente', 'checkSquare', d.taches.length, d.taches.length
+      ? h('div', { class: 'dash-list' }, d.taches.slice(0, 8).map((t) => line(t.origine.date, t.origine.service, t.texte, h('span', { class: 'muted' }, ` — ${t.creePar || ''}`))))
+      : empty('Aucune tâche en attente.')),
+    section('Services saisis non clôturés (7 jours)', 'lock', d.nonClotures.length, [
+      d.nonClotures.length
+        ? h('div', { class: 'dash-list' }, d.nonClotures.slice(0, 8).map((x) => line(x.date, x.service, `Responsable : ${x.responsable || '—'}`)))
+        : empty('Tous les services saisis sont clôturés.'),
+      d.vides ? h('div', { class: 'muted', style: { fontSize: '12px', marginTop: '4px' } }, `${plural(d.vides, 'service')} passé${d.vides > 1 ? 's' : ''} sans aucune saisie.`) : null]),
+    section('Observations importantes (7 jours)', 'flag', d.importantes.length, d.importantes.length
+      ? h('div', { class: 'dash-list' }, d.importantes.slice(0, 8).map((o) => line(o.date, o.service, `${o.heure ? `${o.heure} · ` : ''}${o.texte}`)))
+      : empty('Aucune observation importante.')),
+    section('Boxs à 80 % ou plus', 'box', null, d.boxs && d.boxs.alertes.length
+      ? h('div', { class: 'alert-list' }, d.boxs.alertes.map((a) => h('span', { class: 'pill alert' }, `${a.type} ${a.nom} : ${fmtNum(a.v)} %`)),
+        h('span', { class: 'muted', style: { fontSize: '12px' } }, `(${SVC[d.boxs.service].label} ${fmtShortDate(d.boxs.date)})`))
+      : empty('Aucun box en alerte au dernier service saisi.')),
+    section('Déchets non conformes (7 jours)', 'recycle', d.nonConformes.length, d.nonConformes.length
+      ? h('div', { class: 'dash-list' }, d.nonConformes.slice(0, 8).map((x) => line(x.date, x.service, `${x.type} : ${fmtQte(x)}${x.provenance ? ` — ${x.provenance}` : ''}`)))
+      : empty('Aucun déchet non conforme.')));
 }
 
 /* ---------- Recherche dans le récap ---------- */
@@ -1714,7 +1984,7 @@ function buildPrint() {
     });
     const tasks = tasksForService(S.tasks, S.date, def.id);
     return h('div', { class: 'p-page', style: { '--c': def.couleur } },
-      h('div', { class: 'p-title' }, 'MAIN COURANTE  ·  TRONC PRINCIPAL'),
+      h('div', { class: 'p-title' }, `MAIN COURANTE  ·  ${(S.siteName || 'Tronc principal').toUpperCase()}`),
       h('div', { class: 'p-band' }, h('span', { style: { textTransform: 'capitalize' } }, fmtShortDate(S.date)), h('span', { class: 'p-st' }, def.titre),
         h('span', { class: 'p-rl' }, 'Responsable'), h('span', { class: 'p-resp' }, s.responsable || '')),
       h('div', { class: 'p-sec' }, 'AGENTS ABSENTS'),
@@ -1768,6 +2038,16 @@ async function checkUpdate() {
   }
   const u = updateInfo.update;
   const banner = $('#update-banner');
+  const newer = updateInfo.newer;
+  if (!u && newer && updateDismissed !== `n${newer.version}`) {
+    // Un autre poste est plus à jour mais l'installateur n'est pas dans le dossier commun.
+    $('#update-title').textContent = `Le poste « ${newer.poste} » utilise la version ${newer.version}`;
+    $('#update-sub').textContent = `Ce poste est en ${updateInfo.current}. Déposez Liaison-Installation-${newer.version}.exe dans le dossier mises-a-jour pour l'installer ici.`;
+    $('#update-install').hidden = true;
+    banner.hidden = false;
+    return;
+  }
+  $('#update-install').hidden = false;
   if (!u || updateDismissed === u.version) {
     banner.hidden = true;
     return;
@@ -1799,7 +2079,7 @@ async function installUpdate() {
 function initUpdates() {
   $('#update-install').addEventListener('click', installUpdate);
   $('#update-later').addEventListener('click', () => {
-    updateDismissed = updateInfo && updateInfo.update ? updateInfo.update.version : null;
+    updateDismissed = updateInfo && updateInfo.update ? updateInfo.update.version : updateInfo && updateInfo.newer ? `n${updateInfo.newer.version}` : null;
     $('#update-banner').hidden = true;
   });
   $('#set-update-dir').addEventListener('click', () => call(api.openUpdateDir()));
@@ -1826,9 +2106,39 @@ function renderSettingsUsers() {
     : [h('span', { class: 'muted' }, 'Aucun responsable.')]));
 }
 
+let settingsSites = [];
+
+function renderSettingsSites() {
+  $('#set-sites').replaceChildren(...settingsSites.map((site, i) => h('div', { class: 'site-row' },
+    h('span', { class: 'site-row-main' }, h('b', {}, site.nom || 'Nouveau site'), h('span', { class: 'muted' }, site.dataDir)),
+    site.dataDir === S.config.dataDir ? h('span', { class: 'pill live' }, 'Actif')
+      : h('button', { type: 'button', class: 'o-btn rm', title: 'Retirer ce site de ce poste (ses données ne sont pas supprimées)', onclick: () => { settingsSites.splice(i, 1); renderSettingsSites(); } }, icon('x', 14)))));
+}
+
+async function renderSettingsSups() {
+  let sups = [];
+  try {
+    sups = await call(api.listSupervisors());
+  } catch { /* dossier inaccessible */ }
+  $('#set-sups').replaceChildren(...(sups.length
+    ? sups.map((nom) => h('span', { class: 'chip' }, icon('lock', 12), nom,
+      h('button', {
+        type: 'button', title: `Retirer ${nom}`, onclick: async () => {
+          if (await ask('Retirer le superviseur ?', `${nom} ne pourra plus se connecter comme superviseur sur ce site.`, [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+          await call(api.removeSupervisor(nom));
+          renderSettingsSups();
+        },
+      }, icon('x', 14))))
+    : [h('span', { class: 'muted' }, 'Aucun superviseur sur ce site.')]));
+}
+
 function openSettings() {
   $('#set-poste').value = S.config.poste || '';
   $('#set-dir').value = S.config.dataDir;
+  $('#set-site-nom').value = (S.site && S.site.nom) || S.siteName || '';
+  settingsSites = (S.config.sites || []).map((x) => ({ dataDir: x.dataDir, nom: (S.sites.find((y) => y.dataDir === x.dataDir) || {}).nom }));
+  renderSettingsSites();
+  renderSettingsSups();
   settingsUsers = [...S.users];
   renderSettingsUsers();
   settingsAgents = [...S.agents];
@@ -1872,19 +2182,53 @@ function initSettings() {
     }
   });
   $('#set-open').addEventListener('click', () => call(api.openDataDir()));
+  $('#set-site-add').addEventListener('click', async () => {
+    const dir = await call(api.chooseDir());
+    if (!dir || settingsSites.some((x) => x.dataDir === dir)) return;
+    // Le site garde son nom s'il en a déjà un (dossier déjà utilisé par un autre poste).
+    const info = await call(api.siteInfo(dir)).catch(() => ({}));
+    let nom = info.nom || '';
+    if (!nom) {
+      nom = await promptText('Nom de ce site', 'ex. Site Nord', { text: dir }) || dir.split(/[\\/]/).pop();
+      await call(api.renameSite(dir, nom)).catch(() => null);
+    }
+    settingsSites.push({ dataDir: dir, nom });
+    renderSettingsSites();
+  });
+  $('#set-sup-add').addEventListener('click', async () => {
+    try {
+      await call(api.saveSupervisor($('#set-sup-nom').value, $('#set-sup-pin').value));
+      toast(`Superviseur ${$('#set-sup-nom').value.trim()} enregistré.`);
+      $('#set-sup-nom').value = '';
+      $('#set-sup-pin').value = '';
+      renderSettingsSups();
+    } catch (err) {
+      toast(err.message);
+    }
+  });
   $('#settings').addEventListener('close', async () => {
     if ($('#settings').returnValue !== 'save') return;
     await flush();
     const dirChanged = $('#set-dir').value !== S.config.dataDir;
-    S.config = await call(api.setConfig({ poste: $('#set-poste').value.trim(), dataDir: $('#set-dir').value }));
+    const nom = $('#set-site-nom').value.trim();
+    if (!dirChanged && nom !== ((S.site && S.site.nom) || '')) S.site = await call(api.saveSite({ ...S.site, nom }));
+    S.config = await call(api.setConfig({
+      poste: $('#set-poste').value.trim(), dataDir: $('#set-dir').value, sites: settingsSites.map((x) => ({ dataDir: x.dataDir })),
+    }));
     // Un dossier partagé qui a déjà sa liste de responsables la garde.
     const existing = dirChanged ? await call(api.loadUsers()) : [];
     S.users = await call(api.saveUsers(dirChanged && existing.length ? existing : settingsUsers));
-    if (dirChanged) await loadSiteData();
-    else S.agents = await call(api.saveAgents(settingsAgents));
+    if (dirChanged) {
+      await loadSiteData();
+      if (nom && !S.site.nom) S.site = await call(api.saveSite({ ...S.site, nom }));
+    } else {
+      S.agents = await call(api.saveAgents(settingsAgents));
+    }
+    await loadSites();
     toast('Paramètres enregistrés.');
     checkUpdate();
     if (S.screen === 'user') renderUserScreen();
+    else if (S.screen === 'site') renderSiteScreen();
     else if (S.screen === 'service') renderServiceScreen();
     else await goTo(S.date);
   });
@@ -1912,6 +2256,7 @@ async function init() {
   S.config = await call(api.getConfig());
   S.users = await call(api.loadUsers());
   await loadSiteData();
+  await loadSites();
   const live = M.currentService();
   S.date = live.date;
   S.service = live.service;
@@ -1925,6 +2270,12 @@ async function init() {
   // Écran de choix du service
   const liveFor = () => (M.currentService().date === S.date ? M.currentService().service : 'matin');
   $('#btn-back-user').addEventListener('click', backToUsers);
+  $('#btn-site-back').addEventListener('click', backToUsers);
+  $('#btn-change-site').addEventListener('click', () => renderSiteScreen());
+  $('#btn-go-dashboard').addEventListener('click', async () => {
+    await enterService(liveFor(), 'dashboard');
+    setView('dashboard');
+  });
   $('#svc-prev-day').addEventListener('click', () => { S.date = M.addDays(S.date, -1); renderServiceScreen(); });
   $('#svc-next-day').addEventListener('click', () => { S.date = M.addDays(S.date, 1); renderServiceScreen(); });
   $('#svc-today').addEventListener('click', () => { S.date = M.currentService().date; renderServiceScreen(); });

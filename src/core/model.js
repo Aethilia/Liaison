@@ -60,7 +60,7 @@ function normalize(data, date, service) {
   const base = emptyService(date || data.date, service || data.service);
   const out = { ...base, ...data, date: base.date, service: base.service };
   // 4 lignes d'absents comme sur la feuille, davantage si besoin.
-  out.absents = (Array.isArray(data.absents) ? data.absents : []).map((a) => ({ nom: (a && a.nom) || '', motif: (a && a.motif) || '' }));
+  out.absents = (Array.isArray(data.absents) ? data.absents : []).map((a) => ({ ...a, nom: (a && a.nom) || '', motif: (a && a.motif) || '' }));
   while (out.absents.length < NB_ABSENTS) out.absents.push({ nom: '', motif: '' });
   out.entrees = { ...base.entrees, ...(data.entrees || {}) };
   out.sorties = {};
@@ -68,17 +68,20 @@ function normalize(data, date, service) {
     out.sorties[m] = { ...base.sorties[m], ...((data.sorties || {})[m] || {}) };
     if (!MATIERES_EXTERNES.includes(m)) out.sorties[m].pesees = cleanPesees(out.sorties[m].pesees);
   }
+  // Les champs inconnus (ajoutés par une version plus récente) sont conservés tels quels.
   out.sortiesExtra = (Array.isArray(data.sortiesExtra) ? data.sortiesExtra : []).map((x) => ({
+    ...x,
     nom: (x && x.nom) || '', nb: numOrNull(x && x.nb), tonnage: numOrNull(x && x.tonnage), pesees: cleanPesees(x && x.pesees), couleur: (x && x.couleur) || '',
   }));
   out.nonConformes = (Array.isArray(data.nonConformes) ? data.nonConformes : []).map((x) => ({
+    ...x,
     type: (x && x.type) || '', quantite: numOrNull(x && x.quantite), unite: (x && x.unite) || UNITES[0],
     provenance: (x && x.provenance) || '', commentaire: (x && x.commentaire) || '', photos: cleanList(x && x.photos),
   }));
   out.bennes = { ...base.bennes, ...(data.bennes || {}) };
   out.plateaux = { ...base.plateaux, ...(data.plateaux || {}) };
   out.observations = Array.isArray(data.observations)
-    ? data.observations.map((o) => ({ heure: o.heure || '', texte: o.texte || '', important: !!o.important, auteur: o.auteur || '', photos: cleanList(o.photos) }))
+    ? data.observations.map((o) => ({ ...o, heure: o.heure || '', texte: o.texte || '', important: !!o.important, auteur: o.auteur || '', photos: cleanList(o.photos) }))
     : [];
   return out;
 }
@@ -201,6 +204,78 @@ function layoutObservations(s, width = LARGEUR_LIGNE_NB) {
   return lines;
 }
 
+// Chiffres d'une période (récap, feuille Synthèse) : days = [{ date, services }].
+function stats(days) {
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const matieres = new Map();
+  const services = Object.fromEntries(SERVICES.map((d) => [d.id, { service: d.id, plateaux: 0, pl: 0 }]));
+  const motifs = new Map();
+  const nc = new Map();
+  const parJour = [];
+  const k = { entrees: 0, sorties: 0, tonnage: 0, observations: 0, importantes: 0, clos: 0, services: 0, nonConformes: 0, absents: 0 };
+  for (const day of days) {
+    let tonJour = 0;
+    for (const def of SERVICES) {
+      const s = normalize(day.services[def.id], day.date, def.id);
+      k.services += 1;
+      if (s.cloture) k.clos += 1;
+      services[def.id].plateaux += n(s.entrees.plateaux);
+      services[def.id].pl += n(s.entrees.pl);
+      for (const r of allSorties(s)) {
+        const nom = r.nom || 'Sortie ponctuelle';
+        const m = matieres.get(nom) || { nom, nb: 0, tonnage: 0, externe: r.externe, extra: r.extra };
+        m.nb += n(r.data.nb);
+        m.tonnage += n(r.data.tonnage);
+        matieres.set(nom, m);
+        tonJour += n(r.data.tonnage);
+      }
+      for (const a of s.absents) {
+        if (!a.nom) continue;
+        k.absents += 1;
+        const key = a.motif || 'Non précisé';
+        motifs.set(key, (motifs.get(key) || 0) + 1);
+      }
+      for (const x of s.nonConformes) {
+        if (!x.type) continue;
+        k.nonConformes += 1;
+        const key = `${x.type.toLowerCase()}|${x.unite}`;
+        const e = nc.get(key) || { type: x.type, unite: x.unite, quantite: 0, lignes: 0 };
+        e.quantite += n(x.quantite);
+        e.lignes += 1;
+        nc.set(key, e);
+      }
+      const obs = s.observations.filter((o) => o.heure || o.texte);
+      k.observations += obs.length;
+      k.importantes += obs.filter((o) => o.important).length;
+    }
+    parJour.push({ date: day.date, tonnage: Math.round(tonJour * 1000) / 1000 });
+  }
+  const list = [...matieres.values()].map((m) => ({ ...m, tonnage: Math.round(m.tonnage * 1000) / 1000 }));
+  const entrees = Object.values(services);
+  k.entrees = entrees.reduce((a, e) => a + e.plateaux + e.pl, 0);
+  k.sorties = list.reduce((a, m) => a + m.nb, 0);
+  k.tonnage = Math.round(list.reduce((a, m) => a + m.tonnage, 0) * 1000) / 1000;
+  return {
+    kpis: k,
+    matieres: list,
+    entrees,
+    parJour,
+    motifs: [...motifs.entries()].map(([motif, nb]) => ({ motif, nb })).sort((a, b) => b.nb - a.nb),
+    nonConformes: [...nc.values()].sort((a, b) => a.type.localeCompare(b.type, 'fr')),
+  };
+}
+
+// Compare deux numéros de version « 1.4.0 » : -1, 0 ou 1.
+function compareVersions(a, b) {
+  const pa = String(a || '0').split('.').map(Number);
+  const pb = String(b || '0').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return Math.sign(d);
+  }
+  return 0;
+}
+
 // Service précédent dans l'ordre de relève : nuit (veille) → matin → après-midi → nuit.
 function previousService(date, service) {
   if (service === 'matin') return { date: addDays(date, -1), service: 'nuit' };
@@ -247,7 +322,7 @@ function daysInMonth(year, month) {
 }
 
 const api = {
-  UNITES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
+  stats, compareVersions, UNITES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
   SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth,

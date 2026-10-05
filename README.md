@@ -11,16 +11,22 @@ du modèle, listes déroulantes, remplissage coloré du vert au rouge, une page 
 par service). Les sections s'allongent selon le contenu (absents, sorties
 ponctuelles, déchets non conformes, tâches, observations). Un onglet masqué
 garde toutes les données pour que le réimport soit fidèle ; les classeurs
-remplis à la main à l'ancien format restent importables.
+remplis à la main à l'ancien format restent importables. Un onglet **Synthèse**
+reprend les chiffres clés de la période avec de **vrais graphiques Excel**
+(modifiables) : tonnage par matière et entrées par service (camemberts),
+tonnage par jour et nombre de sorties par matière (histogrammes), absences par
+motif, et le tableau des déchets non conformes.
 
 ## Parcours
 
 1. **Qui prend le poste ?** — choix du responsable parmi la liste (partagée entre
-   tous les postes, modifiable dans les paramètres ou avec « Ajouter »).
-2. **Quel service ?** — les trois services du jour en cartes : état (clôturé, en
+   tous les postes, modifiable dans les paramètres ou avec « Ajouter »). Un
+   **superviseur** saisit son code PIN.
+2. **Quel site ?** — seulement si ce poste connaît plusieurs sites (voir plus bas).
+3. **Quel service ?** — les trois services du jour en cartes : état (clôturé, en
    cours…), responsable, nombre d'observations et d'alertes. « Voir le détail »
    ouvre la fiche du service sans entrer en saisie.
-3. **Main courante** — la saisie du service choisi. Le responsable choisi à
+4. **Main courante** — la saisie du service choisi. Le responsable choisi à
    l'étape 1 est inscrit automatiquement s'il n'y en a pas encore. Le bouton en
    haut à droite (nom + service) ramène au choix du service ou du responsable.
 
@@ -35,6 +41,28 @@ la relève, la fiche et le journal, et est précédée de « ⚠ » dans l'expor
 - Onglet **Observations** : journal de toutes les observations et consignes,
   sur la journée, 7 jours ou le mois, avec recherche, filtre par service et
   filtre « importantes ».
+
+## Plusieurs sites, superviseur
+
+- **Site** = un dossier de données, avec son nom (Paramètres → *Nom du site*).
+  Deux sites indépendants n'ont qu'à utiliser deux dossiers différents : aucune
+  donnée partagée. Un poste peut connaître plusieurs sites (*Ajouter un autre
+  site…*) : on choisit alors le site après son nom.
+- **Superviseur** : ajouté dans les paramètres de chaque site avec un code PIN
+  (4 à 8 chiffres ; seule une empreinte du code est enregistrée). Il accède à
+  tous les sites du poste et dispose d'un **tableau de bord** : services du jour,
+  tâches en attente, services saisis non clôturés, observations importantes,
+  boxs en alerte et déchets non conformes des 7 derniers jours, pour chaque site.
+  Le code PIN est une protection légère : la vraie confidentialité dépend des
+  droits Windows sur le dossier partagé.
+
+## Versions différentes sur les postes
+
+Chaque service enregistré note la version de l'application. Un poste plus
+ancien **ne peut pas écraser** un service enregistré par une version plus
+récente (il l'affiche en lecture seule) et conserve les informations qu'il ne
+connaît pas. Chaque poste inscrit sa version dans `postes/` : si un autre poste
+est plus à jour, un bandeau invite à installer la nouvelle version.
 
 ## Agents absents
 
@@ -73,9 +101,12 @@ appareil photo, glisser-déposer ou Ctrl+V) ; elles sont réduites et rangées d
 de l'export Excel. Dans les listes de suggestions (agents, déchets), la croix
 retire une entrée mémorisée par erreur.
 
-## Récap du mois : recherche
+## Récap du mois : graphiques et recherche
 
-Recherche par mots-clés (sans tenir compte des accents) dans les observations,
+Le récap affiche le **tonnage sorti par jour** (survoler une barre pour le
+détail) et la répartition des **entrées par service**.
+
+La **recherche** par mots-clés (sans tenir compte des accents) porte dans les observations,
 tâches, absents, déchets non conformes, sorties ponctuelles et responsables,
 sur le mois affiché ou une période au choix. Un clic ouvre la fiche du service.
 
@@ -130,7 +161,8 @@ Voir [PARTAGE.md](PARTAGE.md) : téléchargement, dossier commun, configuration 
 Les données sont stockées en JSON lisible dans le dossier commun :
 `AAAA/MM/AAAA-MM-JJ_service.json` (un fichier par service), `taches/` (un fichier
 par tâche), `photos/`, `responsables.json`, `agents.json`,
-`types-non-conformes.json` et `site.json` (couleurs).
+`types-non-conformes.json`, `site.json` (nom du site, couleurs) et `postes/`
+(version de chaque poste). Les superviseurs sont dans `responsables.json`.
 
 ## Développement
 
@@ -155,6 +187,8 @@ avec l'installateur et la version portable, à déposer ensuite dans le dossier
 | `src/core/model.js` | Structure d'un service, totaux, ordre de relève (partagé avec l'interface) |
 | `src/core/store.js` | Lecture/écriture des fichiers, détection des conflits entre postes |
 | `src/core/update.js` | Détection d'une nouvelle version dans `<dossier des données>/mises-a-jour` |
+| `src/core/dashboard.js` | Résumé d'un site pour le tableau de bord du superviseur |
+| `src/core/excel-synthese.js`, `excel-charts.js` | Onglet Synthèse et graphiques Excel natifs (DrawingML) |
 | `src/core/excel-sheet.js` | Construction d'un onglet jour à hauteur variable (styles repris du modèle) |
 | `src/core/excel.js` | Export/import au format du classeur à partir de `assets/modele.xlsx` |
 | `src/main.js`, `src/preload.js` | Processus Electron, dialogues fichiers, configuration |

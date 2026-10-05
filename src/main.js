@@ -4,10 +4,11 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeImage } = requir
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { Store, ConflictError } = require('./core/store');
+const { Store, ConflictError, VersionError } = require('./core/store');
 const { exportWorkbook, importWorkbookFull } = require('./core/excel');
 const M = require('./core/model');
 const { spawn } = require('child_process');
+const { summarizeSite } = require('./core/dashboard');
 const { UPDATE_DIR, findUpdate } = require('./core/update');
 
 // Interface en français (heures sur 24 h dans les champs horaires).
@@ -17,23 +18,40 @@ let win;
 let config;
 let store;
 
+// Chaque poste note sa version dans le dossier commun (voir newestVersion).
+function openStore(dir) {
+  const st = new Store(dir, { appVersion: app.getVersion() });
+  try {
+    st.registerPoste(config.poste, app.getVersion());
+  } catch { /* dossier inaccessible : signalé à la première lecture */ }
+  return st;
+}
+
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
+
+// Un poste peut connaître plusieurs sites (un dossier de données chacun) ;
+// `dataDir` est le site actif.
+function withSites(cfg) {
+  const sites = (Array.isArray(cfg.sites) ? cfg.sites : []).filter((x) => x && x.dataDir);
+  if (cfg.dataDir && !sites.some((x) => x.dataDir === cfg.dataDir)) sites.unshift({ dataDir: cfg.dataDir });
+  return { ...cfg, sites };
+}
 
 function loadConfig() {
   const defaults = { dataDir: path.join(app.getPath('documents'), 'Liaison'), poste: os.hostname() };
   try {
-    return { ...defaults, ...JSON.parse(fs.readFileSync(configFile(), 'utf8')) };
+    return withSites({ ...defaults, ...JSON.parse(fs.readFileSync(configFile(), 'utf8')) });
   } catch {
-    return { ...defaults, firstRun: true };
+    return withSites({ ...defaults, firstRun: true });
   }
 }
 
 function saveConfig(next) {
-  config = { ...config, ...next };
+  config = withSites({ ...config, ...next });
   delete config.firstRun;
   fs.mkdirSync(path.dirname(configFile()), { recursive: true });
   fs.writeFileSync(configFile(), JSON.stringify(config, null, 2));
-  store = new Store(config.dataDir);
+  store = openStore(config.dataDir);
   return config;
 }
 
@@ -68,13 +86,14 @@ function handle(channel, fn) {
       return { ok: true, value: await fn(...args) };
     } catch (err) {
       if (err instanceof ConflictError) return { ok: false, code: 'CONFLICT', error: err.message, current: err.current };
+      if (err instanceof VersionError) return { ok: false, code: 'VERSION', error: err.message, version: err.version };
       return { ok: false, error: err.message || String(err) };
     }
   });
 }
 
-handle('config:get', () => config);
-handle('config:set', (next) => saveConfig(next));
+handle('config:get', () => ({ ...config, appVersion: app.getVersion() }));
+handle('config:set', (next) => ({ ...saveConfig(next), appVersion: app.getVersion() }));
 handle('config:chooseDir', async () => {
   const r = await dialog.showOpenDialog(win, {
     title: 'Dossier des mains courantes (local ou partage réseau)',
@@ -114,6 +133,46 @@ handle('users:load', () => store.loadUsers());
 handle('users:save', (users) => store.saveUsers(users));
 handle('agents:load', () => store.loadAgents());
 handle('site:load', () => store.loadSite());
+
+// Sites connus de ce poste, avec leurs responsables et superviseurs.
+const DEFAULT_SITE_NAME = 'Tronc principal';
+// Sans nom enregistré : « Tronc principal » pour le premier site (historique), sinon le nom du dossier.
+const siteName = (st, dataDir) => st.loadSite().nom || (config.sites[0] && config.sites[0].dataDir === dataDir ? DEFAULT_SITE_NAME : path.basename(dataDir));
+handle('sites:overview', () => config.sites.map(({ dataDir }) => {
+  try {
+    const st = new Store(dataDir);
+    return {
+      dataDir,
+      nom: siteName(st, dataDir),
+      responsables: st.loadUsers(),
+      superviseurs: st.loadSupervisors(),
+      actif: dataDir === config.dataDir,
+    };
+  } catch (err) {
+    return { dataDir, nom: path.basename(dataDir), responsables: [], superviseurs: [], actif: dataDir === config.dataDir, erreur: err.message };
+  }
+}));
+handle('sites:info', (dataDir) => new Store(dataDir).loadSite());
+handle('sites:rename', (dataDir, nom) => {
+  const st = new Store(dataDir);
+  return st.saveSite({ ...st.loadSite(), nom: String(nom || '').trim() });
+});
+handle('sites:select', (dataDir) => {
+  if (!config.sites.some((x) => x.dataDir === dataDir)) throw new Error('Site inconnu sur ce poste.');
+  return { ...saveConfig({ dataDir }), appVersion: app.getVersion() };
+});
+handle('sup:list', () => store.loadSupervisors());
+handle('sup:save', (nom, pin) => store.saveSupervisor(nom, pin));
+handle('sup:remove', (nom) => store.removeSupervisor(nom));
+// Le code PIN est vérifié sur le site où le superviseur est enregistré.
+handle('auth:verify', (dataDir, nom, pin) => {
+  if (!config.sites.some((x) => x.dataDir === dataDir)) return false;
+  return new Store(dataDir).verifyPin(nom, pin);
+});
+handle('dashboard:site', (dataDir) => {
+  if (!config.sites.some((x) => x.dataDir === dataDir)) throw new Error('Site inconnu sur ce poste.');
+  return summarizeSite(new Store(dataDir));
+});
 handle('site:save', (site) => store.saveSite(site));
 handle('nc:load', () => store.loadNcTypes());
 handle('nc:save', (types) => store.saveNcTypes(types));
@@ -174,7 +233,8 @@ handle('excel:export', async ({ from, to, suggestedName }) => {
       return null;
     }
   };
-  await exportWorkbook(store.loadRange(dates), r.filePath, { tasks: store.listTasks(), site: store.loadSite(), loadPhoto });
+  const site = store.loadSite();
+  await exportWorkbook(store.loadRange(dates), r.filePath, { tasks: store.listTasks(), site, siteName: siteName(store, config.dataDir), loadPhoto });
   return r.filePath;
 });
 handle('excel:open', (file) => shell.openPath(file));
@@ -234,7 +294,15 @@ handle('update:check', () => {
   try {
     fs.mkdirSync(dir, { recursive: true });
   } catch { /* dossier en lecture seule : on vérifie quand même */ }
-  return { current: app.getVersion(), kind: updateKind(), dir, update: app.isPackaged ? findUpdate(config.dataDir, app.getVersion(), updateKind()) : null };
+  let newest = null;
+  try {
+    newest = store.newestVersion();
+  } catch { /* sans importance */ }
+  return {
+    current: app.getVersion(), kind: updateKind(), dir,
+    update: app.isPackaged ? findUpdate(config.dataDir, app.getVersion(), updateKind()) : null,
+    newer: newest && M.compareVersions(newest.version, app.getVersion()) > 0 ? newest : null,
+  };
 });
 
 handle('update:install', () => {
@@ -266,7 +334,7 @@ handle('print', () => new Promise((resolve, reject) => {
 
 app.whenReady().then(() => {
   config = loadConfig();
-  store = new Store(config.dataDir);
+  store = openStore(config.dataDir);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -145,6 +145,56 @@ body[data-service="nuit"] { --accent: var(--nuit); --accent-2: var(--nuit-2); --
 .svc-card .sc-detail:hover { background: rgba(255,255,255,.26); }
 .svc-card.live { outline: 3px solid color-mix(in srgb, var(--c) 40%, white); outline-offset: 3px; }
 
+/* Choix du site */
+.site-cards { display: flex; flex-direction: column; gap: 12px; }
+.site-card { display: flex; align-items: center; gap: 16px; text-align: left; border: 2px solid var(--line-soft); background: #fff; border-radius: 16px; padding: 16px 18px; cursor: pointer; transition: transform .12s, box-shadow .12s, border-color .12s; }
+.site-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--line); }
+.site-card.actif { border-color: color-mix(in srgb, var(--nuit) 35%, transparent); }
+.site-icon { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: var(--nuit-soft); color: var(--nuit); flex: none; }
+.site-main { flex: 1; min-width: 0; }
+.site-name { font-size: 18px; font-weight: 800; color: var(--nuit); }
+.site-dir { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-stats { display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 13px; }
+.site-dots { display: inline-flex; gap: 4px; }
+.site-dots .dot { cursor: default; }
+.service-site { margin: -10px 0 14px; color: var(--muted); font-weight: 600; }
+.user-card.sup { border-color: color-mix(in srgb, var(--nuit) 30%, transparent); background: linear-gradient(180deg, #fff, var(--nuit-soft)); }
+.sup-pill { background: var(--nuit); color: #fff; border-color: var(--nuit); }
+.sites-edit { display: flex; flex-direction: column; gap: 6px; }
+.site-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line-soft); border-radius: 10px; padding: 6px 10px; }
+.site-row-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.site-row-main .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Barre du haut : rester sur une ligne même avec l'onglet Tableau de bord */
+.view-btn, .brand-title, .user-chip .u-name { white-space: nowrap; }
+.user-chip .u-svc { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1520px) {
+  .brand > div { display: none; }
+  .user-chip .u-switch { display: none; }
+  .topbar { gap: 14px; }
+}
+#dashboard .recap-head h2 { text-transform: none; }
+
+/* Tableau de bord */
+.dash-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; max-width: 980px; }
+.dash-grid.multi { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: none; }
+@media (max-width: 1250px) { .dash-grid.multi { grid-template-columns: minmax(0, 1fr); } }
+.dash-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line-soft); }
+.dash-today { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 16px; }
+.dash-svc { text-align: left; border: 0; border-top: 4px solid var(--c); background: var(--head); border-radius: 10px; padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+.dash-svc:hover { background: var(--line-soft); }
+.ds-top { display: flex; align-items: center; gap: 6px; color: var(--c); }
+.ds-top .pill { margin-left: auto; }
+.ds-resp { font-size: 13px; font-weight: 600; }
+.ds-nums { font-size: 12px; color: var(--muted); }
+.red { color: var(--danger); font-weight: 700; }
+.dash-list { display: flex; flex-direction: column; gap: 3px; }
+.dash-line { display: grid; grid-template-columns: 150px 1fr auto; gap: 8px; text-align: left; border: 0; border-left: 3px solid var(--c); background: transparent; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.dash-line:hover { background: var(--head); }
+.dl-when { color: var(--c); font-weight: 700; font-size: 12px; }
+.dl-date { text-transform: capitalize; }
+.dash-head > div { min-width: 0; }
+
 /* ---------- Barre du haut ---------- */
 .app { display: flex; flex-direction: column; height: 100%; }
 .topbar {
@@ -327,6 +377,7 @@ table.grid input:hover:not(:read-only) { border-color: var(--line); }
 .empty { color: var(--muted); font-style: italic; padding: 6px 0; }
 .consignes textarea { min-height: 72px; resize: vertical; background: #fffdf5; border-color: #f2e2b0; }
 
+.closed-note.warn { background: var(--warn-soft); color: var(--warn); }
 .closed-note { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; background: var(--nuit-soft); color: var(--nuit); padding: 10px 14px; border-radius: 12px; }
 
 /* Couleur de remplissage calculée (vert → rouge) : pas de dégradé fixe */
@@ -519,6 +570,22 @@ table.recap tfoot td { font-weight: 800; background: var(--head); }
 .matiere-row .bar > i { background: linear-gradient(90deg, #6d8cc0, var(--nuit)); }
 .matiere-row b, .matiere-row span:last-child { text-align: right; }
 .matiere-row span:last-child { color: var(--text-2); }
+
+/* Graphiques du récap */
+.recap-charts { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
+.chart-box { position: relative; }
+.chart-svg { width: 100%; height: auto; display: block; }
+.chart-svg .grid { stroke: #edf0f5; stroke-width: 1; }
+.chart-svg .axis { stroke: #bfc6d1; stroke-width: 1; }
+.chart-svg .tick { fill: var(--muted); font-size: 13px; font-family: inherit; }
+.chart-svg .hit { fill: transparent; cursor: default; }
+.chart-svg .hit:hover { fill: rgba(31, 47, 79, .05); }
+.chart-tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--nuit); color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; pointer-events: none; display: flex; flex-direction: column; white-space: nowrap; box-shadow: var(--shadow); text-transform: capitalize; }
+.svc-share { margin-bottom: 12px; }
+.ss-top { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+.ss-name { color: var(--c); font-weight: 700; margin-right: auto; }
+.ss-sub { font-size: 12px; margin-top: 3px; }
+@media (max-width: 1200px) { .recap-charts { grid-template-columns: minmax(0, 1fr); } }
 
 /* Recherche du récap */
 .rs-period { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }

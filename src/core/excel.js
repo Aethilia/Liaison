@@ -8,6 +8,8 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const M = require('./model');
 const { buildDaySheet, timeToFraction } = require('./excel-sheet');
+const { buildSynthese, SYNTHESE_SHEET } = require('./excel-synthese');
+const { addCharts } = require('./excel-charts');
 
 const TEMPLATE = path.join(__dirname, '..', '..', 'assets', 'modele.xlsx');
 const MODEL_SHEET = 'Modèle';
@@ -145,6 +147,7 @@ async function exportWorkbook(days, file, { tasks = [], site = {}, siteName = ''
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(TEMPLATE);
   const model = wb.getWorksheet(MODEL_SHEET);
+  const charts = days.length ? buildSynthese(wb.addWorksheet(SYNTHESE_SHEET), days, { siteName }) : [];
   for (const day of days) {
     buildDaySheet(wb.addWorksheet(sheetName(day.date)), model, day, { tasks, site, siteName });
   }
@@ -153,6 +156,7 @@ async function exportWorkbook(days, file, { tasks = [], site = {}, siteName = ''
   wb.calcProperties = { fullCalcOnLoad: true };
   if (days.length) wb.views = [{ activeTab: 2, firstSheet: 0 }];
   await wb.xlsx.writeFile(file);
+  await addCharts(file, SYNTHESE_SHEET, charts);
   return file;
 }
 

@@ -5,11 +5,16 @@
 // ce qui permet à plusieurs postes de travailler sur les mêmes données sans
 // s'écraser : chaque service écrit uniquement son propre fichier.
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { normalize, emptyService, SERVICES, daysInMonth } = require('./model');
+const { normalize, emptyService, SERVICES, daysInMonth, compareVersions } = require('./model');
 
 const SERVICE_IDS = SERVICES.map((s) => s.id);
+
+function hashPin(pin, salt) {
+  return crypto.pbkdf2Sync(String(pin), salt, 60000, 32, 'sha256').toString('hex');
+}
 
 class ConflictError extends Error {
   constructor(current) {
@@ -19,9 +24,20 @@ class ConflictError extends Error {
   }
 }
 
+// Le service a été enregistré par une version plus récente de l'application :
+// on refuse de l'écraser, pour ne pas perdre ce que cette version ne connaît pas.
+class VersionError extends Error {
+  constructor(version) {
+    super(`Ce service a été enregistré avec la version ${version} de Liaison, plus récente que celle de ce poste. Mettez à jour l'application pour le modifier.`);
+    this.code = 'VERSION';
+    this.version = version;
+  }
+}
+
 class Store {
-  constructor(dir) {
+  constructor(dir, { appVersion = null } = {}) {
     this.dir = dir;
+    this.appVersion = appVersion;
   }
 
   fileFor(date, service) {
@@ -49,8 +65,11 @@ class Store {
   save(data, { expectedRev, by, force = false } = {}) {
     const file = this.fileFor(data.date, data.service);
     const current = this.load(data.date, data.service);
+    if (this.appVersion && current.appVersion && compareVersions(current.appVersion, this.appVersion) > 0) throw new VersionError(current.appVersion);
     if (!force && expectedRev != null && current.rev !== expectedRev) throw new ConflictError(current);
-    const out = normalize({ ...data, rev: current.rev + 1, updatedAt: new Date().toISOString(), updatedBy: by || null });
+    const out = normalize({
+      ...data, rev: current.rev + 1, updatedAt: new Date().toISOString(), updatedBy: by || null, appVersion: this.appVersion || current.appVersion || null,
+    });
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(out, null, 2), 'utf8');
@@ -81,12 +100,45 @@ class Store {
 
   saveUsers(users) {
     const clean = [...new Set(users.map((u) => String(u).trim()).filter(Boolean))];
-    fs.mkdirSync(this.dir, { recursive: true });
-    const file = path.join(this.dir, 'responsables.json');
-    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ responsables: clean }, null, 2), 'utf8');
-    fs.renameSync(tmp, file);
+    const current = this.readJson('responsables.json', {});
+    this.writeJson('responsables.json', { ...current, responsables: clean });
     return clean;
+  }
+
+  // Superviseurs : accès à tout, protégé par un code PIN (seule son empreinte est stockée).
+  supervisorRecords() {
+    const list = this.readJson('responsables.json', {}).superviseurs;
+    return Array.isArray(list) ? list.filter((x) => x && x.nom) : [];
+  }
+
+  loadSupervisors() {
+    return this.supervisorRecords().map((x) => x.nom);
+  }
+
+  saveSupervisor(nom, pin) {
+    const name = String(nom || '').trim();
+    if (!name) throw new Error('Nom du superviseur manquant.');
+    if (!/^\d{4,8}$/.test(String(pin || ''))) throw new Error('Le code PIN doit comporter 4 à 8 chiffres.');
+    const salt = crypto.randomBytes(16).toString('hex');
+    const rec = { nom: name, salt, hash: hashPin(pin, salt) };
+    const current = this.readJson('responsables.json', {});
+    const others = this.supervisorRecords().filter((x) => x.nom.toLowerCase() !== name.toLowerCase());
+    this.writeJson('responsables.json', { responsables: [], ...current, superviseurs: [...others, rec] });
+    return this.loadSupervisors();
+  }
+
+  removeSupervisor(nom) {
+    const current = this.readJson('responsables.json', {});
+    this.writeJson('responsables.json', { responsables: [], ...current, superviseurs: this.supervisorRecords().filter((x) => x.nom !== nom) });
+    return this.loadSupervisors();
+  }
+
+  verifyPin(nom, pin) {
+    const rec = this.supervisorRecords().find((x) => x.nom === nom);
+    if (!rec) return false;
+    const a = Buffer.from(hashPin(String(pin || ''), rec.salt), 'hex');
+    const b = Buffer.from(rec.hash, 'hex');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
   }
 
   // Agents déjà saisis comme absents, proposés ensuite à la saisie.
@@ -229,9 +281,31 @@ class Store {
     return abs;
   }
 
+  // Registre des postes et de leur version, pour prévenir quand un poste est en retard.
+  registerPoste(poste, version) {
+    const id = String(poste || 'poste').normalize('NFD').replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 60) || 'poste';
+    return this.writeJson(path.join('postes', `${id}.json`), { poste, version, vu: new Date().toISOString() });
+  }
+
+  newestVersion() {
+    let names;
+    try {
+      names = fs.readdirSync(path.join(this.dir, 'postes'));
+    } catch {
+      return null;
+    }
+    let best = null;
+    for (const name of names) {
+      if (!name.endsWith('.json')) continue;
+      const p = this.readJson(path.join('postes', name), null);
+      if (p && p.version && (!best || compareVersions(p.version, best.version) > 0)) best = p;
+    }
+    return best;
+  }
+
   loadMonth(year, month) {
     return this.loadRange(daysInMonth(year, month));
   }
 }
 
-module.exports = { Store, ConflictError };
+module.exports = { Store, ConflictError, VersionError };

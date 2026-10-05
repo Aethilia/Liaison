@@ -41,6 +41,15 @@ La fenêtre **Paramètres** s'ouvre automatiquement :
 Les paramètres restent modifiables avec l'icône ⚙ (écran d'accueil ou en haut
 à droite).
 
+## 3 bis. Un autre site, un superviseur
+
+- **Autre site indépendant** : il crée son propre dossier (ex.
+  `S:\Liaison-SiteNord`) et le choisit dans ses paramètres, avec le nom du site.
+  Ses données restent séparées des vôtres.
+- **Superviseur** : dans ⚙ Paramètres de chaque site, rubrique *Superviseurs*,
+  saisir son nom et un code PIN. Sur son poste, ajouter chaque site avec
+  *Ajouter un autre site…* : il choisira son nom, tapera son code, puis le site.
+
 ## 4. Utilisation au quotidien
 
 1. Cliquer sur son nom → choisir son service → saisir.

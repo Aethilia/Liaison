@@ -14,10 +14,10 @@
         <img src="../../assets/icon.png" alt="" class="welcome-logo">
         <div>
           <div class="welcome-title">Main courante</div>
-          <div class="welcome-sub">Tronc principal · liaison entre services</div>
+          <div class="welcome-sub" id="welcome-sub">Liaison entre services</div>
         </div>
       </div>
-      <div class="steps"><span class="step active">1. Responsable</span><span class="step">2. Service</span><span class="step">3. Main courante</span></div>
+      <div class="steps" data-steps="user"></div>
       <h1>Bonjour, qui prend le poste ?</h1>
       <div id="user-list" class="user-grid"></div>
       <div class="welcome-foot">
@@ -27,14 +27,27 @@
     </div>
   </section>
 
+  <!-- Étape 2 (si plusieurs sites) : choix du site -->
+  <section id="screen-site" class="screen welcome" hidden>
+    <div class="welcome-card wide">
+      <div class="welcome-top">
+        <button id="btn-site-back" class="link-btn" data-icon="arrowLeft">Changer de responsable</button>
+        <div class="steps" data-steps="site"></div>
+      </div>
+      <h1 id="site-hello"></h1>
+      <div id="site-cards" class="site-cards"></div>
+    </div>
+  </section>
+
   <!-- Étape 2 : choix du service -->
   <section id="screen-service" class="screen welcome" hidden>
     <div class="welcome-card wide">
       <div class="welcome-top">
         <button id="btn-back-user" class="link-btn" data-icon="arrowLeft">Changer de responsable</button>
-        <div class="steps"><span class="step done">1. Responsable</span><span class="step active">2. Service</span><span class="step">3. Main courante</span></div>
+        <div class="steps" data-steps="service"></div>
       </div>
       <h1 id="service-hello"></h1>
+      <div id="service-site" class="service-site"></div>
       <div class="service-date">
         <button id="svc-prev-day" class="icon-btn" data-icon="chevronLeft" aria-label="Jour précédent"></button>
         <label class="date-label">
@@ -48,6 +61,8 @@
       <div class="welcome-foot">
         <button id="btn-go-journal" class="link-btn" data-icon="list">Consulter le journal des observations</button>
         <button id="btn-go-recap" class="link-btn" data-icon="chart">Récap du mois</button>
+        <button id="btn-go-dashboard" class="link-btn" data-icon="eye" hidden>Tableau de bord</button>
+        <button id="btn-change-site" class="link-btn" data-icon="arrowLeft" hidden>Changer de site</button>
       </div>
     </div>
   </section>
@@ -59,13 +74,14 @@
         <img src="../../assets/icon.png" alt="" class="brand-logo">
         <div>
           <div class="brand-title">Main courante</div>
-          <div class="brand-sub">Tronc principal</div>
+          <div class="brand-sub" id="brand-site"></div>
         </div>
       </div>
       <nav class="views" role="tablist">
         <button class="view-btn active" data-view="saisie" role="tab" data-icon="edit">Saisie <span id="tasks-badge" class="nav-badge" title="Tâches de relève en attente" hidden></span></button>
         <button class="view-btn" data-view="journal" role="tab" data-icon="list">Observations</button>
         <button class="view-btn" data-view="recap" role="tab" data-icon="chart">Récap du mois</button>
+        <button class="view-btn" data-view="dashboard" role="tab" data-icon="eye" hidden>Tableau de bord</button>
       </nav>
       <div class="top-actions">
         <button id="btn-quick-obs" class="btn obs-btn" data-icon="plus" title="Ajouter une observation (Ctrl+O)">Observation</button>
@@ -113,6 +129,10 @@
       <div id="recap"></div>
     </main>
 
+    <main id="view-dashboard" class="view" hidden>
+      <div id="dashboard"></div>
+    </main>
+
     <footer class="statusbar">
       <span id="save-status">—</span>
       <span id="data-dir" class="muted"></span>
@@ -128,13 +148,24 @@
         <small>Affiché à côté de chaque enregistrement pour savoir d'où vient la saisie.</small>
       </label>
       <label class="field">
-        <span>Dossier des données</span>
+        <span>Nom du site</span>
+        <input id="set-site-nom" type="text" placeholder="ex. Tronc principal">
+        <small>Affiché sur l'accueil, dans l'application et sur les exports Excel. Commun à tous les postes du site.</small>
+      </label>
+      <label class="field">
+        <span>Dossier des données du site</span>
         <div class="row">
           <input id="set-dir" type="text" readonly>
           <button type="button" id="set-dir-btn" class="btn ghost">Choisir…</button>
         </div>
         <small>Pour partager la main courante entre plusieurs postes, choisissez un dossier sur un partage réseau commun.</small>
       </label>
+      <div class="field">
+        <span>Sites de ce poste</span>
+        <div id="set-sites" class="sites-edit"></div>
+        <button type="button" id="set-site-add" class="btn ghost small" style="align-self:flex-start">Ajouter un autre site…</button>
+        <small>Un site = un dossier de données. Le superviseur peut ainsi passer d'un site à l'autre depuis le même poste.</small>
+      </div>
       <div class="field">
         <span>Responsables</span>
         <div id="set-users" class="users-edit"></div>
@@ -143,6 +174,16 @@
           <button type="button" id="set-user-add" class="btn ghost">Ajouter</button>
         </div>
         <small>Liste commune à tous les postes qui utilisent le même dossier.</small>
+      </div>
+      <div class="field">
+        <span>Superviseurs (accès à tout, avec code PIN)</span>
+        <div id="set-sups" class="users-edit"></div>
+        <div class="row">
+          <input id="set-sup-nom" type="text" placeholder="Nom du superviseur">
+          <input id="set-sup-pin" type="password" inputmode="numeric" placeholder="Code PIN (4 à 8 chiffres)" style="max-width:190px">
+          <button type="button" id="set-sup-add" class="btn ghost">Ajouter</button>
+        </div>
+        <small>Enregistrés pour ce site. Pour changer un code, ajoutez à nouveau le même nom.</small>
       </div>
       <div class="field">
         <span>Agents mémorisés</span>
@@ -181,6 +222,7 @@
   <dialog id="prompt">
     <form method="dialog" class="dialog-body">
       <h2 id="prompt-title"></h2>
+      <p id="prompt-text" class="muted" hidden></p>
       <input id="prompt-input" type="text">
       <div class="dialog-actions">
         <span class="spacer"></span>

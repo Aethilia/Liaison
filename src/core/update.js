@@ -5,22 +5,13 @@
 
 const fs = require('fs');
 const path = require('path');
+const { compareVersions } = require('./model');
 
 const UPDATE_DIR = 'mises-a-jour';
 const PATTERNS = {
   installation: /^Liaison-Installation-(\d+)\.(\d+)\.(\d+)\.exe$/i,
   portable: /^Liaison-Portable-(\d+)\.(\d+)\.(\d+)\.exe$/i,
 };
-
-function compareVersions(a, b) {
-  const pa = String(a).split('.').map(Number);
-  const pb = String(b).split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0);
-    if (d) return Math.sign(d);
-  }
-  return 0;
-}
 
 // Renvoie la version la plus récente disponible pour ce type d'installation
 // ({ version, file }), ou null si le poste est déjà à jour.

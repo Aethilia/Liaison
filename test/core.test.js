@@ -85,7 +85,7 @@ test('export Excel : onglet par jour à hauteur variable, puis réimport fidèle
 
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
-  assert.deepEqual(wb.worksheets.filter((w) => w.state !== 'veryHidden').map((w) => w.name), ['Légende', 'Modèle', '02-10', '03-10']);
+  assert.deepEqual(wb.worksheets.filter((w) => w.state !== 'veryHidden').map((w) => w.name), ['Légende', 'Modèle', 'Synthèse', '02-10', '03-10']);
   const ws = wb.getWorksheet('02-10');
   const values = [];
   ws.eachRow((row) => row.eachCell((c) => values.push(c.value)));
@@ -176,4 +176,88 @@ test('mémoire des agents : ajout automatique sans doublon', () => {
   s.absents.push({ nom: ' martin ', motif: 'CP' }, { nom: 'Bernard', motif: '' });
   assert.deepEqual(store.rememberAgents(s), ['Bernard', 'Martin']);
   assert.deepEqual(store.rememberAgents(s), ['Bernard', 'Martin']);
+});
+
+test('protection : un service enregistré par une version plus récente n\'est pas écrasé', () => {
+  const dir = tmp();
+  const recent = new Store(dir, { appVersion: '1.5.0' });
+  const s = sample('2026-10-06', 'matin');
+  s.futurChamp = { inventaire: 42 };
+  s.observations[0].futur = 'x';
+  const saved = recent.save(s);
+  assert.equal(saved.appVersion, '1.5.0');
+  assert.deepEqual(saved.futurChamp, { inventaire: 42 });
+  assert.equal(saved.observations[0].futur, 'x');
+  const old = new Store(dir, { appVersion: '1.4.0' });
+  assert.throws(() => old.save({ ...saved, responsable: 'X' }), (e) => e.code === 'VERSION' && e.version === '1.5.0');
+  assert.throws(() => old.save({ ...saved }, { force: true }), (e) => e.code === 'VERSION');
+  // Registre des postes
+  old.registerPoste('PC A', '1.4.0');
+  recent.registerPoste('PC B', '1.5.0');
+  assert.deepEqual({ ...old.newestVersion(), vu: undefined }, { poste: 'PC B', version: '1.5.0', vu: undefined });
+});
+
+test('superviseurs : code PIN haché, la liste des responsables est conservée', () => {
+  const store = new Store(tmp());
+  store.saveUsers(['Marie', 'Karim']);
+  store.saveSupervisor('Paul Chef', '4821');
+  store.saveUsers(['Marie', 'Karim', 'Julie']);
+  assert.deepEqual(store.loadUsers(), ['Marie', 'Karim', 'Julie']);
+  assert.deepEqual(store.loadSupervisors(), ['Paul Chef']);
+  assert.equal(store.verifyPin('Paul Chef', '4821'), true);
+  assert.equal(store.verifyPin('Paul Chef', '0000'), false);
+  assert.ok(!JSON.stringify(store.readJson('responsables.json', {})).includes('4821'));
+  assert.throws(() => store.saveSupervisor('X', '12'));
+  assert.deepEqual(store.removeSupervisor('Paul Chef'), []);
+});
+
+test('tableau de bord : services du jour, non clôturés, alertes', () => {
+  const { summarizeSite } = require('../src/core/dashboard');
+  const store = new Store(tmp());
+  const now = new Date(2026, 9, 6, 15, 0); // après-midi du 6
+  const hier = M.emptyService('2026-10-05', 'nuit');
+  hier.responsable = 'Karim';
+  hier.observations = [{ heure: '23:00', texte: 'Fuite', important: true }];
+  store.save(hier);
+  const matin = M.emptyService('2026-10-06', 'matin');
+  matin.cloture = { at: '2026-10-06T12:50:00Z' };
+  matin.bennes.Fer = 92;
+  store.save(matin);
+  store.saveTask({ id: 't1', texte: 'Appeler', creeLe: '2026-10-06T07:00:00Z', origine: { date: '2026-10-06', service: 'matin' }, faite: null });
+  const d = summarizeSite(store, now);
+  assert.deepEqual(d.today.map((t) => t.etat), ['clos', 'en-cours', 'vide']);
+  assert.ok(d.nonClotures.some((x) => x.date === '2026-10-05' && x.service === 'nuit'));
+  assert.ok(d.vides > 0);
+  assert.equal(d.importantes[0].texte, 'Fuite');
+  assert.equal(d.taches.length, 1);
+  assert.deepEqual(d.boxs.alertes.map((a) => a.nom), ['Fer']);
+});
+
+test('synthèse Excel : vrais graphiques dans le classeur', async () => {
+  const JSZip = require('jszip');
+  const days = ['2026-10-01', '2026-10-02', '2026-10-03'].map((date, i) => {
+    const s = M.emptyService(date, 'matin');
+    s.entrees = { plateaux: 4 + i, pl: 2 };
+    s.sorties.Fer = { nb: 1, tonnage: 5 + i, pesees: [] };
+    s.sorties.DIB = { nb: 2, tonnage: 3, pesees: [] };
+    const n = M.emptyService(date, 'nuit');
+    n.entrees = { plateaux: 1, pl: 1 };
+    return { date, services: { matin: s, nuit: n } };
+  });
+  const file = path.join(tmp(), 'synthese.xlsx');
+  await exportWorkbook(days, file, { siteName: 'Site Nord' });
+  const zip = await JSZip.loadAsync(fs.readFileSync(file));
+  const charts = Object.keys(zip.files).filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f));
+  assert.ok(charts.length >= 3, `graphiques : ${charts.length}`);
+  const all = (await Promise.all(charts.map((f) => zip.file(f).async('string')))).join('');
+  assert.ok(all.includes('<c:pieChart>') && all.includes('<c:barChart>'));
+  assert.ok(all.includes("'Synthèse'!$B$"));
+  const ct = await zip.file('[Content_Types].xml').async('string');
+  assert.ok(ct.includes('drawingml.chart+xml'));
+  // Le classeur reste lisible et réimportable.
+  const back = await importWorkbook(file);
+  assert.equal(back.length, 3);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(file);
+  assert.equal(wb.getWorksheet('Synthèse').getCell('A1').value, 'SYNTHÈSE  ·  SITE NORD');
 });
