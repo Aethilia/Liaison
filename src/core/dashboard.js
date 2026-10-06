@@ -4,6 +4,7 @@
 // tâches en attente, services non clôturés, alertes des 7 derniers jours.
 
 const M = require('./model');
+const { Inventaire } = require('./inventaire');
 
 const ORDER = Object.fromEntries(M.SERVICES.map((d, i) => [d.id, i]));
 const key = (date, service) => `${date}#${ORDER[service]}`;
@@ -57,6 +58,10 @@ function summarizeSite(store, now = new Date(), nbJours = 7) {
   }
 
   const taches = store.listTasks().filter((t) => !t.faite);
+  let stockBas = [];
+  try {
+    stockBas = new Inventaire(store.dir).list().articles.filter((a) => a.alerte).map((a) => ({ nom: a.nom, stock: a.stock, seuil: a.seuil, unite: a.unite }));
+  } catch { /* inventaire illisible : ignoré */ }
   return {
     site: store.loadSite().nom || '',
     live,
@@ -67,6 +72,7 @@ function summarizeSite(store, now = new Date(), nbJours = 7) {
     importantes: importantes.reverse(),
     nonConformes: nonConformes.reverse(),
     boxs: dernier,
+    stockBas,
   };
 }
 

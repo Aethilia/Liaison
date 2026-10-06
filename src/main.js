@@ -9,6 +9,7 @@ const { exportWorkbook, importWorkbookFull } = require('./core/excel');
 const M = require('./core/model');
 const { spawn } = require('child_process');
 const { summarizeSite } = require('./core/dashboard');
+const { Inventaire } = require('./core/inventaire');
 const { UPDATE_DIR, findUpdate } = require('./core/update');
 
 // Interface en français (heures sur 24 h dans les champs horaires).
@@ -161,6 +162,15 @@ handle('sites:select', (dataDir) => {
   if (!config.sites.some((x) => x.dataDir === dataDir)) throw new Error('Site inconnu sur ce poste.');
   return { ...saveConfig({ dataDir }), appVersion: app.getVersion() };
 });
+// Inventaire du site actif (indépendant de la main courante).
+const inv = () => new Inventaire(config.dataDir);
+handle('inv:list', () => inv().list());
+handle('inv:saveCategories', (cats) => inv().saveCategories(cats));
+handle('inv:saveArticle', (a) => inv().saveArticle(a, a.par || config.poste));
+handle('inv:deleteArticle', (id) => inv().deleteArticle(id));
+handle('inv:addMovement', (m) => inv().addMovement(m, m.par || config.poste));
+handle('inv:deleteMovement', (id) => inv().deleteMovement(id));
+handle('inv:history', (id) => inv().history(id));
 handle('sup:list', () => store.loadSupervisors());
 handle('sup:save', (nom, pin) => store.saveSupervisor(nom, pin));
 handle('sup:remove', (nom) => store.removeSupervisor(nom));

@@ -6,8 +6,8 @@ Page de téléchargement : <https://github.com/Aethilia/Liaison/releases/latest>
 
 | Fichier | Pour qui |
 | --- | --- |
-| `Liaison-Installation-1.0.0.exe` | **Recommandé.** Installe l'appli et crée un raccourci sur le bureau. |
-| `Liaison-Portable-1.0.0.exe` | Sans installation (poste sans droits administrateur, clé USB). Double-clic pour lancer. |
+| `Liaison-Installation-x.y.z.exe` | **Recommandé.** Installe l'appli et crée un raccourci sur le bureau. |
+| `Liaison-Portable-x.y.z.exe` | Sans installation (poste sans droits administrateur, clé USB). Double-clic pour lancer. |
 
 Comme l'application n'est pas signée numériquement, Windows peut afficher
 « Windows a protégé votre ordinateur » : cliquer sur **Informations
@@ -41,22 +41,40 @@ La fenêtre **Paramètres** s'ouvre automatiquement :
 Les paramètres restent modifiables avec l'icône ⚙ (écran d'accueil ou en haut
 à droite).
 
-## 3 bis. Un autre site, un superviseur
+## 3 bis. Plusieurs sites (CTVO, CPTP), un superviseur
 
-- **Autre site indépendant** : il crée son propre dossier (ex.
-  `S:\Liaison-SiteNord`) et le choisit dans ses paramètres, avec le nom du site.
-  Ses données restent séparées des vôtres.
+Chaque site a **son propre dossier** sur S:, par exemple :
+
+```
+S:\Liaison-CTVO   ← données du CTVO (main courante, tâches, inventaire…)
+S:\Liaison-CPTP   ← données du CPTP
+```
+
+1. Créer les deux dossiers (ou garder celui déjà utilisé pour l'un des sites).
+2. Sur **chaque poste**, une seule fois : à l'écran « Quel site ? », cliquer
+   **+ Ajouter un site**, choisir le dossier de l'autre site et lui donner son
+   nom (CTVO ou CPTP). Le poste connaît alors les deux sites.
+3. Ensuite, à chaque ouverture : son nom → **le site du jour** → le service.
+   Le dernier site choisi est mis en avant. Un responsable qui travaille pour la
+   première fois sur un site y est inscrit automatiquement.
+4. Le lien *Gérer les sites* (ou ⚙ Paramètres) permet de renommer ou retirer un
+   site de la liste du poste (les données ne sont pas supprimées).
+
+Les données des deux sites ne se mélangent jamais.
+
 - **Superviseur** : dans ⚙ Paramètres de chaque site, rubrique *Superviseurs*,
-  saisir son nom et un code PIN. Sur son poste, ajouter chaque site avec
-  *Ajouter un autre site…* : il choisira son nom, tapera son code, puis le site.
+  saisir son nom et un code PIN. Sur son poste, ajouter les deux sites avec
+  *+ Ajouter un site* : il choisit son nom, tape son code, puis le site ; son
+  tableau de bord résume tous les sites.
 
 ## 4. Utilisation au quotidien
 
-1. Cliquer sur son nom → choisir son service → saisir.
+1. Cliquer sur son nom → choisir le site → choisir son service → saisir.
 2. Les observations s'ajoutent en tête de page (Entrée pour valider) ou
    n'importe où avec **Ctrl+O**.
-3. En fin de service : remplir les **consignes pour la relève** puis
+3. En fin de service : ajouter les **tâches pour la relève** puis
    **Clôturer le service**. Le service suivant les voit en arrivant.
+4. Onglet **Inventaire** : stock du site (articles, entrées, sorties, comptages).
 
 Tout est enregistré automatiquement et les autres postes se mettent à jour
 seuls au bout de quelques secondes.

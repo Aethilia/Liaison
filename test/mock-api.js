@@ -5,13 +5,15 @@
   const ok = (value) => Promise.resolve({ ok: true, value: JSON.parse(JSON.stringify(value)) });
   const M = () => window.LiaisonModel;
   const load = (d, s) => (db[key(d, s)] ? JSON.parse(JSON.stringify(db[key(d, s)])) : M().emptyService(d, s));
-  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.4.0' };
+  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.5.0' };
   let users = window.__users || [];
   let agents = window.__agents || [];
   let site = window.__site || { couleurs: {} };
   let ncTypes = window.__ncTypes || [];
   const tasks = window.__tasks || {};
   const photos = {};
+  const inv = window.__inv || { categories: [], articles: {}, mouvements: [], seq: 0 };
+  window.__inv = inv;
   const SAMPLE_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect width="240" height="160" fill="#8aa"/><circle cx="80" cy="70" r="30" fill="#dde"/><rect x="120" y="60" width="90" height="70" fill="#567"/></svg>');
   window.__tasks = tasks;
   window.__db = db;
@@ -74,6 +76,7 @@
         taches: Object.values(tasks).filter((t) => !t.faite),
         nonClotures: [], vides: 3,
         importantes: imp, nonConformes: [], boxs: null,
+        stockBas: invView().articles.filter((a) => a.alerte).map((a) => ({ nom: a.nom, stock: a.stock, seuil: a.seuil, unite: a.unite })),
       });
     },
     exportExcel: () => ok(null),
@@ -84,5 +87,41 @@
     checkUpdate: () => ok({ current: '1.0.0', kind: 'installation', dir: 'C:\\Partage\\Liaison\\mises-a-jour', update: window.__update || null }),
     installUpdate: () => ok('1.1.0'),
     openUpdateDir: () => ok(true),
+    invList: () => ok(invView()),
+    invSaveCategories: (cats) => {
+      inv.categories = cats.filter((c) => c.nom).map((c) => ({ id: c.id || `c${++inv.seq}`, nom: c.nom.trim() }));
+      const ids = new Set(inv.categories.map((c) => c.id));
+      for (const a of Object.values(inv.articles)) if (a.categorie && !ids.has(a.categorie)) a.categorie = null;
+      return ok(inv.categories);
+    },
+    invSaveArticle: (a) => {
+      if (!String(a.nom || '').trim()) return Promise.resolve({ ok: false, error: 'Le nom de l\'article est obligatoire.' });
+      const id = a.id || `a${++inv.seq}`;
+      inv.articles[id] = { ...inv.articles[id], ...a, id, nom: a.nom.trim(), seuil: typeof a.seuil === 'number' ? a.seuil : null };
+      return ok(inv.articles[id]);
+    },
+    invDeleteArticle: (id) => { delete inv.articles[id]; inv.mouvements = inv.mouvements.filter((m) => m.article !== id); return ok(true); },
+    invAddMovement: (m) => {
+      const out = { ...m, id: `m${++inv.seq}`, date: m.date || new Date().toISOString(), creeLe: new Date().toISOString() };
+      inv.mouvements.push(out);
+      return ok(out);
+    },
+    invDeleteMovement: (id) => { inv.mouvements = inv.mouvements.filter((m) => m.id !== id); return ok(true); },
+    invHistory: (id) => ok(invStock(inv.mouvements.filter((m) => m.article === id)).history.reverse()),
   };
+  function invStock(mv) {
+    let stock = 0;
+    const history = [...mv].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.creeLe).localeCompare(String(b.creeLe))).map((m) => {
+      if (m.type === 'entree') stock += m.quantite; else if (m.type === 'sortie') stock -= m.quantite; else stock = m.quantite;
+      return { ...m, stockApres: stock };
+    });
+    return { stock, history };
+  }
+  function invView() {
+    const articles = Object.values(inv.articles).map((a) => {
+      const { stock, history } = invStock(inv.mouvements.filter((m) => m.article === a.id));
+      return { ...a, stock, mouvements: history.length, dernier: history[history.length - 1] || null, alerte: a.seuil != null && stock <= a.seuil };
+    }).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    return { categories: inv.categories, articles };
+  }
 })();

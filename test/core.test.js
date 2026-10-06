@@ -261,3 +261,34 @@ test('synthèse Excel : vrais graphiques dans le classeur', async () => {
   await wb.xlsx.readFile(file);
   assert.equal(wb.getWorksheet('Synthèse').getCell('A1').value, 'SYNTHÈSE  ·  SITE NORD');
 });
+
+test('inventaire : catégories, articles, mouvements, stock et seuil', () => {
+  const { Inventaire, computeStock } = require('../src/core/inventaire');
+  const dir = tmp();
+  const inv = new Inventaire(dir);
+  const [epi, conso] = inv.saveCategories([{ nom: 'EPI' }, { nom: 'Consommables' }, { nom: 'epi' }]);
+  assert.equal(inv.loadCategories().length, 2);
+  const gants = inv.saveArticle({ nom: 'Gants', categorie: epi.id, unite: 'paires', seuil: 10 }, 'PC A');
+  const sacs = inv.saveArticle({ nom: 'Sacs', categorie: conso.id, unite: 'rouleaux' }, 'PC A');
+  inv.addMovement({ article: gants.id, type: 'entree', quantite: 50, date: '2026-10-01T08:00:00Z' }, 'Marie');
+  inv.addMovement({ article: gants.id, type: 'sortie', quantite: 12, date: '2026-10-02T08:00:00Z' }, 'Karim');
+  inv.addMovement({ article: gants.id, type: 'comptage', quantite: 9, date: '2026-10-03T08:00:00Z', commentaire: 'Inventaire mensuel' }, 'Julie');
+  inv.addMovement({ article: gants.id, type: 'sortie', quantite: 1, date: '2026-10-04T08:00:00Z' }, 'Julie');
+  const list = inv.list();
+  const g = list.articles.find((a) => a.id === gants.id);
+  assert.equal(g.stock, 8);
+  assert.equal(g.alerte, true);
+  assert.equal(list.articles.find((a) => a.id === sacs.id).alerte, false);
+  const h = inv.history(gants.id);
+  assert.deepEqual(h.map((m) => m.stockApres), [8, 9, 38, 50]);
+  assert.equal(h[1].commentaire, 'Inventaire mensuel');
+  assert.throws(() => inv.addMovement({ article: gants.id, type: 'sortie', quantite: -2 }));
+  // Supprimer une catégorie laisse ses articles sans catégorie.
+  inv.saveCategories([{ id: conso.id, nom: 'Consommables' }]);
+  assert.equal(inv.list().articles.find((a) => a.id === gants.id).categorie, null);
+  // Suppression d'un article et de son historique.
+  inv.deleteArticle(gants.id);
+  assert.equal(inv.list().articles.length, 1);
+  assert.equal(inv.history(gants.id).length, 0);
+  assert.equal(computeStock([]).stock, 0);
+});

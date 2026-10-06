@@ -213,7 +213,7 @@ function showScreen(name) {
 // Étapes affichées en haut des écrans d'accueil (le choix du site n'apparaît
 // que si ce poste connaît plusieurs sites).
 function renderSteps(active) {
-  const steps = [['user', 'Responsable'], ...(S.sites.length > 1 ? [['site', 'Site']] : []), ['service', 'Service'], ['app', 'Main courante']];
+  const steps = [['user', 'Responsable'], ['site', 'Site'], ['service', 'Service'], ['app', 'Main courante']];
   const idx = steps.findIndex(([k]) => k === active);
   document.querySelectorAll(`[data-steps="${active}"]`).forEach((el) => el.replaceChildren(...steps.map(([, label], i) => h('span', { class: `step${i === idx ? ' active' : i < idx ? ' done' : ''}` }, `${i + 1}. ${label}`))));
 }
@@ -278,7 +278,8 @@ async function addUserFromWelcome() {
 }
 
 // Sites accessibles : tous pour un superviseur, sinon ceux où la personne est responsable.
-const userSites = (u) => (S.role === 'superviseur' ? S.sites : S.sites.filter((x) => u.sites.includes(x.dataDir)));
+// Tout le monde peut choisir n'importe quel site du poste (on change parfois de site).
+const userSites = () => S.sites;
 
 async function chooseUser(u) {
   if (u.superviseur) {
@@ -300,27 +301,72 @@ async function chooseUser(u) {
   } catch { /* stockage indisponible */ }
   S.date = M.currentService().date;
   document.querySelectorAll('[data-view="dashboard"], #btn-go-dashboard').forEach((el) => { el.hidden = S.role !== 'superviseur'; });
-  const sites = userSites(u);
-  if (sites.length > 1) await renderSiteScreen();
-  else await useSite(sites[0] ? sites[0].dataDir : S.config.dataDir);
+  await renderSiteScreen();
 }
 
-// Étape 2 bis : choix du site (seulement si plusieurs sont accessibles)
+const lastSiteKey = () => `liaison.lastSite.${S.user}`;
+
+// Choix d'un site : on retient le choix et, pour un responsable qui n'y était
+// pas encore enregistré, on l'ajoute à la liste des responsables de ce site.
+async function pickSite(dataDir) {
+  try {
+    localStorage.setItem(lastSiteKey(), dataDir);
+  } catch { /* stockage indisponible */ }
+  await useSite(dataDir, { thenService: false });
+  if (S.role !== 'superviseur' && S.user && !S.users.includes(S.user)) {
+    try {
+      S.users = await call(api.saveUsers([...S.users, S.user]));
+      await loadSites();
+    } catch { /* dossier en lecture seule : sans conséquence */ }
+  }
+  await renderServiceScreen();
+}
+
+// « + Ajouter un site » : choix du dossier puis du nom (gardé s'il en a déjà un).
+async function addSiteFlow() {
+  const dir = await call(api.chooseDir());
+  if (!dir) return false;
+  if (!(S.config.sites || []).some((x) => x.dataDir === dir)) {
+    const info = await call(api.siteInfo(dir)).catch(() => ({}));
+    let nom = info.nom || '';
+    if (!nom) {
+      nom = await promptText('Nom de ce site', 'ex. CPTP', { text: dir }) || dir.split(/[\\/]/).pop();
+      await call(api.renameSite(dir, nom)).catch(() => null);
+    }
+    S.config = await call(api.setConfig({ sites: [...(S.config.sites || []).map((x) => ({ dataDir: x.dataDir })), { dataDir: dir }] }));
+    await loadSites();
+    toast(`Site « ${nom} » ajouté.`);
+  }
+  return true;
+}
+
+// Étape 2 : choix du site (toujours affiché : on peut changer de site)
 async function renderSiteScreen() {
   renderSteps('site');
   $('#site-hello').textContent = `${S.user}, sur quel site ?`;
-  const sites = userSites(S.userEntry);
-  $('#site-cards').replaceChildren(...sites.map((site) => {
+  let last = null;
+  try {
+    last = localStorage.getItem(lastSiteKey());
+  } catch { /* stockage indisponible */ }
+  if (!last || !S.sites.some((x) => x.dataDir === last)) last = S.config.dataDir;
+  const sites = userSites();
+  const addCard = h('button', { class: 'site-card add', onclick: async () => { if (await addSiteFlow()) renderSiteScreen(); } },
+    h('span', { class: 'site-icon' }, icon('plus', 24)),
+    h('div', { class: 'site-main' }, h('div', { class: 'site-name' }, 'Ajouter un site'), h('div', { class: 'site-dir' }, 'Choisir le dossier de données de l\'autre site (ex. S:\\Liaison-CPTP)')));
+  $('#site-cards').replaceChildren(addCard);
+  $('#site-cards').prepend(...sites.map((site) => {
     const stats = h('div', { class: 'site-stats muted' }, 'Chargement…');
     call(api.siteDashboard(site.dataDir)).then((d) => {
       stats.replaceChildren(
         h('div', { class: 'site-dots' }, d.today.map((t) => h('span', { class: `dot ${t.etat === 'clos' ? 'done' : t.etat === 'vide' ? '' : 'draft'}`, style: { '--c': SVC[t.service].couleur }, title: `${SVC[t.service].label} : ${t.etat}` }))),
         h('span', {}, plural(d.taches.length, 'tâche'), ' en attente'),
-        d.importantes.length ? h('span', { class: 'pill alert' }, icon('alert', 12), plural(d.importantes.length, 'obs. importante')) : null);
+        ...(d.importantes.length ? [h('span', { class: 'pill alert' }, icon('alert', 12), plural(d.importantes.length, 'obs. importante'))] : []),
+        ...((d.stockBas || []).length ? [h('span', { class: 'pill alert' }, icon('box', 12), plural(d.stockBas.length, 'article'), ' en stock bas')] : []));
     }).catch((err) => stats.replaceChildren(h('span', { class: 'red' }, `Dossier inaccessible : ${err.message}`)));
-    return h('button', { class: `site-card${site.actif ? ' actif' : ''}`, onclick: () => useSite(site.dataDir) },
+    return h('button', { class: `site-card${site.dataDir === last ? ' actif' : ''}`, onclick: () => pickSite(site.dataDir) },
       h('span', { class: 'site-icon' }, icon('box', 24)),
-      h('div', { class: 'site-main' }, h('div', { class: 'site-name' }, site.nom), h('div', { class: 'site-dir' }, site.dataDir), stats),
+      h('div', { class: 'site-main' }, h('div', { class: 'site-name' }, site.nom, site.dataDir === last ? h('span', { class: 'u-hint' }, ' · dernier choisi') : null),
+        h('div', { class: 'site-dir' }, site.dataDir), stats),
       icon('arrowRight', 18));
   }));
   showScreen('site');
@@ -347,8 +393,8 @@ async function renderServiceScreen() {
   const live = M.currentService();
   renderSteps('service');
   $('#service-hello').textContent = `${S.user}, sur quel service travaillez-vous ?`;
-  $('#service-site').textContent = S.sites.length > 1 ? `Site : ${S.siteName}` : '';
-  $('#btn-change-site').hidden = !(S.userEntry && userSites(S.userEntry).length > 1);
+  $('#service-site').textContent = S.siteName ? `Site : ${S.siteName}` : '';
+  $('#btn-change-site').hidden = false;
   $('#svc-date-text').textContent = fmtLongDate(S.date);
   $('#svc-date-input').value = S.date;
   const cards = M.SERVICES.map((def) => {
@@ -482,7 +528,7 @@ function renderHeader() {
   av.textContent = initials(S.user || '?');
   av.style.setProperty('--av', avatarColor(S.user || '?'));
   $('#user-name').textContent = S.user || '';
-  $('#user-service').textContent = `${S.role === 'superviseur' ? 'Superviseur · ' : ''}${S.sites.length > 1 ? `${S.siteName} · ` : ''}Service ${SVC[S.service].label.toLowerCase()}`;
+  $('#user-service').textContent = `${S.role === 'superviseur' ? 'Superviseur · ' : ''}${S.siteName ? `${S.siteName} · ` : ''}Service ${SVC[S.service].label.toLowerCase()}`;
   $('#brand-site').textContent = S.siteName;
   document.body.dataset.service = S.service;
 }
@@ -1457,7 +1503,10 @@ function setView(view, { silent = false } = {}) {
   $('#view-journal').hidden = view !== 'journal';
   $('#view-recap').hidden = view !== 'recap';
   $('#view-dashboard').hidden = view !== 'dashboard';
+  $('#view-inventaire').hidden = view !== 'inventaire';
+  document.querySelector('.toolbar').hidden = view === 'inventaire'; // dates et exports sans objet
   if (silent) return;
+  if (view === 'inventaire') renderInventaire();
   if (view === 'dashboard') renderDashboard();
   if (view === 'recap') {
     const d = M.parseISODate(S.date);
@@ -1478,6 +1527,12 @@ async function poll() {
     if ($('#fiche').open && S.fiche) renderFiche();
   }
   if (S.view === 'dashboard' && Date.now() - (S.dashAt || 0) > 60000 && !$('#fiche').open) renderDashboard();
+  // Inventaire : rafraîchi en continu quand il est affiché, sinon le badge toutes les minutes.
+  if (S.view === 'inventaire') {
+    if (!document.querySelector('dialog[open]')) renderInventaire();
+    return;
+  }
+  if (Date.now() - invState.loadedAt > 60000) loadInventaire();
   if (S.view !== 'saisie' || S.saving || $('#fiche').open) return;
   let revs;
   try {
@@ -1792,7 +1847,10 @@ function dashSiteCard(site, d) {
       : empty('Aucun box en alerte au dernier service saisi.')),
     section('Déchets non conformes (7 jours)', 'recycle', d.nonConformes.length, d.nonConformes.length
       ? h('div', { class: 'dash-list' }, d.nonConformes.slice(0, 8).map((x) => line(x.date, x.service, `${x.type} : ${fmtQte(x)}${x.provenance ? ` — ${x.provenance}` : ''}`)))
-      : empty('Aucun déchet non conforme.')));
+      : empty('Aucun déchet non conforme.')),
+    section('Stock bas (inventaire)', 'box', (d.stockBas || []).length, (d.stockBas || []).length
+      ? h('div', { class: 'alert-list' }, d.stockBas.map((a) => h('span', { class: 'pill alert' }, `${a.nom} : ${fmtNum(a.stock)}${a.unite ? ` ${a.unite}` : ''} (seuil ${fmtNum(a.seuil)})`)))
+      : empty('Aucun article sous son seuil.')));
 }
 
 /* ---------- Recherche dans le récap ---------- */
@@ -2247,6 +2305,8 @@ async function loadSiteData() {
   S.ncTypes = await safe(api.loadNcTypes(), []);
   S.site = await safe(api.loadSite(), { couleurs: {} });
   await loadTasks();
+  await loadInventaire();
+  if (S.view === 'inventaire' && S.screen === 'app') renderInventaire({ reload: false });
 }
 
 /* ---------- Démarrage ---------- */
@@ -2272,6 +2332,7 @@ async function init() {
   $('#btn-back-user').addEventListener('click', backToUsers);
   $('#btn-site-back').addEventListener('click', backToUsers);
   $('#btn-change-site').addEventListener('click', () => renderSiteScreen());
+  $('#btn-site-manage').addEventListener('click', openSettings);
   $('#btn-go-dashboard').addEventListener('click', async () => {
     await enterService(liveFor(), 'dashboard');
     setView('dashboard');

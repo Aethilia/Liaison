@@ -36,6 +36,9 @@
       </div>
       <h1 id="site-hello"></h1>
       <div id="site-cards" class="site-cards"></div>
+      <div class="welcome-foot">
+        <button id="btn-site-manage" class="link-btn" data-icon="settings">Gérer les sites</button>
+      </div>
     </div>
   </section>
 
@@ -81,6 +84,7 @@
         <button class="view-btn active" data-view="saisie" role="tab" data-icon="edit">Saisie <span id="tasks-badge" class="nav-badge" title="Tâches de relève en attente" hidden></span></button>
         <button class="view-btn" data-view="journal" role="tab" data-icon="list">Observations</button>
         <button class="view-btn" data-view="recap" role="tab" data-icon="chart">Récap du mois</button>
+        <button class="view-btn" data-view="inventaire" role="tab" data-icon="box">Inventaire <span id="inv-badge" class="nav-badge" hidden></span></button>
         <button class="view-btn" data-view="dashboard" role="tab" data-icon="eye" hidden>Tableau de bord</button>
       </nav>
       <div class="top-actions">
@@ -127,6 +131,10 @@
 
     <main id="view-recap" class="view" hidden>
       <div id="recap"></div>
+    </main>
+
+    <main id="view-inventaire" class="view" hidden>
+      <div id="inventaire"></div>
     </main>
 
     <main id="view-dashboard" class="view" hidden>
@@ -275,6 +283,7 @@
   <script src="suggest.js"></script>
   <script src="photos.js"></script>
   <script src="taches.js"></script>
+  <script src="inventaire.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

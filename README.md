@@ -22,7 +22,10 @@ motif, et le tableau des déchets non conformes.
 1. **Qui prend le poste ?** — choix du responsable parmi la liste (partagée entre
    tous les postes, modifiable dans les paramètres ou avec « Ajouter »). Un
    **superviseur** saisit son code PIN.
-2. **Quel site ?** — seulement si ce poste connaît plusieurs sites (voir plus bas).
+2. **Quel site ?** — toujours demandé, pour tout le monde : on peut changer de
+   site d'un jour à l'autre. Le dernier site choisi est mis en avant ; la carte
+   **+ Ajouter un site** ajoute le dossier d'un autre site. Un responsable qui
+   choisit un site où il n'est pas encore inscrit y est ajouté automatiquement.
 3. **Quel service ?** — les trois services du jour en cartes : état (clôturé, en
    cours…), responsable, nombre d'observations et d'alertes. « Voir le détail »
    ouvre la fiche du service sans entrer en saisie.
@@ -46,8 +49,8 @@ la relève, la fiche et le journal, et est précédée de « ⚠ » dans l'expor
 
 - **Site** = un dossier de données, avec son nom (Paramètres → *Nom du site*).
   Deux sites indépendants n'ont qu'à utiliser deux dossiers différents : aucune
-  donnée partagée. Un poste peut connaître plusieurs sites (*Ajouter un autre
-  site…*) : on choisit alors le site après son nom.
+  donnée partagée. Chaque poste peut connaître plusieurs sites (carte
+  *+ Ajouter un site* ou Paramètres) : on choisit le site après son nom.
 - **Superviseur** : ajouté dans les paramètres de chaque site avec un code PIN
   (4 à 8 chiffres ; seule une empreinte du code est enregistrée). Il accède à
   tous les sites du poste et dispose d'un **tableau de bord** : services du jour,
@@ -55,6 +58,24 @@ la relève, la fiche et le journal, et est précédée de « ⚠ » dans l'expor
   boxs en alerte et déchets non conformes des 7 derniers jours, pour chaque site.
   Le code PIN est une protection légère : la vraie confidentialité dépend des
   droits Windows sur le dossier partagé.
+
+## Inventaire
+
+Onglet **Inventaire**, indépendant de la main courante, **un par site** (rangé
+dans le sous-dossier `inventaire` du dossier du site).
+
+- **Catégories** entièrement personnalisables (ajouter, renommer, supprimer ;
+  les articles d'une catégorie supprimée passent « Sans catégorie »).
+- **Articles** créés par les utilisateurs : nom, catégorie, unité, seuil
+  d'alerte, note. Cliquer sur le nom pour modifier ou supprimer.
+- **Suivi en continu** : *+ Entrée*, *− Sortie*, *= Comptage* (le stock devient
+  la quantité comptée). Chaque mouvement garde sa date, son auteur et un
+  commentaire ; l'horloge ouvre l'historique (un mouvement saisi par erreur
+  peut y être annulé).
+- **Seuil d'alerte** par article : sous le seuil, la ligne passe en rouge, un
+  petit badge apparaît sur l'onglet et le tableau de bord du superviseur le
+  signale.
+- Recherche et filtres par catégorie / stock bas.
 
 ## Versions différentes sur les postes
 
