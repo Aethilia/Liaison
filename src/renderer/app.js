@@ -182,10 +182,8 @@ const isClosed = (s) => !!(s && s.cloture);
 const isTooNew = (s) => !!(s && s.appVersion && S.config && M.compareVersions(s.appVersion, S.config.appVersion) > 0);
 const isLocked = (s) => isClosed(s) || isTooNew(s);
 const realObs = (s) => s.observations.filter((o) => o.heure || o.texte);
-const boxAlerts = (s) => [
-  ...M.BENNES.filter((b) => s.bennes[b] >= M.SEUIL_ALERTE).map((b) => ({ type: 'Benne', nom: b, v: s.bennes[b] })),
-  ...M.PLATEAUX.filter((p) => s.plateaux[p] >= M.SEUIL_ALERTE).map((p) => ({ type: 'Plateau', nom: p, v: s.plateaux[p] })),
-];
+const boxAlerts = (s) => M.boxAlerts(s);
+const boxNames = (s) => M.boxNames(S.site, s);
 
 function serviceState(s) {
   const live = M.currentService();
@@ -737,10 +735,12 @@ function renderForm() {
   const boxRow = (group, nom) => h('div', { class: 'box-row' },
     h('span', {}, nom),
     h('div', { class: 'bar', 'data-bar': `${group}.${nom}` }, h('i')),
-    h('div', { class: 'pct' }, field(`${group}.${nom}`, 'pct', { 'aria-label': `${group === 'bennes' ? 'Benne' : 'Plateau'} ${nom}` })));
-  const boxs = card('État des boxs', 'box', h('div', { class: 'boxs' },
-    h('div', {}, h('h4', {}, 'Bennes'), M.BENNES.map((b) => boxRow('bennes', b))),
-    h('div', {}, h('h4', {}, 'Plateaux'), M.PLATEAUX.map((p) => boxRow('plateaux', p)))),
+    h('div', { class: 'pct' }, field(`${group}.${nom}`, 'pct', { 'aria-label': `${group === 'bennes' ? 'Benne' : 'Plateau'} ${nom}` })),
+    closed ? null : h('button', { class: 'o-btn rm box-rm', title: 'Retirer cette ligne pour le site', 'aria-label': `Retirer ${nom}`, onclick: () => removeBox(group, nom) }, icon('x', 13)));
+  const noms = boxNames(s);
+  const boxGroup = (group, titre) => h('div', {}, h('h4', {}, titre), noms[group].map((n) => boxRow(group, n)),
+    closed ? null : h('button', { class: 'btn small ghost box-add', onclick: () => addBox(group) }, icon('plus', 13), group === 'bennes' ? 'Benne' : 'Plateau'));
+  const boxs = card('État des boxs', 'box', h('div', { class: 'boxs' }, boxGroup('bennes', 'Bennes'), boxGroup('plateaux', 'Plateaux')),
   { hint: `Remplissage en % · alerte à ${M.SEUIL_ALERTE} %` });
 
   const ncRows = s.nonConformes.map((x, i) => {
@@ -827,6 +827,48 @@ function addExtraSortie() {
   markDirty();
   const inputs = document.querySelectorAll('#form .extra-name');
   if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+// Lignes de l'état des boxs : liste permanente du site (site.json), commune à tous les services.
+async function saveBoxList(group, update) {
+  let site;
+  try {
+    site = await call(api.loadSite()); // version la plus récente (autre poste)
+  } catch {
+    site = { ...S.site };
+  }
+  const current = M.boxNames(site, null);
+  site.boxs = { ...current, [group]: update(current[group]) };
+  try {
+    S.site = await call(api.saveSite(site));
+  } catch (err) {
+    toast(`Non enregistré : ${err.message}`);
+  }
+}
+
+async function addBox(group) {
+  const label = group === 'bennes' ? 'benne' : 'plateau';
+  const nom = (await promptText(`Ajouter ${label === 'benne' ? 'une benne' : 'un plateau'}`, 'Nom (ex. Gravats)', { text: 'La ligne sera ajoutée pour tous les services du site.' }) || '').trim().replace(/\./g, ' ');
+  if (!nom) return;
+  if (boxNames(cur())[group].some((n) => n.toLowerCase() === nom.toLowerCase())) {
+    toast(`« ${nom} » existe déjà.`);
+    return;
+  }
+  await saveBoxList(group, (list) => [...list, nom]);
+  renderForm();
+}
+
+async function removeBox(group, nom) {
+  if (await ask('Retirer cette ligne ?', `« ${nom} » ne sera plus proposé dans l'état des boxs du site (les services déjà saisis gardent leurs chiffres).`,
+    [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+  await saveBoxList(group, (list) => list.filter((n) => n !== nom));
+  const s = cur();
+  if (s[group][nom] != null && !isLocked(s)) {
+    s[group][nom] = null;
+    markDirty();
+  }
+  delete s[group][nom];
+  renderForm();
 }
 
 async function removeExtraSortie(i) {
@@ -1171,7 +1213,7 @@ async function closeService() {
   const s = cur();
   const warnings = [];
   if (!s.responsable) warnings.push('• Le responsable n\'est pas renseigné.');
-  if (M.BENNES.every((b) => s.bennes[b] == null) && M.PLATEAUX.every((p) => s.plateaux[p] == null)) warnings.push('• L\'état des boxs n\'est pas renseigné.');
+  if (Object.values(s.bennes).every((v) => v == null) && Object.values(s.plateaux).every((v) => v == null)) warnings.push('• L\'état des boxs n\'est pas renseigné.');
   if (!realObs(s).length) warnings.push('• Aucune observation saisie.');
   const pending = tasksForService(S.tasks, S.date, S.service).filter((t) => !t.faite).length;
   if (pending) warnings.push(`• ${plural(pending, 'tâche')} encore en attente (elles restent affichées au service suivant).`);
@@ -1259,7 +1301,7 @@ function renderPassation() {
 
 async function takeOverBoxes() {
   const s = cur();
-  const hasValues = M.BENNES.some((b) => s.bennes[b] != null) || M.PLATEAUX.some((p) => s.plateaux[p] != null);
+  const hasValues = Object.values(s.bennes).some((v) => v != null) || Object.values(s.plateaux).some((v) => v != null);
   if (hasValues) {
     const r = await ask('Remplacer l\'état des boxs ?', 'L\'état des boxs déjà saisi pour ce service sera remplacé par celui du service précédent.', [
       { label: 'Annuler', value: 'no' },
@@ -1370,8 +1412,8 @@ function renderFiche() {
             h('tfoot', {}, h('tr', { class: 'tot' }, h('td', {}, 'Total'), h('td', {}, plural(t.sortiesNb, 'sortie')), h('td', {}, fmtTon(t.tonnage))))),
         ]),
         ficheCard('État des boxs', 'box', [
-          subTitle('BENNES', 0), M.BENNES.map((b) => miniBar(b, s.bennes[b])),
-          subTitle('PLATEAUX', 10), M.PLATEAUX.map((p) => miniBar(p, s.plateaux[p])),
+          subTitle('BENNES', 0), boxNames(s).bennes.map((b) => miniBar(b, s.bennes[b])),
+          subTitle('PLATEAUX', 10), boxNames(s).plateaux.map((p) => miniBar(p, s.plateaux[p])),
         ]))),
     h('div', { class: 'fiche-foot' },
       h('span', { class: 'spacer' }),
@@ -1504,9 +1546,11 @@ function setView(view, { silent = false } = {}) {
   $('#view-recap').hidden = view !== 'recap';
   $('#view-dashboard').hidden = view !== 'dashboard';
   $('#view-inventaire').hidden = view !== 'inventaire';
-  document.querySelector('.toolbar').hidden = view === 'inventaire'; // dates et exports sans objet
+  $('#view-stockage').hidden = view !== 'stockage';
+  document.querySelector('.toolbar').hidden = view === 'inventaire' || view === 'stockage'; // dates et exports sans objet
   if (silent) return;
   if (view === 'inventaire') renderInventaire();
+  if (view === 'stockage') renderStockage();
   if (view === 'dashboard') renderDashboard();
   if (view === 'recap') {
     const d = M.parseISODate(S.date);
@@ -1532,7 +1576,12 @@ async function poll() {
     if (!document.querySelector('dialog[open]')) renderInventaire();
     return;
   }
+  if (S.view === 'stockage') {
+    if (!document.querySelector('dialog[open]')) renderStockage();
+    return;
+  }
   if (Date.now() - invState.loadedAt > 60000) loadInventaire();
+  if (Date.now() - stkState.loadedAt > 60000) loadStockage();
   if (S.view !== 'saisie' || S.saving || $('#fiche').open) return;
   let revs;
   try {
@@ -1850,7 +1899,10 @@ function dashSiteCard(site, d) {
       : empty('Aucun déchet non conforme.')),
     section('Stock bas (inventaire)', 'box', (d.stockBas || []).length, (d.stockBas || []).length
       ? h('div', { class: 'alert-list' }, d.stockBas.map((a) => h('span', { class: 'pill alert' }, `${a.nom} : ${fmtNum(a.stock)}${a.unite ? ` ${a.unite}` : ''} (seuil ${fmtNum(a.seuil)})`)))
-      : empty('Aucun article sous son seuil.')));
+      : empty('Aucun article sous son seuil.')),
+    section(`Stockage à ${M.SEUIL_ALERTE} % ou plus`, 'truck', (d.stockagePlein || []).length, (d.stockagePlein || []).length
+      ? h('div', { class: 'alert-list' }, d.stockagePlein.map((z) => h('span', { class: 'pill alert' }, `${z.nom} : ${fmtNum(z.remplissage)} %`)))
+      : empty('Aucune zone de stockage pleine.')));
 }
 
 /* ---------- Recherche dans le récap ---------- */
@@ -2027,10 +2079,11 @@ function buildPrint() {
     const pctCell = (v) => h('td', { class: `c${v >= M.SEUIL_ALERTE ? ' red' : ''}`, style: v == null ? null : { background: M.fillColor(v), color: '#fff' } }, v == null ? '' : `${fmtNum(v)} %`);
     const noBorder = () => h('td', { style: { border: 0 } });
     const rowsSorties = M.allSorties(s);
-    const boxRows = Array.from({ length: Math.max(rowsSorties.length, M.BENNES.length) }, (_, i) => {
+    const noms = boxNames(s);
+    const boxRows = Array.from({ length: Math.max(rowsSorties.length, noms.bennes.length, noms.plateaux.length) }, (_, i) => {
       const r = rowsSorties[i];
-      const b = M.BENNES[i];
-      const p = M.PLATEAUX[i];
+      const b = noms.bennes[i];
+      const p = noms.plateaux[i];
       const col = r ? sortieColor(r) : null;
       const ton = r && r.data.tonnage != null ? `${fmtTon(r.data.tonnage)}${(r.data.pesees || []).length > 1 ? ` (${r.data.pesees.map((v) => fmtNum(v)).join('+')})` : ''}` : '';
       return h('tr', {},
@@ -2141,8 +2194,36 @@ function initUpdates() {
     $('#update-banner').hidden = true;
   });
   $('#set-update-dir').addEventListener('click', () => call(api.openUpdateDir()));
-  checkUpdate();
+  checkUpdate().then(autoUpdateAtLaunch);
   setInterval(checkUpdate, UPDATE_CHECK_MS);
+}
+
+// Au lancement (rien n'est encore saisi), une nouvelle version trouvée dans le
+// dossier mises-a-jour s'installe toute seule. Après deux essais ratés pour la
+// même version, on revient au bandeau « Installer ».
+async function autoUpdateAtLaunch() {
+  const u = updateInfo && updateInfo.update;
+  if (!u || updateInfo.kind === 'portable' || S.screen === 'app') return;
+  const KEY = 'liaison.autoUpdate';
+  let tries = {};
+  try {
+    tries = JSON.parse(localStorage.getItem(KEY) || '{}');
+  } catch { /* stockage indisponible */ }
+  if ((tries[u.version] || 0) >= 2) return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ [u.version]: (tries[u.version] || 0) + 1 }));
+  } catch { /* stockage indisponible */ }
+  $('#update-banner').hidden = true;
+  document.body.append(h('div', { class: 'auto-update' }, h('div', {},
+    h('div', { class: 'spinner' }), h('h2', {}, `Mise à jour vers la version ${u.version}…`),
+    h('p', {}, 'L\'application va se fermer et se relancer toute seule dans quelques secondes.'))));
+  try {
+    await call(api.installUpdate());
+  } catch (err) {
+    document.querySelector('.auto-update').remove();
+    checkUpdate();
+    toast(`Mise à jour automatique impossible : ${err.message}`, 8000);
+  }
 }
 
 /* ---------- Paramètres ---------- */
@@ -2306,7 +2387,9 @@ async function loadSiteData() {
   S.site = await safe(api.loadSite(), { couleurs: {} });
   await loadTasks();
   await loadInventaire();
+  await loadStockage();
   if (S.view === 'inventaire' && S.screen === 'app') renderInventaire({ reload: false });
+  if (S.view === 'stockage' && S.screen === 'app') renderStockage({ reload: false });
 }
 
 /* ---------- Démarrage ---------- */

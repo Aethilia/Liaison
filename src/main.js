@@ -10,6 +10,7 @@ const M = require('./core/model');
 const { spawn } = require('child_process');
 const { summarizeSite } = require('./core/dashboard');
 const { Inventaire } = require('./core/inventaire');
+const { Stockage } = require('./core/stockage');
 const { UPDATE_DIR, findUpdate } = require('./core/update');
 
 // Interface en français (heures sur 24 h dans les champs horaires).
@@ -171,6 +172,12 @@ handle('inv:deleteArticle', (id) => inv().deleteArticle(id));
 handle('inv:addMovement', (m) => inv().addMovement(m, m.par || config.poste));
 handle('inv:deleteMovement', (id) => inv().deleteMovement(id));
 handle('inv:history', (id) => inv().history(id));
+
+// Zones de stockage du site actif.
+const stk = () => new Stockage(config.dataDir);
+handle('stk:list', () => stk().list());
+handle('stk:save', (z) => stk().saveZone(z, z.par || config.poste));
+handle('stk:delete', (id) => stk().deleteZone(id));
 handle('sup:list', () => store.loadSupervisors());
 handle('sup:save', (nom, pin) => store.saveSupervisor(nom, pin));
 handle('sup:remove', (nom) => store.removeSupervisor(nom));
@@ -299,6 +306,21 @@ handle('excel:import', async (file, { overwrite = false } = {}) => {
 const PORTABLE_EXE = process.env.PORTABLE_EXECUTABLE_FILE || null;
 const updateKind = () => (PORTABLE_EXE ? 'portable' : 'installation');
 
+// Cherche la version la plus récente dans le dossier mises-a-jour de tous les
+// sites connus du poste (site actif d'abord).
+function findAnyUpdate() {
+  let best = null;
+  const dirs = [config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)];
+  for (const dir of [...new Set(dirs)]) {
+    let u = null;
+    try {
+      u = findUpdate(dir, app.getVersion(), updateKind());
+    } catch { /* dossier inaccessible */ }
+    if (u && (!best || M.compareVersions(u.version, best.version) > 0)) best = u;
+  }
+  return best;
+}
+
 handle('update:check', () => {
   const dir = path.join(config.dataDir, UPDATE_DIR);
   try {
@@ -310,13 +332,13 @@ handle('update:check', () => {
   } catch { /* sans importance */ }
   return {
     current: app.getVersion(), kind: updateKind(), dir,
-    update: app.isPackaged ? findUpdate(config.dataDir, app.getVersion(), updateKind()) : null,
+    update: app.isPackaged ? findAnyUpdate() : null,
     newer: newest && M.compareVersions(newest.version, app.getVersion()) > 0 ? newest : null,
   };
 });
 
 handle('update:install', () => {
-  const update = findUpdate(config.dataDir, app.getVersion(), updateKind());
+  const update = findAnyUpdate();
   if (!update) throw new Error('Aucune nouvelle version trouvée dans le dossier des mises à jour.');
   if (PORTABLE_EXE) {
     // On ne peut pas remplacer l'exécutable en cours : la nouvelle version est copiée à côté.

@@ -77,6 +77,16 @@ dans le sous-dossier `inventaire` du dossier du site).
   signale.
 - Recherche et filtres par catégorie / stock bas.
 
+## Stockage
+
+Onglet **Stockage** : les zones de stockage du site (ex. hangar, zone palettes),
+chacune avec son **taux de remplissage** (barre du vert au rouge, saisie en % ou
+au curseur) et un **commentaire**. Mis à jour en continu, indépendamment des
+services ; chaque zone garde la date, l'auteur et un historique des derniers
+changements. À partir de 80 %, la zone est signalée (badge sur l'onglet,
+tableau de bord du superviseur). Cliquer sur le nom pour renommer, la croix
+pour supprimer.
+
 ## Versions différentes sur les postes
 
 Chaque service enregistré note la version de l'application. Un poste plus
@@ -100,6 +110,13 @@ faite reste affichée aux services suivants (et dans le panneau de relève)
 jusqu'à ce qu'un responsable la valide ; on voit qui l'a créée, qui l'a faite et
 quand. Les autres postes reçoivent une alerte discrète à chaque ajout ou
 validation, et le nombre de tâches en attente s'affiche à côté de « Saisie ».
+
+## État des boxs
+
+Les lignes de bennes et de plateaux se règlent pour le site : **+ Benne** /
+**+ Plateau** sous chaque liste, et la petite croix (au survol) pour retirer une
+ligne. Le changement vaut pour tous les services suivants ; les services déjà
+saisis gardent leurs chiffres (y compris dans l'export Excel).
 
 ## Sorties
 

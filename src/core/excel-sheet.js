@@ -152,7 +152,8 @@ function buildDaySheet(ws, model, day, { tasks = [], site = {}, siteName = '' } 
     const rows = M.allSorties(s);
     const first = b.row;
     const couleurs = { ...M.COULEURS_DEFAUT, ...(site.couleurs || {}) };
-    for (let i = 0; i < Math.max(rows.length, M.BENNES.length); i++) {
+    const noms = M.boxNames(site, s);
+    for (let i = 0; i < Math.max(rows.length, noms.bennes.length, noms.plateaux.length); i++) {
       const r = rows[i];
       if (r) {
         const nameStyle = b.st('A15', def);
@@ -177,12 +178,12 @@ function buildDaySheet(ws, model, day, { tasks = [], site = {}, siteName = '' } 
       } else {
         for (const c of ['A', 'B', 'C', 'D']) b.put(`${c}${b.row}`, undefined, null);
       }
-      const benne = M.BENNES[i];
+      const benne = noms.bennes[i];
       if (benne) {
         b.put(`E${b.row}`, benne, b.st('E15', def));
         b.put(`F${b.row}`, s.bennes[benne] == null ? null : s.bennes[benne] / 100, b.st('F15', def));
       }
-      const plateau = M.PLATEAUX[i];
+      const plateau = noms.plateaux[i];
       if (plateau) {
         b.put(`G${b.row}`, plateau, b.st('G15', def));
         b.put(`H${b.row}`, s.plateaux[plateau] == null ? null : s.plateaux[plateau] / 100, b.st('H15', def));
@@ -197,7 +198,7 @@ function buildDaySheet(ws, model, day, { tasks = [], site = {}, siteName = '' } 
     if (rows.some((r) => r.extra)) b.merge(`E${b.row}`, `H${b.row}`, '* sortie ponctuelle', { font: { italic: true, size: 8, color: { argb: 'FF999999' } }, alignment: { vertical: 'middle' } });
     b.next(H.total);
     // Remplissage : fond du vert au rouge, chiffre en rouge à partir de 80 %.
-    for (const ref of [`F${first}:F${first + M.BENNES.length - 1}`, `H${first}:H${first + M.PLATEAUX.length - 1}`]) {
+    for (const ref of [noms.bennes.length && `F${first}:F${first + noms.bennes.length - 1}`, noms.plateaux.length && `H${first}:H${first + noms.plateaux.length - 1}`].filter(Boolean)) {
       ws.addConditionalFormatting({
         ref,
         rules: [

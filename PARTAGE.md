@@ -94,9 +94,12 @@ Excel mensuel (**Exporter le mois**) en garde aussi une copie au format habituel
 2. Le déposer dans le sous-dossier **`mises-a-jour`** du dossier commun (créé
    automatiquement ; bouton *Dossier des mises à jour* dans les paramètres).
    Pour les postes en version portable, y déposer aussi `Liaison-Portable-x.y.z.exe`.
-3. Chaque poste affiche « **Nouvelle version disponible** » au démarrage (et
-   toutes les 30 minutes) : cliquer sur **Installer**. L'application enregistre
-   les saisies, se ferme, s'installe et se relance seule.
+3. À partir de la 1.5.1, la nouvelle version **s'installe toute seule au
+   lancement** de l'application (quelques secondes, puis l'appli se relance).
+   Si elle est trouvée en cours d'utilisation, un bandeau « **Nouvelle version
+   disponible** » propose **Installer** (vérification toutes les 30 minutes).
+   L'installateur peut être déposé dans le dossier `mises-a-jour` de
+   n'importe quel site connu du poste (CTVO ou CPTP).
 
 Les données ne sont jamais touchées par une mise à jour. Les postes encore en
 1.0.0 doivent installer la 1.1.0 une fois à la main (elle apporte cette

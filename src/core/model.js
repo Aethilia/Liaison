@@ -109,6 +109,24 @@ function cleanList(list) {
   return Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x) : [];
 }
 
+// Bennes et plateaux affichés : liste du site (modifiable) ou liste d'origine,
+// plus ceux encore renseignés dans le service (lignes retirées depuis).
+function boxNames(site, s) {
+  const cfg = (site && site.boxs) || {};
+  const out = {};
+  for (const [k, def] of [['bennes', BENNES], ['plateaux', PLATEAUX]]) {
+    const list = Array.isArray(cfg[k]) ? cfg[k].filter((n) => typeof n === 'string' && n) : [...def];
+    if (s && s[k]) for (const [n, v] of Object.entries(s[k])) if (v != null && !list.includes(n)) list.push(n);
+    out[k] = list;
+  }
+  return out;
+}
+
+function boxAlerts(s) {
+  const list = (k, type) => Object.entries(s[k] || {}).filter(([, v]) => v != null && v >= SEUIL_ALERTE).map(([nom, v]) => ({ type, nom, v }));
+  return [...list('bennes', 'Benne'), ...list('plateaux', 'Plateau')];
+}
+
 // Tonnage saisi : « 5,54 », « 5T540 » ou plusieurs bennes « 5,54+4T740+3 ».
 function parsePoids(str) {
   const s = String(str).trim();
@@ -323,6 +341,7 @@ function daysInMonth(year, month) {
 
 const api = {
   stats, compareVersions, UNITES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
+  boxNames, boxAlerts,
   SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth,

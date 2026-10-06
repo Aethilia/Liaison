@@ -292,3 +292,32 @@ test('inventaire : catégories, articles, mouvements, stock et seuil', () => {
   assert.equal(inv.history(gants.id).length, 0);
   assert.equal(computeStock([]).stock, 0);
 });
+
+test('état des boxs : liste du site modifiable, anciennes valeurs conservées', () => {
+  const s = M.emptyService('2026-10-01', 'matin');
+  assert.deepEqual(M.boxNames({}, s).bennes, M.BENNES);
+  const site = { boxs: { bennes: ['Fer', 'Gravats'], plateaux: ['Sport'] } };
+  s.bennes.Matelas = 90; // ligne retirée depuis, mais renseignée dans ce service
+  s.bennes.Gravats = 85;
+  assert.deepEqual(M.boxNames(site, s).bennes, ['Fer', 'Gravats', 'Matelas']);
+  assert.deepEqual(M.boxNames(site, null).plateaux, ['Sport']);
+  assert.deepEqual(M.boxAlerts(s).map((a) => a.nom).sort(), ['Gravats', 'Matelas']);
+  const back = M.normalize(JSON.parse(JSON.stringify(s)));
+  assert.equal(back.bennes.Gravats, 85);
+});
+
+test('stockage : zones, remplissage, historique', () => {
+  const { Stockage } = require('../src/core/stockage');
+  const st = new Stockage(tmp());
+  const z = st.saveZone({ nom: 'Hangar' }, 'Marie');
+  st.saveZone({ ...z, remplissage: 40, commentaire: 'Palettes' }, 'Marie');
+  const z2 = st.saveZone({ ...st.read(z.id), remplissage: 85 }, 'Karim');
+  assert.equal(z2.remplissage, 85);
+  assert.equal(z2.majPar, 'Karim');
+  assert.deepEqual(z2.historique.map((x) => x.remplissage), [85, 40]);
+  assert.throws(() => st.saveZone({ nom: '' }));
+  assert.throws(() => st.saveZone({ nom: 'X', remplissage: -1 }));
+  assert.equal(st.list().length, 1);
+  st.deleteZone(z.id);
+  assert.equal(st.list().length, 0);
+});

@@ -5,16 +5,12 @@
 
 const M = require('./model');
 const { Inventaire } = require('./inventaire');
+const { Stockage } = require('./stockage');
 
 const ORDER = Object.fromEntries(M.SERVICES.map((d, i) => [d.id, i]));
 const key = (date, service) => `${date}#${ORDER[service]}`;
 
-function boxAlerts(s) {
-  return [
-    ...M.BENNES.filter((b) => s.bennes[b] >= M.SEUIL_ALERTE).map((b) => ({ type: 'Benne', nom: b, v: s.bennes[b] })),
-    ...M.PLATEAUX.filter((p) => s.plateaux[p] >= M.SEUIL_ALERTE).map((p) => ({ type: 'Plateau', nom: p, v: s.plateaux[p] })),
-  ];
-}
+const boxAlerts = M.boxAlerts;
 
 function summarizeSite(store, now = new Date(), nbJours = 7) {
   const live = M.currentService(now);
@@ -62,6 +58,10 @@ function summarizeSite(store, now = new Date(), nbJours = 7) {
   try {
     stockBas = new Inventaire(store.dir).list().articles.filter((a) => a.alerte).map((a) => ({ nom: a.nom, stock: a.stock, seuil: a.seuil, unite: a.unite }));
   } catch { /* inventaire illisible : ignoré */ }
+  let stockagePlein = [];
+  try {
+    stockagePlein = new Stockage(store.dir).list().filter((z) => z.remplissage != null && z.remplissage >= M.SEUIL_ALERTE).map((z) => ({ nom: z.nom, remplissage: z.remplissage }));
+  } catch { /* dossier illisible : ignoré */ }
   return {
     site: store.loadSite().nom || '',
     live,
@@ -73,6 +73,7 @@ function summarizeSite(store, now = new Date(), nbJours = 7) {
     nonConformes: nonConformes.reverse(),
     boxs: dernier,
     stockBas,
+    stockagePlein,
   };
 }
 
