@@ -225,6 +225,41 @@ function buildDaySheet(ws, model, day, { tasks = [], site = {}, siteName = '' } 
       b.gap();
     }
 
+    // Stockage (bennes stockées sur site)
+    const stk = (s.stockage || []).filter((x) => x.type || x.nombre != null);
+    if (stk.length) {
+      b.section('STOCKAGE', def);
+      b.next(H.section);
+      b.colHeads([['A', 'D', 'Type'], ['E', 'E', 'Nombre'], ['F', 'H', 'État']], def);
+      for (const x of stk) {
+        const etat = (M.ETATS_STOCKAGE.find((e) => e.id === x.etat) || {}).label || '';
+        const cEtat = b.st('C7', def);
+        cEtat.font = { ...cEtat.font, bold: true, color: { argb: x.etat === 'pleine' ? 'FFC00000' : x.etat === 'vide' ? 'FF1F8A4C' : 'FFB7791F' } };
+        b.merge(`A${b.row}`, `D${b.row}`, x.type, b.st('A15', def));
+        b.put(`E${b.row}`, x.nombre, b.st('C15', def));
+        b.merge(`F${b.row}`, `H${b.row}`, etat, cEtat);
+        b.next(H.row);
+      }
+      b.gap();
+    }
+
+    // Commandes (saisies par le matin)
+    const cmds = (s.commandes || []).filter((x) => x.quoi || x.quantite || x.fournisseur);
+    if (cmds.length) {
+      b.section('COMMANDES', def);
+      b.next(H.section);
+      b.colHeads([['A', 'C', 'Quoi'], ['D', 'D', 'Quantité'], ['E', 'F', 'Fournisseur'], ['G', 'G', 'Date prévue'], ['H', 'H', 'Reçue']], def);
+      for (const x of cmds) {
+        b.merge(`A${b.row}`, `C${b.row}`, x.quoi, b.st('A15', def));
+        b.put(`D${b.row}`, x.quantite, b.st('C7', def));
+        b.merge(`E${b.row}`, `F${b.row}`, x.fournisseur, b.st('A7', def));
+        b.put(`G${b.row}`, x.date ? x.date.split('-').reverse().join('/') : '', b.st('C7', def));
+        b.put(`H${b.row}`, x.recue ? '☑' : '☐', b.st('C7', def));
+        b.next(H.row);
+      }
+      b.gap();
+    }
+
     // Tâches de relève (créées dans ce service ou encore en attente à ce moment-là)
     const svcTasks = tasksForService(tasks, day.date, def.id);
     if (svcTasks.length) {

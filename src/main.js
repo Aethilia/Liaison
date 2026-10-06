@@ -10,7 +10,6 @@ const M = require('./core/model');
 const { spawn } = require('child_process');
 const { summarizeSite } = require('./core/dashboard');
 const { Inventaire } = require('./core/inventaire');
-const { Stockage } = require('./core/stockage');
 const { UPDATE_DIR, findUpdate } = require('./core/update');
 
 // Interface en français (heures sur 24 h dans les champs horaires).
@@ -172,12 +171,6 @@ handle('inv:deleteArticle', (id) => inv().deleteArticle(id));
 handle('inv:addMovement', (m) => inv().addMovement(m, m.par || config.poste));
 handle('inv:deleteMovement', (id) => inv().deleteMovement(id));
 handle('inv:history', (id) => inv().history(id));
-
-// Zones de stockage du site actif.
-const stk = () => new Stockage(config.dataDir);
-handle('stk:list', () => stk().list());
-handle('stk:save', (z) => stk().saveZone(z, z.par || config.poste));
-handle('stk:delete', (id) => stk().deleteZone(id));
 handle('sup:list', () => store.loadSupervisors());
 handle('sup:save', (nom, pin) => store.saveSupervisor(nom, pin));
 handle('sup:remove', (nom) => store.removeSupervisor(nom));

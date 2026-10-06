@@ -77,16 +77,6 @@ dans le sous-dossier `inventaire` du dossier du site).
   signale.
 - Recherche et filtres par catégorie / stock bas.
 
-## Stockage
-
-Onglet **Stockage** : les zones de stockage du site (ex. hangar, zone palettes),
-chacune avec son **taux de remplissage** (barre du vert au rouge, saisie en % ou
-au curseur) et un **commentaire**. Mis à jour en continu, indépendamment des
-services ; chaque zone garde la date, l'auteur et un historique des derniers
-changements. À partir de 80 %, la zone est signalée (badge sur l'onglet,
-tableau de bord du superviseur). Cliquer sur le nom pour renommer, la croix
-pour supprimer.
-
 ## Versions différentes sur les postes
 
 Chaque service enregistré note la version de l'application. Un poste plus
@@ -117,6 +107,18 @@ Les lignes de bennes et de plateaux se règlent pour le site : **+ Benne** /
 **+ Plateau** sous chaque liste, et la petite croix (au survol) pour retirer une
 ligne. Le changement vaut pour tous les services suivants ; les services déjà
 saisis gardent leurs chiffres (y compris dans l'export Excel).
+
+## Stockage et commandes
+
+- **Stockage** (dans la saisie) : une ligne par lot de bennes stockées sur site,
+  avec le type (ex. « Benne Fer »), le nombre et l'état **Vide / Pleine / En
+  cours**. Ajout et suppression libres ; *Reprendre le service précédent* recopie
+  les lignes du service d'avant. Un total par état s'affiche sous la liste.
+- **Commandes** : remplies par le **matin** (quoi, quantité, fournisseur, date
+  prévue, case *Reçue*). L'après-midi et la nuit les voient en haut de leur
+  saisie, en information.
+
+Les deux figurent dans la fiche, l'impression, la recherche et l'export Excel.
 
 ## Sorties
 

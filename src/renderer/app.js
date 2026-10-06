@@ -763,7 +763,53 @@ function renderForm() {
     closed ? null : h('div', { class: 'absents-foot' }, h('button', { class: 'btn small', onclick: addNonConforme }, icon('plus', 14), 'Ajouter un déchet')),
   ], { wide: true, hint: 'Ex. Frigo = 1, Pneus = 20 · en pièces, kg ou T' });
 
-  $('#form').replaceChildren(...[banner, closedNote, obs, taches, motifs, absents, entrees, sorties, boxs, nonConformes].filter(Boolean));
+  // Stockage : bennes stockées sur site (type, nombre, vide / pleine / en cours).
+  const stkTypes = [...new Set([...boxNames(s).bennes, ...boxNames(s).plateaux, ...((S.prev && S.prev.stockage) || []).map((x) => x.type), ...s.stockage.map((x) => x.type)].filter(Boolean))];
+  const stkRows = s.stockage.map((x, i) => {
+    const base = `stockage.${i}`;
+    return h('div', { class: `stk-row etat-${x.etat}` },
+      field(`${base}.type`, 'text', { placeholder: 'Type (ex. Benne Fer)', list: 'stk-types', 'data-stk-type': String(i) }),
+      field(`${base}.nombre`, 'int', { placeholder: 'Nb', 'aria-label': 'Nombre' }),
+      h('div', { class: 'seg stk-etat', role: 'radiogroup' }, M.ETATS_STOCKAGE.map((e) => h('button', {
+        type: 'button', class: `${x.etat === e.id ? 'on' : ''} e-${e.id}`, disabled: closed, role: 'radio', 'aria-checked': String(x.etat === e.id),
+        onclick: () => { x.etat = e.id; markDirty(); renderForm(); },
+      }, e.label))),
+      closed ? h('span') : h('button', { class: 'o-btn rm', title: 'Supprimer cette ligne', 'aria-label': 'Supprimer cette ligne', onclick: () => removeStockage(i) }, icon('trash', 15)));
+  });
+  const stkTotal = M.ETATS_STOCKAGE.map((e) => [e, s.stockage.filter((x) => x.etat === e.id).reduce((a, x) => a + (x.nombre || 0), 0)]).filter(([, n]) => n);
+  const stockage = card('Stockage', 'truck', [
+    h('datalist', { id: 'stk-types' }, stkTypes.map((t) => h('option', { value: t }))),
+    stkRows.length ? h('div', { class: 'stk-list' }, stkRows) : h('div', { class: 'empty' }, 'Aucune benne en stockage renseignée.'),
+    stkTotal.length ? h('div', { class: 'stk-total muted' }, stkTotal.map(([e, n]) => `${n} ${e.label.toLowerCase()}${n > 1 && e.id !== 'en-cours' ? 's' : ''}`).join(' · ')) : null,
+    closed ? null : h('div', { class: 'absents-foot' },
+      h('button', { class: 'btn small', onclick: addStockage }, icon('plus', 14), 'Ajouter une ligne'),
+      S.prev && S.prev.stockage.length ? h('button', { class: 'btn small ghost', onclick: takeOverStockage }, 'Reprendre le service précédent') : null),
+  ], { hint: 'Ex. Benne Fer · 2 · Vide' });
+
+  // Commandes : saisies par le matin, affichées en information aux autres services.
+  let commandes;
+  if (s.service === M.SERVICE_COMMANDES) {
+    const cmdRows = s.commandes.map((x, i) => {
+      const base = `commandes.${i}`;
+      return h('div', { class: `cmd-row${x.recue ? ' recue' : ''}` },
+        field(`${base}.quoi`, 'text', { placeholder: 'Quoi (article, benne…)', 'data-cmd': String(i) }),
+        field(`${base}.quantite`, 'text', { placeholder: 'Qté' }),
+        field(`${base}.fournisseur`, 'text', { placeholder: 'Fournisseur' }),
+        field(`${base}.date`, 'text', { type: 'date', 'aria-label': 'Date prévue' }),
+        h('label', { class: 'cmd-recue', title: 'Commande reçue' }, h('input', { type: 'checkbox', checked: x.recue, disabled: closed, onchange: (e) => { x.recue = e.target.checked; markDirty(); renderForm(); } }), 'Reçue'),
+        closed ? h('span') : h('button', { class: 'o-btn rm', title: 'Supprimer cette commande', 'aria-label': 'Supprimer cette commande', onclick: () => removeCommande(i) }, icon('trash', 15)));
+    });
+    commandes = card('Commandes', 'send', [
+      cmdRows.length ? h('div', { class: 'cmd-list' }, cmdRows) : h('div', { class: 'empty' }, 'Aucune commande.'),
+      closed ? null : h('div', { class: 'absents-foot' }, h('button', { class: 'btn small', onclick: addCommande }, icon('plus', 14), 'Ajouter une commande')),
+    ], { wide: true, hint: 'Affichées en information à l\'après-midi et à la nuit' });
+  } else {
+    const m = S.data[M.SERVICE_COMMANDES];
+    const list = m ? m.commandes.filter((x) => x.quoi || x.quantite || x.fournisseur) : [];
+    commandes = list.length ? card(`Commandes du jour (${list.length})`, 'send', commandesView(list), { wide: true, cls: 'info-card', hint: `Saisies par le ${SVC[M.SERVICE_COMMANDES].label.toLowerCase()}` }) : null;
+  }
+
+  $('#form').replaceChildren(...[banner, closedNote, obs, taches, s.service === M.SERVICE_COMMANDES ? null : commandes, motifs, absents, entrees, sorties, boxs, nonConformes, stockage, s.service === M.SERVICE_COMMANDES ? commandes : null].filter(Boolean));
   $('#form').querySelectorAll('textarea').forEach(fitTextarea);
   $('#form').querySelectorAll('[data-agent]').forEach((input) => Suggest.attach(input, {
     items: () => S.agents.map((a) => ({ label: a })),
@@ -930,6 +976,60 @@ function openColorPicker(anchor, row) {
       document.removeEventListener('mousedown', outside);
     }
   }), 0);
+}
+
+/* ---------- Stockage et commandes ---------- */
+
+function addStockage() {
+  cur().stockage.push({ type: '', nombre: null, etat: 'vide' });
+  renderForm();
+  markDirty();
+  const inputs = document.querySelectorAll('#form [data-stk-type]');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+function removeStockage(i) {
+  cur().stockage.splice(i, 1);
+  renderForm();
+  markDirty();
+}
+
+async function takeOverStockage() {
+  const s = cur();
+  if (s.stockage.some((x) => x.type || x.nombre != null) && await ask('Remplacer le stockage ?', 'Les lignes de stockage de ce service seront remplacées par celles du service précédent.',
+    [{ label: 'Annuler', value: 'no' }, { label: 'Remplacer', value: 'yes', cls: 'primary' }]) !== 'yes') return;
+  s.stockage = S.prev.stockage.map((x) => ({ ...x }));
+  renderForm();
+  markDirty();
+}
+
+function addCommande() {
+  cur().commandes.push({ quoi: '', quantite: '', fournisseur: '', date: S.date, recue: false });
+  renderForm();
+  markDirty();
+  const inputs = document.querySelectorAll('#form [data-cmd]');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+async function removeCommande(i) {
+  const x = cur().commandes[i];
+  if (x.quoi && await ask('Supprimer cette commande ?', `« ${x.quoi} » sera retirée.`,
+    [{ label: 'Annuler', value: 'no' }, { label: 'Supprimer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+  cur().commandes.splice(i, 1);
+  renderForm();
+  markDirty();
+}
+
+const fmtCmdDate = (d) => (d ? M.parseISODate(d).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '');
+const cmdText = (x) => [x.quantite, x.quoi].filter(Boolean).join(' × ') + (x.fournisseur ? ` — ${x.fournisseur}` : '') + (x.date ? ` (${fmtCmdDate(x.date)})` : '');
+const stkText = (x) => `${x.nombre ?? '?'} × ${x.type || 'benne'} — ${(M.ETATS_STOCKAGE.find((e) => e.id === x.etat) || {}).label || ''}`;
+
+function commandesView(list) {
+  return h('ul', { class: 'cmd-view' }, list.map((x) => h('li', { class: x.recue ? 'recue' : '' },
+    h('span', { class: `pill ${x.recue ? 'live' : 'draft'}` }, x.recue ? 'Reçue' : 'Attendue'),
+    h('b', {}, [x.quantite, x.quoi].filter(Boolean).join(' × ')),
+    x.fournisseur ? h('span', { class: 'muted' }, ` — ${x.fournisseur}`) : null,
+    x.date ? h('span', { class: 'muted' }, ` · ${fmtCmdDate(x.date)}`) : null)));
 }
 
 /* ---------- Déchets non conformes et photos ---------- */
@@ -1392,7 +1492,10 @@ function renderFiche() {
         s.nonConformes.length ? ficheCard(`Déchets non conformes (${s.nonConformes.length})`, 'recycle', h('div', { class: 'nc-view' }, s.nonConformes.map((x) => h('div', { class: 'ncv-row' },
           h('div', {}, h('b', {}, x.type || '?'), ` : ${fmtQte(x)}`, x.provenance ? h('span', { class: 'muted' }, ` — ${x.provenance}`) : null),
           x.commentaire ? h('div', { class: 'muted' }, x.commentaire) : null,
-          photoStrip(x.photos))))) : null),
+          photoStrip(x.photos))))) : null,
+        s.stockage.some((x) => x.type || x.nombre != null) ? ficheCard('Stockage', 'truck', h('ul', { class: 'cmd-view' }, s.stockage.filter((x) => x.type || x.nombre != null).map((x) => h('li', {},
+          h('span', { class: `pill ${x.etat === 'pleine' ? 'alert' : x.etat === 'vide' ? 'live' : 'draft'}` }, (M.ETATS_STOCKAGE.find((e) => e.id === x.etat) || {}).label), h('b', {}, `${x.nombre ?? '?'} × ${x.type || 'benne'}`))))) : null,
+        s.commandes.some((x) => x.quoi) ? ficheCard('Commandes', 'send', commandesView(s.commandes.filter((x) => x.quoi))) : null),
       h('div', { class: 'fiche-col' },
         ficheCard('Service', 'user', [
           h('div', { class: 'kv' }, h('span', {}, 'Responsable'), h('b', {}, s.responsable || '—')),
@@ -1546,11 +1649,9 @@ function setView(view, { silent = false } = {}) {
   $('#view-recap').hidden = view !== 'recap';
   $('#view-dashboard').hidden = view !== 'dashboard';
   $('#view-inventaire').hidden = view !== 'inventaire';
-  $('#view-stockage').hidden = view !== 'stockage';
-  document.querySelector('.toolbar').hidden = view === 'inventaire' || view === 'stockage'; // dates et exports sans objet
+  document.querySelector('.toolbar').hidden = view === 'inventaire'; // dates et exports sans objet
   if (silent) return;
   if (view === 'inventaire') renderInventaire();
-  if (view === 'stockage') renderStockage();
   if (view === 'dashboard') renderDashboard();
   if (view === 'recap') {
     const d = M.parseISODate(S.date);
@@ -1576,12 +1677,7 @@ async function poll() {
     if (!document.querySelector('dialog[open]')) renderInventaire();
     return;
   }
-  if (S.view === 'stockage') {
-    if (!document.querySelector('dialog[open]')) renderStockage();
-    return;
-  }
   if (Date.now() - invState.loadedAt > 60000) loadInventaire();
-  if (Date.now() - stkState.loadedAt > 60000) loadStockage();
   if (S.view !== 'saisie' || S.saving || $('#fiche').open) return;
   let revs;
   try {
@@ -1596,7 +1692,7 @@ async function poll() {
     if (id === S.service && S.dirty) continue; // le conflit sera signalé à l'enregistrement
     S.data[id] = await call(api.loadService(S.date, id));
     changed = true;
-    if (id === S.service) {
+    if (id === S.service || id === M.SERVICE_COMMANDES) {
       const active = document.activeElement;
       const focused = active && active.dataset && active.dataset.bind ? `[data-bind="${active.dataset.bind}"]` : active && active.id ? `#${active.id}` : null;
       renderForm();
@@ -1604,7 +1700,7 @@ async function poll() {
         const el = document.querySelector(focused);
         if (el) el.focus();
       }
-      toast(`Service mis à jour depuis le poste ${S.data[id].updatedBy || 'distant'}.`);
+      if (id === S.service) toast(`Service mis à jour depuis le poste ${S.data[id].updatedBy || 'distant'}.`);
     }
   }
   const p = M.previousService(S.date, S.service);
@@ -1899,10 +1995,7 @@ function dashSiteCard(site, d) {
       : empty('Aucun déchet non conforme.')),
     section('Stock bas (inventaire)', 'box', (d.stockBas || []).length, (d.stockBas || []).length
       ? h('div', { class: 'alert-list' }, d.stockBas.map((a) => h('span', { class: 'pill alert' }, `${a.nom} : ${fmtNum(a.stock)}${a.unite ? ` ${a.unite}` : ''} (seuil ${fmtNum(a.seuil)})`)))
-      : empty('Aucun article sous son seuil.')),
-    section(`Stockage à ${M.SEUIL_ALERTE} % ou plus`, 'truck', (d.stockagePlein || []).length, (d.stockagePlein || []).length
-      ? h('div', { class: 'alert-list' }, d.stockagePlein.map((z) => h('span', { class: 'pill alert' }, `${z.nom} : ${fmtNum(z.remplissage)} %`)))
-      : empty('Aucune zone de stockage pleine.')));
+      : empty('Aucun article sous son seuil.')));
 }
 
 /* ---------- Recherche dans le récap ---------- */
@@ -1916,6 +2009,8 @@ function searchItems(date, svcId, s) {
   add('Responsable', s.responsable);
   for (const o of realObs(s)) add(o.important ? 'Observation importante' : 'Observation', o.texte, [o.heure, o.auteur].filter(Boolean).join(' · '));
   for (const a of s.absents) if (a.nom) add('Absent', `${a.nom}${a.motif ? ` (${a.motif})` : ''}`);
+  for (const x of s.stockage || []) if (x.type) add('Stockage', stkText(x));
+  for (const x of s.commandes || []) if (x.quoi) add('Commande', `${cmdText(x)}${x.recue ? ' — reçue' : ''}`);
   for (const x of s.nonConformes) if (x.type) add('Non conforme', `${x.type} : ${fmtQte(x)}${x.provenance ? ` — ${x.provenance}` : ''}${x.commentaire ? ` — ${x.commentaire}` : ''}`);
   for (const x of s.sortiesExtra) if (x.nom) add('Sortie ponctuelle', `${x.nom}${x.nb ? ` · ${plural(x.nb, 'sortie')}` : ''}${x.tonnage ? ` · ${fmtTon(x.tonnage)}` : ''}`);
   if (s.consignes) add('Consigne', s.consignes);
@@ -2115,6 +2210,12 @@ function buildPrint() {
       s.nonConformes.length ? h('div', { class: 'p-sec' }, 'DÉCHETS NON CONFORMES') : null,
       s.nonConformes.length ? h('table', {}, h('tr', {}, ['Déchet', 'Quantité', 'Provenance', 'Commentaire'].map((x) => h('th', {}, x))),
         s.nonConformes.map((x) => h('tr', {}, h('td', {}, x.type), h('td', { class: 'c' }, fmtQte(x)), h('td', {}, x.provenance), h('td', {}, x.commentaire, x.photos.length ? ` (📷 ${x.photos.length})` : '')))) : null,
+      s.stockage.some((x) => x.type) ? h('div', { class: 'p-sec' }, 'STOCKAGE') : null,
+      s.stockage.some((x) => x.type) ? h('table', {}, h('tr', {}, ['Type', 'Nombre', 'État'].map((x) => h('th', {}, x))),
+        s.stockage.filter((x) => x.type).map((x) => h('tr', {}, h('td', {}, x.type), h('td', { class: 'c' }, x.nombre ?? ''), h('td', { class: 'c' }, (M.ETATS_STOCKAGE.find((e) => e.id === x.etat) || {}).label)))) : null,
+      s.commandes.some((x) => x.quoi) ? h('div', { class: 'p-sec' }, 'COMMANDES') : null,
+      s.commandes.some((x) => x.quoi) ? h('table', {}, h('tr', {}, ['Quoi', 'Quantité', 'Fournisseur', 'Date prévue', 'Reçue'].map((x) => h('th', {}, x))),
+        s.commandes.filter((x) => x.quoi).map((x) => h('tr', {}, h('td', {}, x.quoi), h('td', { class: 'c' }, x.quantite), h('td', {}, x.fournisseur), h('td', { class: 'c' }, fmtCmdDate(x.date)), h('td', { class: 'c' }, x.recue ? '☑' : '☐')))) : null,
       tasks.length ? h('div', { class: 'p-sec' }, 'TÂCHES POUR LA RELÈVE') : null,
       tasks.length ? h('table', {}, tasks.map((tk) => h('tr', {}, h('td', { class: 'c', style: { width: '6%' } }, tk.faite ? '☑' : '☐'),
         h('td', {}, tk.texte, h('span', { style: { color: '#888', fontSize: '8pt' } }, ` — ${tk.creePar || ''}${tk.faite ? ` · fait par ${tk.faite.par || ''} ${fmtDateTime(tk.faite.le)}` : ''}`))))) : null,
@@ -2387,9 +2488,7 @@ async function loadSiteData() {
   S.site = await safe(api.loadSite(), { couleurs: {} });
   await loadTasks();
   await loadInventaire();
-  await loadStockage();
   if (S.view === 'inventaire' && S.screen === 'app') renderInventaire({ reload: false });
-  if (S.view === 'stockage' && S.screen === 'app') renderStockage({ reload: false });
 }
 
 /* ---------- Démarrage ---------- */

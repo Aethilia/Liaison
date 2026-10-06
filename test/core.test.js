@@ -306,18 +306,24 @@ test('état des boxs : liste du site modifiable, anciennes valeurs conservées',
   assert.equal(back.bennes.Gravats, 85);
 });
 
-test('stockage : zones, remplissage, historique', () => {
-  const { Stockage } = require('../src/core/stockage');
-  const st = new Stockage(tmp());
-  const z = st.saveZone({ nom: 'Hangar' }, 'Marie');
-  st.saveZone({ ...z, remplissage: 40, commentaire: 'Palettes' }, 'Marie');
-  const z2 = st.saveZone({ ...st.read(z.id), remplissage: 85 }, 'Karim');
-  assert.equal(z2.remplissage, 85);
-  assert.equal(z2.majPar, 'Karim');
-  assert.deepEqual(z2.historique.map((x) => x.remplissage), [85, 40]);
-  assert.throws(() => st.saveZone({ nom: '' }));
-  assert.throws(() => st.saveZone({ nom: 'X', remplissage: -1 }));
-  assert.equal(st.list().length, 1);
-  st.deleteZone(z.id);
-  assert.equal(st.list().length, 0);
+
+test('stockage et commandes : normalisation et export Excel', async () => {
+  const s = M.normalize({ date: '2026-10-05', service: 'matin', stockage: [{ type: 'Benne Fer', nombre: 2, etat: 'pleine' }, { type: 'Benne DIB', nombre: 1, etat: '???' }],
+    commandes: [{ quoi: 'Gants', quantite: 20, fournisseur: 'Würth', date: '2026-10-07' }] });
+  assert.equal(s.stockage[1].etat, 'vide');
+  assert.equal(s.commandes[0].quantite, '20');
+  assert.equal(s.commandes[0].recue, false);
+  assert.equal(M.isEmpty(s), false);
+  const X = require('../src/core/excel');
+  const ExcelJS = require('exceljs');
+  const file = path.join(tmp(), 'cmd.xlsx');
+  const day = { date: '2026-10-05', services: { matin: s, apresmidi: M.emptyService('2026-10-05', 'apresmidi'), nuit: M.emptyService('2026-10-05', 'nuit') } };
+  await X.exportWorkbook([day], file);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(file);
+  const vals = [];
+  wb.worksheets.find((w) => w.name.startsWith('05')).eachRow((r) => r.eachCell((c) => vals.push(c.value)));
+  for (const v of ['STOCKAGE', 'COMMANDES', 'Benne Fer', 'Pleine', 'Gants', 'Würth', '07/10/2026']) assert.ok(vals.includes(v), v);
+  const back = await X.importWorkbookFull(file, { year: 2026 });
+  assert.equal(back.days[0].services.matin.commandes[0].fournisseur, 'Würth');
 });

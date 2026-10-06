@@ -19,6 +19,9 @@ const BENNES = ['Matelas', 'Fer', 'Bois', 'DIB', 'UVE'];
 const PLATEAUX = ['Sport', 'Fer', 'Bois', 'DIB'];
 
 const UNITES = ['pièce(s)', 'kg', 'T'];
+// Stockage (bennes stockées sur site) : état de chaque ligne.
+const ETATS_STOCKAGE = [{ id: 'vide', label: 'Vide' }, { id: 'pleine', label: 'Pleine' }, { id: 'en-cours', label: 'En cours' }];
+const SERVICE_COMMANDES = 'matin'; // service qui saisit les commandes, vues en info par les autres
 // Couleur par défaut des matières en sortie (les externes en vert) ; modifiable par site.
 const COULEURS_DEFAUT = { Bois: { couleur: '#2f9e44', mode: 'nom' }, Matelas: { couleur: '#2f9e44', mode: 'nom' } };
 const PALETTE = ['#2f9e44', '#1971c2', '#e8590c', '#c2255c', '#7048e8', '#f08c00', '#0c8599', '#868e96'];
@@ -45,6 +48,8 @@ function emptyService(date, service) {
     bennes,
     plateaux,
     nonConformes: [], // { type, quantite, unite, provenance, commentaire, photos }
+    stockage: [], // { type, nombre, etat: vide | pleine | en-cours }
+    commandes: [], // { quoi, quantite, fournisseur, date, recue } — saisies par le matin
     observations: [],
     consignes: '',
     cloture: null,
@@ -78,6 +83,16 @@ function normalize(data, date, service) {
     type: (x && x.type) || '', quantite: numOrNull(x && x.quantite), unite: (x && x.unite) || UNITES[0],
     provenance: (x && x.provenance) || '', commentaire: (x && x.commentaire) || '', photos: cleanList(x && x.photos),
   }));
+  out.stockage = (Array.isArray(data.stockage) ? data.stockage : []).map((x) => ({
+    ...x,
+    type: (x && x.type) || '', nombre: numOrNull(x && x.nombre),
+    etat: ETATS_STOCKAGE.some((e) => e.id === (x && x.etat)) ? x.etat : 'vide',
+  }));
+  out.commandes = (Array.isArray(data.commandes) ? data.commandes : []).map((x) => ({
+    ...x,
+    quoi: (x && x.quoi) || '', quantite: (x && x.quantite != null) ? String(x.quantite) : '',
+    fournisseur: (x && x.fournisseur) || '', date: (x && x.date) || '', recue: !!(x && x.recue),
+  }));
   out.bennes = { ...base.bennes, ...(data.bennes || {}) };
   out.plateaux = { ...base.plateaux, ...(data.plateaux || {}) };
   out.observations = Array.isArray(data.observations)
@@ -96,6 +111,8 @@ function isEmpty(s) {
   if (Object.values(s.plateaux).some((v) => v != null)) return false;
   if ((s.sortiesExtra || []).some((x) => x.nom || x.nb != null || x.tonnage != null)) return false;
   if ((s.nonConformes || []).some((x) => x.type || x.quantite != null)) return false;
+  if ((s.stockage || []).some((x) => x.type || x.nombre != null)) return false;
+  if ((s.commandes || []).some((x) => x.quoi || x.quantite || x.fournisseur)) return false;
   return !s.observations.some((o) => o.heure || o.texte || (o.photos && o.photos.length));
 }
 
@@ -340,7 +357,7 @@ function daysInMonth(year, month) {
 }
 
 const api = {
-  stats, compareVersions, UNITES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
+  stats, compareVersions, UNITES, ETATS_STOCKAGE, SERVICE_COMMANDES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
   boxNames, boxAlerts,
   SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,

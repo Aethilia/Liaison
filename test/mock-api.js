@@ -5,7 +5,7 @@
   const ok = (value) => Promise.resolve({ ok: true, value: JSON.parse(JSON.stringify(value)) });
   const M = () => window.LiaisonModel;
   const load = (d, s) => (db[key(d, s)] ? JSON.parse(JSON.stringify(db[key(d, s)])) : M().emptyService(d, s));
-  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.5.1' };
+  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.5.2' };
   let users = window.__users || [];
   let agents = window.__agents || [];
   let site = window.__site || { couleurs: {} };
@@ -14,7 +14,6 @@
   const photos = {};
   const inv = window.__inv || { categories: [], articles: {}, mouvements: [], seq: 0 };
   window.__inv = inv;
-  const stk = window.__stk || {};
   const SAMPLE_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect width="240" height="160" fill="#8aa"/><circle cx="80" cy="70" r="30" fill="#dde"/><rect x="120" y="60" width="90" height="70" fill="#567"/></svg>');
   window.__tasks = tasks;
   window.__db = db;
@@ -77,7 +76,6 @@
         taches: Object.values(tasks).filter((t) => !t.faite),
         nonClotures: [], vides: 3,
         importantes: imp, nonConformes: [], boxs: null,
-        stockagePlein: Object.values(stk).filter((z) => z.remplissage >= 80).map((z) => ({ nom: z.nom, remplissage: z.remplissage })),
         stockBas: invView().articles.filter((a) => a.alerte).map((a) => ({ nom: a.nom, stock: a.stock, seuil: a.seuil, unite: a.unite })),
       });
     },
@@ -89,17 +87,6 @@
     checkUpdate: () => ok({ current: '1.0.0', kind: 'installation', dir: 'C:\\Partage\\Liaison\\mises-a-jour', update: window.__update || null }),
     installUpdate: () => ok('1.1.0'),
     openUpdateDir: () => ok(true),
-    stkList: () => ok(Object.values(stk)),
-    stkSave: (z) => {
-      const id = z.id || `z${Object.keys(stk).length + 1}`;
-      const prev = stk[id] || { historique: [], creeLe: new Date().toISOString() };
-      const out = { ...prev, ...z, id, majLe: new Date().toISOString(), majPar: z.par };
-      out.historique = [{ date: out.majLe, par: z.par, remplissage: out.remplissage, commentaire: out.commentaire }, ...prev.historique];
-      delete out.par;
-      stk[id] = out;
-      return ok(out);
-    },
-    stkDelete: (id) => { delete stk[id]; return ok(true); },
     invList: () => ok(invView()),
     invSaveCategories: (cats) => {
       inv.categories = cats.filter((c) => c.nom).map((c) => ({ id: c.id || `c${++inv.seq}`, nom: c.nom.trim() }));
