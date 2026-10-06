@@ -426,11 +426,12 @@ async function enterService(id, view = 'saisie') {
   setView(view, { silent: true });
   await goTo(S.date, id);
   const s = cur();
-  if (!isClosed(s) && !s.responsable && S.user) {
+  // Responsable prérempli mais pas enregistré tant que rien d'autre n'est saisi :
+  // ouvrir un service (jour non travaillé) ne le marque pas comme commencé.
+  if (!isClosed(s) && !s.responsable && S.user && M.isEmpty(s)) {
     s.responsable = S.user;
     renderForm();
     renderTabs();
-    markDirty();
   }
 }
 
@@ -635,7 +636,9 @@ function renderForm() {
     h('button', { class: 'btn', title: 'Fiche détaillée du service', onclick: () => openFiche(S.date, S.service) }, icon('eye', 16)),
     isTooNew(s) ? null : closed
       ? h('button', { class: 'btn', onclick: reopenService }, icon('unlock', 16), 'Rouvrir')
-      : h('button', { class: 'btn solid', onclick: closeService }, icon('lock', 16), 'Clôturer le service'));
+      : h('button', { class: 'btn solid', onclick: closeService }, icon('lock', 16), 'Clôturer le service'),
+    closed ? null
+      : h('button', { class: 'btn ghost', title: 'Effacer toute la saisie de ce service (jour non travaillé, saisie par erreur)', onclick: clearService }, icon('trash', 16), 'Vider'));
 
   const closedNote = isTooNew(s)
     ? h('div', { class: 'closed-note warn' }, icon('alert'), h('span', {}, h('b', {}, 'Lecture seule'),
@@ -1328,6 +1331,22 @@ async function closeService() {
   await save();
   renderSaisie();
   toast('Service clôturé et transmis à la relève.');
+}
+
+// Remet le service à zéro, comme si rien n'avait été saisi (case vide dans le récap).
+async function clearService() {
+  const def = SVC[S.service];
+  const r = await ask('Vider ce service ?', `Toute la saisie du service ${def.label.toLowerCase()} du ${fmtLongDate(S.date)} sera effacée (responsable, observations, chiffres…), comme si rien n'avait été fait. Cette action ne peut pas être annulée.`, [
+    { label: 'Annuler', value: 'no' },
+    { label: 'Vider le service', value: 'yes', cls: 'danger' },
+  ]);
+  if (r !== 'yes') return;
+  const s = cur();
+  S.data[S.service] = { ...M.emptyService(S.date, S.service), rev: s.rev };
+  S.dirty = true;
+  await save();
+  renderSaisie();
+  toast('Service vidé.');
 }
 
 async function reopenService() {

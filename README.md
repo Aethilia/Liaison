@@ -33,6 +33,13 @@ motif, et le tableau des déchets non conformes.
    l'étape 1 est inscrit automatiquement s'il n'y en a pas encore. Le bouton en
    haut à droite (nom + service) ramène au choix du service ou du responsable.
 
+## Jour non travaillé, saisie par erreur
+
+Ouvrir un service sans rien saisir ne l'enregistre pas : la case reste vide
+dans le récap. Le bouton **Vider** (en haut de la saisie) efface toute la saisie
+d'un service, comme si rien n'avait été fait (un service clôturé doit d'abord
+être rouvert).
+
 ## Observations
 
 Les observations sont en tête de la saisie, avec une ligne de saisie rapide
