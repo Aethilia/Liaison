@@ -1205,6 +1205,8 @@ function onTonnageInput(el) {
 // affiche (ou retire) les cases de pesées.
 function onFormChange(e) {
   const el = e.target;
+  // Menu secret : petit caca qui tombe quand on saisit un % dans une benne.
+  if (cacaActif && el.dataset && el.dataset.type === 'pct' && /^bennes\./.test(el.dataset.bind || '') && el.value.trim() && !el.readOnly) cacaTombe(el);
   if (!el.dataset || !(el.dataset.nb || el.dataset.type === 'tonexpr')) return;
   const base = el.dataset.nb || el.dataset.bind.replace(/\.tonnage$/, '');
   if (base.startsWith('sorties.') && M.MATIERES_EXTERNES.includes(base.split('.')[1])) return;
@@ -2391,9 +2393,12 @@ let settingsClicSon = null;
 
 // Son au clic sur « Nom de l'agent » (menu secret) : chargé pour la personne connectée.
 let sonClic = null;
+let cacaActif = false;
 async function chargerSonClic() {
   sonClic = null;
+  cacaActif = false;
   if (!S.user) return;
+  cacaActif = !!(await call(api.funFind(S.user, 'caca')).catch(() => null));
   const trouve = await call(api.funFind(S.user, 'clic')).catch(() => null);
   if (!trouve || !trouve.fun.son) return;
   sonClic = await call(api.funReadSound(trouve.fun.son.rel, trouve.dataDir)).catch(() => null);
@@ -2440,6 +2445,9 @@ async function openFunDialog() {
   $('#set-clic-user').replaceChildren(h('option', { value: '' }, 'Personne'), h('option', { value: '*', selected: clic.user === '*' }, 'Tout le monde'),
     ...[...new Set([...S.users, clic.user].filter((u) => u && u !== '*'))].map((u) => h('option', { value: u, selected: u === clic.user }, u)));
   settingsClicSon = clic.son || null;
+  const caca = (S.site && S.site.caca) || {};
+  $('#set-caca-user').replaceChildren(h('option', { value: '' }, 'Personne'), h('option', { value: '*', selected: caca.user === '*' }, 'Tout le monde'),
+    ...[...new Set([...S.users, caca.user].filter((u) => u && u !== '*'))].map((u) => h('option', { value: u, selected: u === caca.user }, u)));
   $('#set-clic-son-nom').textContent = settingsClicSon ? settingsClicSon.nom : 'Aucun son';
   $('#fun-dialog').showModal();
 }
@@ -2450,9 +2458,10 @@ async function saveFunDialog() {
   const fun = funSettings();
   const farce = $('#set-farce-user').value ? { user: $('#set-farce-user').value, frequence: $('#set-farce-freq').value } : null;
   const clic = $('#set-clic-user').value && settingsClicSon ? { user: $('#set-clic-user').value, son: settingsClicSon } : null;
+  const caca = $('#set-caca-user').value ? { user: $('#set-caca-user').value } : null;
   try {
-    const r = await call(api.funSaveAll(fun, farce, clic));
-    S.site = { ...S.site, fun, farce, clic };
+    const r = await call(api.funSaveAll(fun, farce, clic, caca));
+    S.site = { ...S.site, fun, farce, clic, caca };
     chargerSonClic();
     toast(r.echecs.length ? `Non enregistré sur : ${r.echecs.join(', ')}` : 'Enregistré.', r.echecs.length ? 6000 : 2500);
   } catch (err) {
@@ -2589,6 +2598,7 @@ function initSettings() {
   });
   $('#btn-fun-coin').addEventListener('click', openFunDialog);
   $('#set-farce-test').addEventListener('click', () => playEcranBleu());
+  $('#set-caca-test').addEventListener('click', (e) => cacaTombe(e.currentTarget));
   $('#set-clic-son').addEventListener('click', async () => {
     const son = await call(api.funPickSound()).catch((err) => { toast(err.message); return null; });
     if (!son) return;

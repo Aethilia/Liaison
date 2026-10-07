@@ -505,3 +505,44 @@ function playEcranBleu(duree = 10000) {
     setTimeout(fin, duree);
   });
 }
+
+// Petit caca souriant (dessin original) qui tombe le long de la barre d'une
+// benne quand on y saisit un pourcentage.
+const CACA_SVG = `
+  <defs>
+    <linearGradient id="cacaG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9763e"/><stop offset=".55" stop-color="#8a4f22"/><stop offset="1" stop-color="#6a3a16"/></linearGradient>
+  </defs>
+  <g stroke="#4a2408" stroke-width="5" stroke-linejoin="round" fill="url(#cacaG)">
+    <path d="M14 150 C2 150 2 116 30 112 L170 112 C198 116 198 150 186 150 Z"/>
+    <path d="M30 116 C14 112 16 82 42 80 L158 80 C184 82 186 112 170 116 Z"/>
+    <path d="M46 84 C32 80 36 54 60 52 L140 52 C164 54 168 80 154 84 Z"/>
+    <path d="M62 56 C56 40 78 26 100 28 C110 10 96 4 92 2 C122 4 134 26 126 42 C142 42 146 54 138 56 Z"/>
+  </g>
+  <path d="M40 120 C80 124 130 124 168 118 M52 88 C90 92 124 92 150 88 M68 60 C92 63 116 63 134 60" stroke="#d99a5e" stroke-width="5" fill="none" stroke-linecap="round" opacity=".55"/>
+  <ellipse cx="74" cy="92" rx="17" ry="20" fill="#fff" stroke="#4a2408" stroke-width="3"/><ellipse cx="126" cy="92" rx="17" ry="20" fill="#fff" stroke="#4a2408" stroke-width="3"/>
+  <ellipse cx="76" cy="95" rx="7" ry="10" fill="#1b0c02"/><ellipse cx="124" cy="95" rx="7" ry="10" fill="#1b0c02"/>
+  <path d="M66 122 Q100 148 134 122 Z" fill="#fff" stroke="#4a2408" stroke-width="4" stroke-linejoin="round"/>`;
+
+function cacaTombe(champ) {
+  // Accroché à la ligne de la benne (suit le défilement), juste à droite du %.
+  const ligne = champ.closest('.box-row');
+  const hote = ligne || document.body;
+  const taille = 42;
+  const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  el.setAttribute('viewBox', '0 0 200 155');
+  el.setAttribute('class', `caca-tombe${ligne ? '' : ' libre'}`);
+  el.innerHTML = CACA_SVG;
+  el.style.width = `${taille}px`;
+  el.style.height = `${taille * 0.78}px`;
+  if (ligne) {
+    const pct = ligne.querySelector('.pct') || champ;
+    el.style.left = `${pct.offsetLeft + pct.offsetWidth + 2}px`;
+    el.style.top = `${pct.offsetTop + pct.offsetHeight / 2 - taille * 0.39}px`;
+  } else {
+    const r = champ.getBoundingClientRect();
+    el.style.left = `${r.right + 6}px`;
+    el.style.top = `${r.top}px`;
+  }
+  hote.append(el);
+  el.addEventListener('animationend', () => el.remove());
+}

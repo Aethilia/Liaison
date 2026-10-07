@@ -109,3 +109,19 @@
 .eb-smiley { font-size: 17vh; line-height: 1; margin-bottom: 5vh; }
 .eb-texte { font-size: 3.4vh; line-height: 1.35; margin: 0 0 7vh; max-width: 66vw; }
 .eb-petit { font-size: 1.55vh; margin: 0; opacity: .95; }
+
+/* ---------- Caca qui tombe le long d'une benne ---------- */
+.box-row { position: relative; }
+.caca-tombe.libre { position: fixed; }
+.caca-tombe { position: absolute; z-index: 1500; pointer-events: none; transform-origin: 50% 100%;
+  filter: drop-shadow(1px 3px 2px rgba(0, 0, 0, .35)); animation: caca-tombe 1.6s cubic-bezier(.3, .1, .4, 1) forwards; }
+@keyframes caca-tombe {
+  0% { transform: translate(-30px, -90px) rotate(-25deg) scale(.4); opacity: 0; }
+  12% { opacity: 1; }
+  38% { transform: translate(0, 0) rotate(8deg) scale(1, 1); }
+  46% { transform: translate(0, 4px) rotate(0) scale(1.25, .7); }
+  56% { transform: translate(0, -14px) rotate(-6deg) scale(.92, 1.1); }
+  66% { transform: translate(0, 0) scale(1.1, .88); }
+  74% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(6px, 46px) rotate(12deg) scale(.9); opacity: 0; }
+}
