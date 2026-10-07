@@ -40,6 +40,13 @@ dans le récap. Le bouton **Vider** (en haut de la saisie) efface toute la saisi
 d'un service, comme si rien n'avait été fait (un service clôturé doit d'abord
 être rouvert).
 
+## Intro fun 🔥
+
+⚙ Paramètres → *Intro fun* : choisir **un** responsable. Juste après le clic
+sur son nom, une intro plein écran de 3 secondes (flammes, WordArt
+arc-en-ciel, merguez volantes, fanfare) se joue ; un clic ou Échap la passe.
+Les trois textes sont modifiables, *Tester* la montre. Réglage par site.
+
 ## Observations
 
 Les observations sont en tête de la saisie, avec une ligne de saisie rapide

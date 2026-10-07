@@ -5,6 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
   <title>Liaison — Main courante</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="fun.css">
 </head>
 <body>
   <!-- Étape 1 : choix du responsable -->
@@ -207,6 +208,19 @@
         <small>Proposés quand on saisit un absent. Un nouveau nom s'ajoute automatiquement ; retirez ici les fautes de frappe.</small>
       </div>
       <div class="field">
+        <span>Intro fun 🔥</span>
+        <div class="row">
+          <select id="set-fun-user"><option value="">Personne</option></select>
+          <button type="button" id="set-fun-test" class="btn ghost">Tester</button>
+        </div>
+        <div class="row">
+          <input id="set-fun-titre" type="text" placeholder="Merguez">
+          <input id="set-fun-sous" type="text" placeholder="de salopard">
+        </div>
+        <input id="set-fun-bulle" type="text" placeholder="GROSSE MERGUEZ À VOLONTÉ !">
+        <small>Animation de 3 secondes avec son, jouée juste après le clic sur ce nom (un clic ou Échap pour passer). Textes vides = textes par défaut.</small>
+      </div>
+      <div class="field">
         <span>Version</span>
         <div class="row version-row">
           <span id="set-version" class="muted"></span>
@@ -288,6 +302,7 @@
   <script src="photos.js"></script>
   <script src="taches.js"></script>
   <script src="inventaire.js"></script>
+  <script src="fun.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

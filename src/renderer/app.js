@@ -294,6 +294,7 @@ async function chooseUser(u) {
   }
   S.user = u.nom;
   S.userEntry = u;
+  if (S.site && S.site.fun && S.site.fun.user === u.nom) await playFunIntro(S.site.fun);
   try {
     localStorage.setItem('liaison.lastUser', u.nom);
   } catch { /* stockage indisponible */ }
@@ -2355,6 +2356,13 @@ async function autoUpdateAtLaunch() {
 let settingsUsers = [];
 let settingsAgents = [];
 
+// Intro fun : un seul responsable, textes facultatifs (null = désactivée).
+function funSettings() {
+  const user = $('#set-fun-user').value;
+  if (!user) return null;
+  return { user, titre: $('#set-fun-titre').value.trim(), soustitre: $('#set-fun-sous').value.trim(), bulle: $('#set-fun-bulle').value.trim() };
+}
+
 function renderSettingsAgents() {
   $('#set-agents').replaceChildren(...(settingsAgents.length
     ? settingsAgents.map((u, i) => h('span', { class: 'chip' }, u,
@@ -2405,6 +2413,12 @@ function openSettings() {
   renderSettingsSups();
   settingsUsers = [...S.users];
   renderSettingsUsers();
+  const fun = (S.site && S.site.fun) || {};
+  $('#set-fun-user').replaceChildren(h('option', { value: '' }, 'Personne'),
+    ...[...new Set([...S.users, fun.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === fun.user }, u)));
+  $('#set-fun-titre').value = fun.titre || '';
+  $('#set-fun-sous').value = fun.soustitre || '';
+  $('#set-fun-bulle').value = fun.bulle || '';
   settingsAgents = [...S.agents];
   renderSettingsAgents();
   $('#set-version').textContent = updateInfo ? `Liaison ${updateInfo.current}${updateInfo.update ? ` — version ${updateInfo.update.version} disponible` : ' — à jour'}` : '';
@@ -2470,14 +2484,16 @@ function initSettings() {
       toast(err.message);
     }
   });
+  $('#set-fun-test').addEventListener('click', () => playFunIntro(funSettings() || {}));
   $('#settings').addEventListener('close', async () => {
     if ($('#settings').returnValue !== 'save') return;
     await flush();
     const dirChanged = $('#set-dir').value !== S.config.dataDir;
     const nom = $('#set-site-nom').value.trim();
     const entTon = $('#set-entrees-ton').checked;
-    if (!dirChanged && (nom !== ((S.site && S.site.nom) || '') || entTon !== M.entreesTonnage(S.site))) {
-      S.site = await call(api.saveSite({ ...S.site, nom, entreesTonnage: entTon }));
+    const fun = funSettings();
+    if (!dirChanged && (nom !== ((S.site && S.site.nom) || '') || entTon !== M.entreesTonnage(S.site) || JSON.stringify(fun) !== JSON.stringify((S.site && S.site.fun) || null))) {
+      S.site = await call(api.saveSite({ ...S.site, nom, entreesTonnage: entTon, fun }));
     }
     S.config = await call(api.setConfig({
       poste: $('#set-poste').value.trim(), dataDir: $('#set-dir').value, sites: settingsSites.map((x) => ({ dataDir: x.dataDir })),
