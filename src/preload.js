@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('api', {
   openPhoto: call('photo:open'),
   funPickSound: call('fun:pickSound'),
   funReadSound: call('fun:readSound'),
+  funFind: call('fun:find'),
+  funReadPhoto: call('fun:readPhoto'),
   exportExcel: call('excel:export'),
   openFile: call('excel:open'),
   pickImport: call('excel:pick'),

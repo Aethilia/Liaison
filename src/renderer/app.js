@@ -294,7 +294,16 @@ async function chooseUser(u) {
   }
   S.user = u.nom;
   S.userEntry = u;
-  if (S.site && S.site.fun && S.site.fun.user === u.nom) await playFunIntro(S.site.fun, await funPhotoUrl(S.site.fun.photo), await funSonUrl(S.site.fun.son));
+  // Intro fun : réglage relu à neuf (autre poste, autre site du poste).
+  const trouve = await call(api.funFind(u.nom)).catch(() => null);
+  if (trouve) {
+    const { fun, dataDir } = trouve;
+    const [photo, son] = await Promise.all([
+      fun.photo ? call(api.funReadPhoto(fun.photo, dataDir)).catch(() => null) : null,
+      fun.son && fun.son.rel ? call(api.funReadSound(fun.son.rel, dataDir)).catch(() => null) : null,
+    ]);
+    await playFunIntro(fun, photo, son);
+  }
   try {
     localStorage.setItem('liaison.lastUser', u.nom);
   } catch { /* stockage indisponible */ }

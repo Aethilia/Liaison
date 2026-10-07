@@ -238,9 +238,33 @@ handle('fun:pickSound', async () => {
   fs.copyFileSync(src, path.join(config.dataDir, rel));
   return { rel, nom: path.basename(src) };
 });
-handle('fun:readSound', (rel) => {
-  const abs = path.resolve(config.dataDir, rel);
-  if (!abs.startsWith(path.resolve(config.dataDir, 'fun') + path.sep)) throw new Error('Chemin de son invalide.');
+// Dossier d'un site connu du poste (site actif par défaut).
+const funDir = (dataDir) => {
+  const dir = dataDir || config.dataDir;
+  if (!withSites(config).sites.some((x) => x.dataDir === dir)) throw new Error('Site inconnu.');
+  return dir;
+};
+const memeNom = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+// Intro fun d'un responsable : relue à neuf dans tous les sites du poste.
+handle('fun:find', (nom) => {
+  const dirs = [config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)];
+  for (const dir of [...new Set(dirs)]) {
+    try {
+      const fun = new Store(dir).loadSite().fun;
+      if (fun && memeNom(fun.user, nom)) return { dataDir: dir, fun };
+    } catch { /* site inaccessible */ }
+  }
+  return null;
+});
+handle('fun:readPhoto', (rel, dataDir) => {
+  const img = nativeImage.createFromPath(new Store(funDir(dataDir)).photoPath(rel));
+  if (img.isEmpty()) throw new Error('Photo introuvable.');
+  return img.toDataURL();
+});
+handle('fun:readSound', (rel, dataDir) => {
+  const dir = funDir(dataDir);
+  const abs = path.resolve(dir, rel);
+  if (!abs.startsWith(path.resolve(dir, 'fun') + path.sep)) throw new Error('Chemin de son invalide.');
   const type = SON_TYPES[path.extname(abs).slice(1).toLowerCase()] || 'audio/mpeg';
   return `data:${type};base64,${fs.readFileSync(abs).toString('base64')}`;
 });
