@@ -154,7 +154,9 @@ function funSon() {
 function playFunIntro(cfg = {}, photoUrl = null) {
   const c = { ...FUN_DEFAUT, ...Object.fromEntries(Object.entries(cfg).filter(([k, v]) => v && k !== 'photo')) };
   return new Promise((resolve) => {
-    const lettres = (txt, cls, delai) => (txt ? h('div', { class: cls }, [...txt].map((ch, i) => h('span', { style: { animationDelay: `${delai + i * 0.05}s` } }, ch === ' ' ? '\u00a0' : ch))) : null);
+    // Lettres qui tombent une \u00e0 une (en 0,5 s au plus) ; un texte long est r\u00e9duit pour tenir \u00e0 l'\u00e9cran.
+    const lettres = (txt, cls, delai) => (txt ? h('div', { class: cls, style: { fontSize: txt.length > 10 ? `calc(var(--fun-fs) * ${(10 / txt.length).toFixed(2)})` : null } },
+      [...txt].map((ch, i) => h('span', { style: { animationDelay: `${delai + i * Math.min(0.05, 0.5 / txt.length)}s` } }, ch === ' ' ? '\u00a0' : ch))) : null);
     const flammes = h('div', { class: 'fun-flammes' },
       Array.from({ length: 24 }, (_, i) => h('span', { style: { left: `${(i * 4.3) % 100}%`, animationDelay: `${1.0 + (i % 6) * 0.1}s`, fontSize: `${40 + (i * 13) % 60}px` } }, '🔥')));
     const etoiles = h('div', { class: 'fun-etoiles' },

@@ -44,8 +44,8 @@
 /* WordArt */
 .fun-textes { position: absolute; left: 0; right: 0; bottom: 3vh; text-align: center; line-height: .95; }
 .fun-titre, .fun-sous { white-space: nowrap; letter-spacing: -.02em; }
-.fun-titre { font-size: min(12vw, 17vh); color: #39d3ff; -webkit-text-stroke: 4px #0a2fd6; text-shadow: 6px 6px 0 #0a2fd6, 10px 10px 0 #001a8c, 0 0 30px #fff; }
-.fun-sous { font-size: min(10vw, 14vh); -webkit-text-stroke: 3px #111; }
+.fun-titre { --fun-fs: min(12vw, 17vh); font-size: var(--fun-fs); color: #39d3ff; -webkit-text-stroke: 4px #0a2fd6; text-shadow: 6px 6px 0 #0a2fd6, 10px 10px 0 #001a8c, 0 0 30px #fff; }
+.fun-sous { --fun-fs: min(10vw, 14vh); font-size: var(--fun-fs); -webkit-text-stroke: 3px #111; }
 .fun-sous span { text-shadow: 5px 6px 0 #111; }
 .fun-sous span:nth-child(8n+1) { color: #ff00d4; }
 .fun-sous span:nth-child(8n+2) { color: #ff2a2a; }
