@@ -327,3 +327,24 @@ test('stockage et commandes : normalisation et export Excel', async () => {
   const back = await X.importWorkbookFull(file, { year: 2026 });
   assert.equal(back.days[0].services.matin.commandes[0].fournisseur, 'Würth');
 });
+
+test('tonnage des entrées : réglage du site (CPTP par défaut)', async () => {
+  assert.equal(M.entreesTonnage({ nom: 'CPTP' }), true);
+  assert.equal(M.entreesTonnage({ nom: 'CTVO' }), false);
+  assert.equal(M.entreesTonnage({ nom: 'CPTP', entreesTonnage: false }), false);
+  const s = M.normalize({ date: '2026-10-05', service: 'matin', entrees: { pl: 3, tonnage: 12.54 } });
+  assert.equal(s.entrees.tonnage, 12.54);
+  assert.equal(M.normalize({ entrees: { pl: 1 } }, '2026-10-05', 'matin').entrees.tonnage, null);
+  const X = require('../src/core/excel');
+  const ExcelJS = require('exceljs');
+  const file = path.join(tmp(), 'ent.xlsx');
+  const day = { date: '2026-10-05', services: { matin: s, apresmidi: M.emptyService('2026-10-05', 'apresmidi'), nuit: M.emptyService('2026-10-05', 'nuit') } };
+  await X.exportWorkbook([day], file, { site: { nom: 'CPTP' } });
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(file);
+  const vals = [];
+  wb.worksheets.find((w) => w.name.startsWith('05')).eachRow((r) => r.eachCell((c) => vals.push(c.value)));
+  assert.ok(vals.includes('Tonnage (T)') && vals.includes(12.54));
+  const back = await X.importWorkbookFull(file, { year: 2026 });
+  assert.equal(back.days[0].services.matin.entrees.tonnage, 12.54);
+});

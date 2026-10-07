@@ -42,7 +42,7 @@ function emptyService(date, service) {
     service,
     responsable: '',
     absents: Array.from({ length: NB_ABSENTS }, () => ({ nom: '', motif: '' })),
-    entrees: { plateaux: null, pl: null },
+    entrees: { plateaux: null, pl: null, tonnage: null }, // tonnage : sites qui pèsent les entrées (CPTP)
     sorties,
     sortiesExtra: [], // sorties ponctuelles (ex. sapins) : { nom, nb, tonnage, pesees, couleur }
     bennes,
@@ -105,7 +105,7 @@ function isEmpty(s) {
   if (!s) return true;
   if (s.responsable || s.consignes || s.cloture) return false;
   if (s.absents.some((a) => a.nom || a.motif)) return false;
-  if (s.entrees.plateaux != null || s.entrees.pl != null) return false;
+  if (s.entrees.plateaux != null || s.entrees.pl != null || s.entrees.tonnage != null) return false;
   if (Object.values(s.sorties).some((v) => v.nb != null || v.tonnage != null)) return false;
   if (Object.values(s.bennes).some((v) => v != null)) return false;
   if (Object.values(s.plateaux).some((v) => v != null)) return false;
@@ -124,6 +124,12 @@ function cleanPesees(list) {
 }
 function cleanList(list) {
   return Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x) : [];
+}
+
+// Case « Tonnage » des entrées : réglage du site, activé d'office pour le CPTP.
+function entreesTonnage(site) {
+  if (site && typeof site.entreesTonnage === 'boolean') return site.entreesTonnage;
+  return /cptp/i.test((site && site.nom) || '');
 }
 
 // Bennes et plateaux affichés : liste du site (modifiable) ou liste d'origine,
@@ -358,7 +364,7 @@ function daysInMonth(year, month) {
 
 const api = {
   stats, compareVersions, UNITES, ETATS_STOCKAGE, SERVICE_COMMANDES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
-  boxNames, boxAlerts,
+  boxNames, boxAlerts, entreesTonnage,
   SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth,

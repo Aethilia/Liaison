@@ -115,6 +115,14 @@ Les lignes de bennes et de plateaux se règlent pour le site : **+ Benne** /
 ligne. Le changement vaut pour tous les services suivants ; les services déjà
 saisis gardent leurs chiffres (y compris dans l'export Excel).
 
+## Tonnage des entrées (CPTP)
+
+Sur le site **CPTP**, la carte *Entrées — passages de véhicules* a une case
+**Tonnage (T)** en plus (« 12,540 » ou « 12T540 »). Elle figure dans la fiche,
+l'impression, l'export Excel et le récap du mois. Réglage par site dans
+⚙ Paramètres (*Case « Tonnage » dans les entrées*) : activé d'office pour un
+site nommé CPTP, désactivé ailleurs.
+
 ## Stockage et commandes
 
 - **Stockage** (dans la saisie) : une ligne par lot de bennes stockées sur site,

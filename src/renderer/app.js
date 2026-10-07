@@ -702,7 +702,9 @@ function renderForm() {
   const entrees = card('Entrées — passages de véhicules', 'truck', h('div', { class: 'entrees' },
     h('label', { class: 'field' }, h('span', {}, 'Plateaux'), field('entrees.plateaux', 'int')),
     h('label', { class: 'field' }, h('span', {}, 'Poids lourds (PL)'), field('entrees.pl', 'int')),
-    h('div', { class: 'total-box' }, h('span', {}, 'TOTAL'), h('b', { id: 'calc-entrees' }, '0'))));
+    h('div', { class: 'total-box' }, h('span', {}, 'TOTAL'), h('b', { id: 'calc-entrees' }, '0')),
+    M.entreesTonnage(S.site) || s.entrees.tonnage != null
+      ? h('label', { class: 'field' }, h('span', {}, 'Tonnage (T)'), field('entrees.tonnage', 'ton', { placeholder: 'ex. 12,540' })) : null));
 
   const sortieRows = [];
   for (const row of M.allSorties(s)) {
@@ -1524,7 +1526,7 @@ function renderFiche() {
         ]),
         ficheCard('Activité', 'truck', [
           h('div', { class: 'fiche-kpis' },
-            h('div', {}, h('b', {}, fmtNum(t.entrees)), h('span', {}, `Entrées (${fmtNum(s.entrees.plateaux || 0)} plat. · ${fmtNum(s.entrees.pl || 0)} PL)`)),
+            h('div', {}, h('b', {}, fmtNum(t.entrees)), h('span', {}, `Entrées (${fmtNum(s.entrees.plateaux || 0)} plat. · ${fmtNum(s.entrees.pl || 0)} PL${s.entrees.tonnage != null ? ` · ${fmtTon(s.entrees.tonnage)}` : ''})`)),
             h('div', {}, h('b', {}, fmtNum(t.sortiesNb)), h('span', {}, 'Sorties')),
             h('div', {}, h('b', {}, fmtNum(t.tonnage)), h('span', {}, 'Tonnes'))),
           h('table', { class: 'simple', style: { marginTop: '10px' } },
@@ -1760,6 +1762,7 @@ async function renderRecap() {
       if (isClosed(s)) tot.clos++;
       row.plateaux += n(s.entrees.plateaux);
       row.pl += n(s.entrees.pl);
+      tot.entTon = (tot.entTon || 0) + n(s.entrees.tonnage);
       for (const r of M.allSorties(s)) {
         const nom = r.nom || 'Sortie ponctuelle';
         if (r.extra) ponctuelles.add(nom);
@@ -1833,7 +1836,7 @@ async function renderRecap() {
       h('span', { class: 'spacer' }),
       h('button', { class: 'btn primary', onclick: () => exportMonth(year, month) }, icon('download', 16), 'Exporter ce mois en Excel')),
     h('div', { class: 'kpis' },
-      kpi('Entrées (passages)', fmtNum(tot.entrees), 'truck', '#2e75b6', '#e7f1fb'),
+      kpi('Entrées (passages)', `${fmtNum(tot.entrees)}${tot.entTon ? ` · ${fmtNum(Math.round(tot.entTon * 10) / 10)} T` : ''}`, 'truck', '#2e75b6', '#e7f1fb'),
       kpi('Sorties · tonnage', `${fmtNum(tot.nb)} · ${fmtNum(Math.round(tot.tonnage * 10) / 10)} T`, 'upload', '#c55a11', '#fdf0e6'),
       kpi('Observations', fmtNum(tot.obs), 'note', '#8e44ad', '#f3e8fa'),
       kpi('Services clôturés', `${tot.clos} / ${days.length * 3}`, 'lock', '#1f8a4c', '#e5f6ec')),
@@ -2221,7 +2224,8 @@ function buildPrint() {
         })),
       h('div', { class: 'p-sec' }, 'ENTRÉES  —  passages de véhicules'),
       h('table', {}, h('tr', {}, h('td', {}, 'Plateaux'), h('td', { class: 'c' }, s.entrees.plateaux ?? ''), h('td', {}, 'Poids lourds (PL)'),
-        h('td', { class: 'c' }, s.entrees.pl ?? ''), h('td', { class: 'c' }, h('b', {}, 'TOTAL')), h('td', { class: 'c' }, h('b', {}, t.entrees)))),
+        h('td', { class: 'c' }, s.entrees.pl ?? ''), h('td', { class: 'c' }, h('b', {}, 'TOTAL')), h('td', { class: 'c' }, h('b', {}, t.entrees)),
+        ...(s.entrees.tonnage != null ? [h('td', {}, 'Tonnage'), h('td', { class: 'c' }, fmtTon(s.entrees.tonnage))] : []))),
       h('div', { class: 'p-sec' }, 'SORTIES  ·  ÉTAT DES BOXS'),
       h('table', {}, h('tr', {}, ['Matière', 'Nb sorties', 'Tonnage', 'Bennes', 'Remplissage', 'Plateaux', 'Remplissage'].map((x) => h('th', {}, x))),
         boxRows,
@@ -2395,6 +2399,7 @@ function openSettings() {
   $('#set-poste').value = S.config.poste || '';
   $('#set-dir').value = S.config.dataDir;
   $('#set-site-nom').value = (S.site && S.site.nom) || S.siteName || '';
+  $('#set-entrees-ton').checked = M.entreesTonnage(S.site);
   settingsSites = (S.config.sites || []).map((x) => ({ dataDir: x.dataDir, nom: (S.sites.find((y) => y.dataDir === x.dataDir) || {}).nom }));
   renderSettingsSites();
   renderSettingsSups();
@@ -2470,7 +2475,10 @@ function initSettings() {
     await flush();
     const dirChanged = $('#set-dir').value !== S.config.dataDir;
     const nom = $('#set-site-nom').value.trim();
-    if (!dirChanged && nom !== ((S.site && S.site.nom) || '')) S.site = await call(api.saveSite({ ...S.site, nom }));
+    const entTon = $('#set-entrees-ton').checked;
+    if (!dirChanged && (nom !== ((S.site && S.site.nom) || '') || entTon !== M.entreesTonnage(S.site))) {
+      S.site = await call(api.saveSite({ ...S.site, nom, entreesTonnage: entTon }));
+    }
     S.config = await call(api.setConfig({
       poste: $('#set-poste').value.trim(), dataDir: $('#set-dir').value, sites: settingsSites.map((x) => ({ dataDir: x.dataDir })),
     }));

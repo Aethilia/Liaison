@@ -142,6 +142,11 @@ function buildDaySheet(ws, model, day, { tasks = [], site = {}, siteName = '' } 
     const totalEntrees = (s.entrees.plateaux || 0) + (s.entrees.pl || 0);
     b.put(`H${b.row}`, { formula: `SUM(C${b.row},F${b.row})`, result: totalEntrees }, b.st('H11', def));
     b.next(H.entree);
+    if (M.entreesTonnage(site) || s.entrees.tonnage != null) {
+      b.merge(`A${b.row}`, `B${b.row}`, 'Tonnage (T)', b.st('A11', def));
+      b.put(`C${b.row}`, s.entrees.tonnage, { ...b.st('C11', def), numFmt: '0.000' });
+      b.next(H.entree);
+    }
     b.gap();
 
     // Sorties et état des boxs côte à côte

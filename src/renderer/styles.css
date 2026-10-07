@@ -324,7 +324,7 @@ table.grid input:hover:not(:read-only) { border-color: var(--line); }
 .absents-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .agents-edit { max-height: 140px; overflow: auto; }
 
-.entrees { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.entrees { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
 .entrees .field > span { font-size: 12px; color: var(--muted); font-weight: 600; }
 .total-box { background: var(--accent-soft); color: var(--accent); border-radius: 12px; display: grid; place-items: center; font-weight: 700; padding: 6px; font-size: 12px; }
 .total-box b { font-size: 26px; line-height: 1.1; }
@@ -739,3 +739,4 @@ dialog#inv-dialog.wide { width: min(820px, 94vw); }
 .cmd-view li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cmd-view li.recue b { text-decoration: line-through; color: var(--text-2); }
 .card.info-card { border-left: 4px solid var(--matin); }
+.check-field { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
