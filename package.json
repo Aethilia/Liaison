@@ -1,7 +1,7 @@
 {
   "name": "liaison",
   "productName": "Liaison",
-  "version": "1.5.9",
+  "version": "1.5.10",
   "description": "Main courante du tronc principal : liaison entre les services matin, après-midi et nuit",
   "main": "src/main.js",
   "author": "Aethilia",

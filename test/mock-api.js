@@ -5,7 +5,7 @@
   const ok = (value) => Promise.resolve({ ok: true, value: JSON.parse(JSON.stringify(value)) });
   const M = () => window.LiaisonModel;
   const load = (d, s) => (db[key(d, s)] ? JSON.parse(JSON.stringify(db[key(d, s)])) : M().emptyService(d, s));
-  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.5.9' };
+  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.5.10' };
   let users = window.__users || [];
   let agents = window.__agents || [];
   let site = window.__site || { couleurs: {} };
