@@ -1,6 +1,6 @@
 'use strict';
 
-/* global h */
+/* global h, call, api */
 // Intro « fun » pour un responsable choisi dans les paramètres : parodie
 // ringarde des génériques de cinéma. Anneau doré, ruban, bandes de film,
 // et au centre la photo de la personne qui rugit… puis WordArt (textes libres),
@@ -469,5 +469,39 @@ async function playFunIntro(cfg = {}, photoUrl = null, sonUrl = null) {
     const perso = funSonPerso(sonUrl);
     funSon(undefined, { rugissement: !perso });
     setTimeout(end, perso ? FUN_DUREE + 600 : FUN_DUREE);
+  });
+}
+
+// Farce : faux « écran bleu » Windows (en français), plein écran pendant 10 s,
+// au choix du site. Rien n'est touché sur le PC ; Échap l'arrête.
+function playEcranBleu(duree = 10000) {
+  return new Promise((resolve) => {
+    const pct = h('span', {}, '0');
+    const el = h('div', { class: 'ecran-bleu', role: 'presentation' },
+      h('div', { class: 'eb-contenu' },
+        h('div', { class: 'eb-smiley' }, ':('),
+        h('p', { class: 'eb-texte' }, 'Votre ordinateur a rencontré un problème et doit redémarrer. Nous recueillons simplement certaines informations relatives à l’erreur, puis nous allons redémarrer l’ordinateur pour vous. (', pct, ' % effectué)'),
+        h('p', { class: 'eb-petit' }, 'Pour en savoir plus, vous pourrez rechercher ultérieurement en ligne l’erreur suivante : HAL_INITIALIZATION_FAILED')));
+    // Progression irrégulière, comme le vrai.
+    const paliers = [[0, 0], [0.12, 0], [0.2, 11], [0.38, 23], [0.5, 37], [0.62, 52], [0.74, 68], [0.86, 85], [0.95, 100]];
+    const timers = paliers.map(([t, v]) => setTimeout(() => { pct.textContent = String(v); }, t * duree));
+    let fini = false;
+    const fin = () => {
+      if (fini) return;
+      fini = true;
+      timers.forEach(clearTimeout);
+      document.removeEventListener('keydown', onKey, true);
+      call(api.setFullScreen(false)).catch(() => {});
+      el.remove();
+      resolve();
+    };
+    const onKey = (e) => {
+      e.preventDefault();
+      if (e.key === 'Escape') fin();
+    };
+    document.addEventListener('keydown', onKey, true);
+    (document.querySelector('dialog[open]') || document.body).append(el);
+    call(api.setFullScreen(true)).catch(() => {});
+    setTimeout(fin, duree);
   });
 }

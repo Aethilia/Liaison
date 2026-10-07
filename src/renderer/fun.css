@@ -101,3 +101,11 @@
   font: 11px/1 system-ui, sans-serif; color: currentColor; opacity: .28; cursor: default; }
 .coin-discret:hover { opacity: .45; }
 #fun-dialog { width: min(600px, 94vw); }
+
+/* ---------- Farce : faux écran bleu ---------- */
+.ecran-bleu { position: fixed; inset: 0; z-index: 3000; background: #1f68b4; color: #fff; cursor: none; user-select: none;
+  font-family: 'Segoe UI Light', 'Segoe UI', 'Selawik', system-ui, sans-serif; font-weight: 300; }
+.eb-contenu { position: absolute; left: 18.6vw; top: 27vh; right: 15vw; }
+.eb-smiley { font-size: 17vh; line-height: 1; margin-bottom: 5vh; }
+.eb-texte { font-size: 3.4vh; line-height: 1.35; margin: 0 0 7vh; max-width: 66vw; }
+.eb-petit { font-size: 1.55vh; margin: 0; opacity: .95; }

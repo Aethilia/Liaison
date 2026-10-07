@@ -253,6 +253,18 @@
         <input id="set-fun-bulle" type="text" placeholder="Texte de la bulle (facultatif)">
         <small>Animation de 3 secondes avec rugissement, jouée juste après le clic sur ce nom (un clic ou Échap pour passer). Sa photo apparaît au centre de l'anneau doré : cliquez sur sa bouche dans l'aperçu pour que la mâchoire s'ouvre au bon endroit. Son : un vrai rugissement (MP3, WAV…) remplace le rugissement synthétisé ; il démarre quand la mâchoire s'ouvre.</small>
       </div>
+      <div class="field">
+        <span>Écran bleu au choix du site</span>
+        <div class="row">
+          <select id="set-farce-user"><option value="">Personne</option></select>
+          <select id="set-farce-freq">
+            <option value="toujours">À chaque fois</option>
+            <option value="jour">Une fois par jour</option>
+          </select>
+          <button type="button" id="set-farce-test" class="btn ghost">Tester</button>
+        </div>
+        <small>Faux écran bleu Windows en plein écran pendant 10 secondes quand cette personne choisit son site, puis l'appli reprend normalement (Échap pour l'arrêter).</small>
+      </div>
       <div class="dialog-actions">
         <span class="spacer"></span>
         <button value="cancel" class="btn ghost">Annuler</button>

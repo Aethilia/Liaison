@@ -57,8 +57,9 @@
     openPhoto: () => ok(true),
     funPickSound: () => ok(window.__sonPick || null),
     funReadSound: () => ok(window.__sonUrl || 'data:audio/wav;base64,'),
-    funFind: (nom) => ok(site.fun && site.fun.user === nom ? { dataDir: config.dataDir, fun: site.fun } : null),
-    funSaveAll: (fun) => { site = { ...site, fun }; return ok({ sites: 1, echecs: [] }); },
+    funFind: (nom, cle = 'fun') => ok(site[cle] && site[cle].user === nom ? { dataDir: config.dataDir, fun: site[cle] } : null),
+    funSaveAll: (fun, farce) => { site = { ...site, fun, ...(farce !== undefined ? { farce } : {}) }; return ok({ sites: 1, echecs: [] }); },
+    setFullScreen: () => ok(true),
     funReadPhoto: (rel) => ok(photos[rel] || SAMPLE_IMG),
     sitesOverview: () => ok((window.__sites || [{ dataDir: config.dataDir, nom: 'Tronc principal', superviseurs: [] }]).map((x) => ({
       responsables: users, superviseurs: [], ...x, actif: x.dataDir === config.dataDir,

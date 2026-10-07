@@ -322,6 +322,7 @@ async function pickSite(dataDir) {
     localStorage.setItem(lastSiteKey(), dataDir);
   } catch { /* stockage indisponible */ }
   await useSite(dataDir, { thenService: false });
+  await farceAuChoixDuSite();
   if (S.role !== 'superviseur' && S.user && !S.users.includes(S.user)) {
     try {
       S.users = await call(api.saveUsers([...S.users, S.user]));
@@ -329,6 +330,21 @@ async function pickSite(dataDir) {
     } catch { /* dossier en lecture seule : sans conséquence */ }
   }
   await renderServiceScreen();
+}
+
+// Farce de l'écran bleu (menu secret) : relue dans tous les sites du poste.
+async function farceAuChoixDuSite() {
+  const trouve = await call(api.funFind(S.user, 'farce')).catch(() => null);
+  if (!trouve) return;
+  if (trouve.fun.frequence === 'jour') {
+    const cle = `liaison.farce.${S.user}`;
+    const auj = new Date().toLocaleDateString('fr-CA'); // AAAA-MM-JJ, heure locale
+    try {
+      if (localStorage.getItem(cle) === auj) return;
+      localStorage.setItem(cle, auj);
+    } catch { /* stockage indisponible : on la joue */ }
+  }
+  await playEcranBleu();
 }
 
 // « + Ajouter un site » : choix du dossier puis du nom (gardé s'il en a déjà un).
@@ -2399,6 +2415,10 @@ async function openFunDialog() {
   $('#set-fun-titre').value = fun.titre || '';
   $('#set-fun-sous').value = fun.soustitre || '';
   $('#set-fun-bulle').value = fun.bulle || '';
+  const farce = (S.site && S.site.farce) || {};
+  $('#set-farce-user').replaceChildren(h('option', { value: '' }, 'Personne'),
+    ...[...new Set([...S.users, farce.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === farce.user }, u)));
+  $('#set-farce-freq').value = farce.frequence || 'toujours';
   $('#fun-dialog').showModal();
 }
 
@@ -2406,9 +2426,10 @@ async function openFunDialog() {
 async function saveFunDialog() {
   if ($('#fun-dialog').returnValue !== 'save') return;
   const fun = funSettings();
+  const farce = $('#set-farce-user').value ? { user: $('#set-farce-user').value, frequence: $('#set-farce-freq').value } : null;
   try {
-    const r = await call(api.funSaveAll(fun));
-    S.site = { ...S.site, fun };
+    const r = await call(api.funSaveAll(fun, farce));
+    S.site = { ...S.site, fun, farce };
     toast(r.echecs.length ? `Non enregistré sur : ${r.echecs.join(', ')}` : 'Enregistré.', r.echecs.length ? 6000 : 2500);
   } catch (err) {
     toast(`Non enregistré : ${err.message}`);
@@ -2543,6 +2564,7 @@ function initSettings() {
     }
   });
   $('#btn-fun-coin').addEventListener('click', openFunDialog);
+  $('#set-farce-test').addEventListener('click', () => playEcranBleu());
   $('#fun-dialog').addEventListener('close', saveFunDialog);
   $('#set-fun-test').addEventListener('click', async () => playFunIntro(funSettings() || {}, await funPhotoUrl(settingsFunPhoto), await funSonUrl(settingsFunSon)));
   $('#set-fun-son').addEventListener('click', async () => {

@@ -246,11 +246,13 @@ const funDir = (dataDir) => {
 };
 const memeNom = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 // Intro fun d'un responsable : relue à neuf dans tous les sites du poste.
-handle('fun:find', (nom) => {
+// `cle` : 'fun' (intro au choix du nom) ou 'farce' (écran bleu au choix du site).
+handle('fun:find', (nom, cle = 'fun') => {
+  if (!['fun', 'farce'].includes(cle)) throw new Error('Réglage inconnu.');
   const dirs = [config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)];
   for (const dir of [...new Set(dirs)]) {
     try {
-      const fun = new Store(dir).loadSite().fun;
+      const fun = new Store(dir).loadSite()[cle];
       if (fun && memeNom(fun.user, nom)) return { dataDir: dir, fun };
     } catch { /* site inaccessible */ }
   }
@@ -258,7 +260,7 @@ handle('fun:find', (nom) => {
 });
 // Enregistre l'intro dans TOUS les sites connus du poste (réglage, photo, son),
 // pour qu'elle se joue quel que soit le site choisi au démarrage.
-handle('fun:saveAll', (fun) => {
+handle('fun:saveAll', (fun, farce) => {
   const src = config.dataDir;
   const dirs = [...new Set([src, ...withSites(config).sites.map((x) => x.dataDir)])];
   const copier = (rel, dir) => {
@@ -277,12 +279,17 @@ handle('fun:saveAll', (fun) => {
         copier(fun.photo, dir);
         if (fun.son) copier(fun.son.rel, dir);
       }
-      st.saveSite({ ...st.loadSite(), fun });
+      st.saveSite({ ...st.loadSite(), fun, ...(farce !== undefined ? { farce } : {}) });
     } catch (err) {
       echecs.push(`${path.basename(dir)} : ${err.message}`);
     }
   }
   return { sites: dirs.length, echecs };
+});
+// Plein écran le temps d'une farce.
+handle('win:fullscreen', (on) => {
+  win.setFullScreen(!!on);
+  return true;
 });
 handle('fun:readPhoto', (rel, dataDir) => {
   const img = nativeImage.createFromPath(new Store(funDir(dataDir)).photoPath(rel));
