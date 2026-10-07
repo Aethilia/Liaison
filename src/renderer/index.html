@@ -26,6 +26,7 @@
         <span id="welcome-poste" class="muted"></span>
       </div>
     </div>
+    <button id="btn-fun-coin" class="coin-discret" type="button" tabindex="-1" aria-hidden="true"></button>
   </section>
 
   <!-- Étape 2 (si plusieurs sites) : choix du site -->
@@ -208,7 +209,28 @@
         <small>Proposés quand on saisit un absent. Un nouveau nom s'ajoute automatiquement ; retirez ici les fautes de frappe.</small>
       </div>
       <div class="field">
-        <span>Intro fun 🔥</span>
+        <span>Version</span>
+        <div class="row version-row">
+          <span id="set-version" class="muted"></span>
+          <button type="button" id="set-update-dir" class="btn ghost small">Dossier des mises à jour</button>
+        </div>
+        <small>Pour mettre à jour tous les postes, déposez le nouvel installateur (Liaison-Installation-x.y.z.exe) dans ce dossier.</small>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="set-open" class="btn ghost">Ouvrir le dossier</button>
+        <span class="spacer"></span>
+        <button value="cancel" class="btn ghost">Annuler</button>
+        <button id="set-save" value="save" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Réglage discret de l'intro fun (accès : numéro de version en bas à droite de l'accueil) -->
+  <dialog id="fun-dialog">
+    <form method="dialog" class="dialog-body">
+      <h2>Diagnostic</h2>
+      <div class="field">
+        <span>Intro au choix du nom</span>
         <div class="row">
           <select id="set-fun-user"><option value="">Personne</option></select>
           <button type="button" id="set-fun-test" class="btn ghost">Tester</button>
@@ -231,19 +253,10 @@
         <input id="set-fun-bulle" type="text" placeholder="Texte de la bulle (facultatif)">
         <small>Animation de 3 secondes avec rugissement, jouée juste après le clic sur ce nom (un clic ou Échap pour passer). Sa photo apparaît au centre de l'anneau doré : cliquez sur sa bouche dans l'aperçu pour que la mâchoire s'ouvre au bon endroit. Son : un vrai rugissement (MP3, WAV…) remplace le rugissement synthétisé ; il démarre quand la mâchoire s'ouvre.</small>
       </div>
-      <div class="field">
-        <span>Version</span>
-        <div class="row version-row">
-          <span id="set-version" class="muted"></span>
-          <button type="button" id="set-update-dir" class="btn ghost small">Dossier des mises à jour</button>
-        </div>
-        <small>Pour mettre à jour tous les postes, déposez le nouvel installateur (Liaison-Installation-x.y.z.exe) dans ce dossier.</small>
-      </div>
       <div class="dialog-actions">
-        <button type="button" id="set-open" class="btn ghost">Ouvrir le dossier</button>
         <span class="spacer"></span>
         <button value="cancel" class="btn ghost">Annuler</button>
-        <button id="set-save" value="save" class="btn primary">Enregistrer</button>
+        <button id="fun-save" value="save" class="btn primary">Enregistrer</button>
       </div>
     </form>
   </dialog>

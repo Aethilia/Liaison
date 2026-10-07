@@ -264,6 +264,7 @@ function renderUserScreen() {
     h('span', { class: 'avatar' }, icon('plus', 24)), h('span', {}, 'Ajouter un responsable')));
   $('#user-list').replaceChildren(...(users.length ? [] : [h('div', { class: 'empty-users' }, 'Commencez par ajouter les responsables (une seule fois, la liste est partagée entre les postes).')]), ...cards);
   $('#welcome-poste').textContent = S.config.poste ? `Poste : ${S.config.poste}` : '';
+  $('#btn-fun-coin').textContent = S.config.appVersion ? `v${S.config.appVersion}` : '·';
   showScreen('user');
 }
 
@@ -2381,6 +2382,39 @@ function funSettings() {
 const funSonUrl = (son) => (son && son.rel ? call(api.funReadSound(son.rel)).catch(() => null) : Promise.resolve(null));
 const funPhotoUrl = (rel) => (rel ? call(api.readPhoto(rel)).catch(() => null) : Promise.resolve(null));
 
+// Fenêtre discrète « Diagnostic » : ouverte par le numéro de version, en bas à
+// droite de l'accueil. Réglage relu à neuf dans le site actif.
+async function openFunDialog() {
+  try {
+    S.site = await call(api.loadSite());
+  } catch { /* garde la version en mémoire */ }
+  const fun = (S.site && S.site.fun) || {};
+  $('#set-fun-user').replaceChildren(h('option', { value: '' }, 'Personne'),
+    ...[...new Set([...S.users, fun.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === fun.user }, u)));
+  $('#set-fun-ruban').value = fun.ruban || '';
+  settingsFunPhoto = fun.photo || null;
+  settingsFunBouche = fun.bouche || null;
+  settingsFunSon = fun.son || null;
+  renderFunPhoto();
+  $('#set-fun-titre').value = fun.titre || '';
+  $('#set-fun-sous').value = fun.soustitre || '';
+  $('#set-fun-bulle').value = fun.bulle || '';
+  $('#fun-dialog').showModal();
+}
+
+// Enregistre l'intro dans tous les sites du poste (photo et son compris).
+async function saveFunDialog() {
+  if ($('#fun-dialog').returnValue !== 'save') return;
+  const fun = funSettings();
+  try {
+    const r = await call(api.funSaveAll(fun));
+    S.site = { ...S.site, fun };
+    toast(r.echecs.length ? `Non enregistré sur : ${r.echecs.join(', ')}` : 'Enregistré.', r.echecs.length ? 6000 : 2500);
+  } catch (err) {
+    toast(`Non enregistré : ${err.message}`);
+  }
+}
+
 async function renderFunPhoto() {
   const url = await funPhotoUrl(settingsFunPhoto);
   $('#set-fun-photo-box').hidden = !url;
@@ -2443,17 +2477,6 @@ function openSettings() {
   renderSettingsSups();
   settingsUsers = [...S.users];
   renderSettingsUsers();
-  const fun = (S.site && S.site.fun) || {};
-  $('#set-fun-user').replaceChildren(h('option', { value: '' }, 'Personne'),
-    ...[...new Set([...S.users, fun.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === fun.user }, u)));
-  $('#set-fun-ruban').value = fun.ruban || '';
-  settingsFunPhoto = fun.photo || null;
-  settingsFunBouche = fun.bouche || null;
-  settingsFunSon = fun.son || null;
-  renderFunPhoto();
-  $('#set-fun-titre').value = fun.titre || '';
-  $('#set-fun-sous').value = fun.soustitre || '';
-  $('#set-fun-bulle').value = fun.bulle || '';
   settingsAgents = [...S.agents];
   renderSettingsAgents();
   $('#set-version').textContent = updateInfo ? `Liaison ${updateInfo.current}${updateInfo.update ? ` — version ${updateInfo.update.version} disponible` : ' — à jour'}` : '';
@@ -2519,6 +2542,8 @@ function initSettings() {
       toast(err.message);
     }
   });
+  $('#btn-fun-coin').addEventListener('click', openFunDialog);
+  $('#fun-dialog').addEventListener('close', saveFunDialog);
   $('#set-fun-test').addEventListener('click', async () => playFunIntro(funSettings() || {}, await funPhotoUrl(settingsFunPhoto), await funSonUrl(settingsFunSon)));
   $('#set-fun-son').addEventListener('click', async () => {
     const son = await call(api.funPickSound()).catch((err) => { toast(err.message); return null; });
@@ -2552,19 +2577,8 @@ function initSettings() {
     const dirChanged = $('#set-dir').value !== S.config.dataDir;
     const nom = $('#set-site-nom').value.trim();
     const entTon = $('#set-entrees-ton').checked;
-    const fun = funSettings();
     if (!dirChanged && (nom !== ((S.site && S.site.nom) || '') || entTon !== M.entreesTonnage(S.site))) {
       S.site = await call(api.saveSite({ ...S.site, nom, entreesTonnage: entTon }));
-    }
-    // Intro fun : recopiée dans tous les sites du poste (photo et son compris).
-    if (!dirChanged && JSON.stringify(fun) !== JSON.stringify((S.site && S.site.fun) || null)) {
-      try {
-        const r = await call(api.funSaveAll(fun));
-        S.site = { ...S.site, fun };
-        if (r.echecs.length) toast(`Intro non enregistrée sur : ${r.echecs.join(', ')}`, 6000);
-      } catch (err) {
-        toast(`Intro non enregistrée : ${err.message}`);
-      }
     }
     S.config = await call(api.setConfig({
       poste: $('#set-poste').value.trim(), dataDir: $('#set-dir').value, sites: settingsSites.map((x) => ({ dataDir: x.dataDir })),

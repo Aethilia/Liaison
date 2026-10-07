@@ -42,7 +42,9 @@ d'un service, comme si rien n'avait été fait (un service clôturé doit d'abor
 
 ## Intro fun 🔥
 
-⚙ Paramètres → *Intro fun* : choisir **un** responsable. Juste après le clic
+Réglage discret, hors des Paramètres : cliquer sur le **numéro de version** en
+bas à droite de l'écran d'accueil (fenêtre *Diagnostic*), puis choisir **un**
+responsable. Juste après le clic
 sur son nom, une intro plein écran d'environ 3,5 secondes se joue, façon
 générique de cinéma : anneau doré, ruban gravé, pellicules, et **sa photo qui
 rugit** au centre (la mâchoire s'ouvre), puis textes WordArt et accord de cuivres.
