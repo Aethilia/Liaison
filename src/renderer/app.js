@@ -337,15 +337,27 @@ async function pickSite(dataDir) {
 async function farceAuChoixDuSite() {
   const trouve = await call(api.funFind(S.user, 'farce')).catch(() => null);
   if (!trouve) return;
-  if (trouve.fun.frequence === 'jour') {
-    const cle = `liaison.farce.${S.user}`;
+  if (!uneFoisParJour(trouve.fun, 'farce')) return;
+  await playEcranBleu();
+}
+
+// « Une fois par jour » : vrai si la farce peut se jouer (et note qu'elle l'a été).
+function uneFoisParJour(reglage, nom) {
+  if (reglage.frequence === 'jour') {
+    const cle = `liaison.${nom}.${S.user}`;
     const auj = new Date().toLocaleDateString('fr-CA'); // AAAA-MM-JJ, heure locale
     try {
-      if (localStorage.getItem(cle) === auj) return;
+      if (localStorage.getItem(cle) === auj) return false;
       localStorage.setItem(cle, auj);
     } catch { /* stockage indisponible : on la joue */ }
   }
-  await playEcranBleu();
+  return true;
+}
+
+// Petit bonhomme « LET'S GO » quand la personne choisie ouvre sa main courante.
+async function bonhommeALEntree() {
+  const trouve = await call(api.funFind(S.user, 'bonhomme')).catch(() => null);
+  if (trouve && uneFoisParJour(trouve.fun, 'bonhomme')) playBonhomme(trouve.fun.texte || undefined);
 }
 
 // « + Ajouter un site » : choix du dossier puis du nom (gardé s'il en a déjà un).
@@ -453,6 +465,7 @@ async function enterService(id, view = 'saisie') {
   showScreen('app');
   setView(view, { silent: true });
   await goTo(S.date, id);
+  bonhommeALEntree();
   const s = cur();
   // Responsable prérempli mais pas enregistré tant que rien d'autre n'est saisi :
   // ouvrir un service (jour non travaillé) ne le marque pas comme commencé.
@@ -2445,6 +2458,11 @@ async function openFunDialog() {
   $('#set-clic-user').replaceChildren(h('option', { value: '' }, 'Personne'), h('option', { value: '*', selected: clic.user === '*' }, 'Tout le monde'),
     ...[...new Set([...S.users, clic.user].filter((u) => u && u !== '*'))].map((u) => h('option', { value: u, selected: u === clic.user }, u)));
   settingsClicSon = clic.son || null;
+  const bonh = (S.site && S.site.bonhomme) || {};
+  $('#set-bonhomme-user').replaceChildren(h('option', { value: '' }, 'Personne'),
+    ...[...new Set([...S.users, bonh.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === bonh.user }, u)));
+  $('#set-bonhomme-freq').value = bonh.frequence || 'toujours';
+  $('#set-bonhomme-texte').value = bonh.texte || '';
   const caca = (S.site && S.site.caca) || {};
   $('#set-caca-user').replaceChildren(h('option', { value: '' }, 'Personne'), h('option', { value: '*', selected: caca.user === '*' }, 'Tout le monde'),
     ...[...new Set([...S.users, caca.user].filter((u) => u && u !== '*'))].map((u) => h('option', { value: u, selected: u === caca.user }, u)));
@@ -2459,9 +2477,11 @@ async function saveFunDialog() {
   const farce = $('#set-farce-user').value ? { user: $('#set-farce-user').value, frequence: $('#set-farce-freq').value } : null;
   const clic = $('#set-clic-user').value && settingsClicSon ? { user: $('#set-clic-user').value, son: settingsClicSon } : null;
   const caca = $('#set-caca-user').value ? { user: $('#set-caca-user').value } : null;
+  const bonhomme = $('#set-bonhomme-user').value
+    ? { user: $('#set-bonhomme-user').value, frequence: $('#set-bonhomme-freq').value, texte: $('#set-bonhomme-texte').value.trim() } : null;
   try {
-    const r = await call(api.funSaveAll(fun, farce, clic, caca));
-    S.site = { ...S.site, fun, farce, clic, caca };
+    const r = await call(api.funSaveAll(fun, farce, clic, caca, bonhomme));
+    S.site = { ...S.site, fun, farce, clic, caca, bonhomme };
     chargerSonClic();
     toast(r.echecs.length ? `Non enregistré sur : ${r.echecs.join(', ')}` : 'Enregistré.', r.echecs.length ? 6000 : 2500);
   } catch (err) {
@@ -2599,6 +2619,10 @@ function initSettings() {
   $('#btn-fun-coin').addEventListener('click', openFunDialog);
   $('#set-farce-test').addEventListener('click', () => playEcranBleu());
   $('#set-caca-test').addEventListener('click', (e) => cacaTombe(e.currentTarget));
+  $('#set-bonhomme-test').addEventListener('click', () => {
+    $('#fun-dialog').close('cancel');
+    playBonhomme($('#set-bonhomme-texte').value.trim() || undefined).then(() => $('#fun-dialog').showModal());
+  });
   $('#set-clic-son').addEventListener('click', async () => {
     const son = await call(api.funPickSound()).catch((err) => { toast(err.message); return null; });
     if (!son) return;

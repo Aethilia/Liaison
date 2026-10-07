@@ -248,7 +248,7 @@ const memeNom = (a, b) => String(a || '').trim().toLowerCase() === String(b || '
 // Intro fun d'un responsable : relue à neuf dans tous les sites du poste.
 // `cle` : 'fun' (intro au choix du nom) ou 'farce' (écran bleu au choix du site).
 handle('fun:find', (nom, cle = 'fun') => {
-  if (!['fun', 'farce', 'clic', 'caca'].includes(cle)) throw new Error('Réglage inconnu.');
+  if (!['fun', 'farce', 'clic', 'caca', 'bonhomme'].includes(cle)) throw new Error('Réglage inconnu.');
   const dirs = [config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)];
   for (const dir of [...new Set(dirs)]) {
     try {
@@ -260,7 +260,7 @@ handle('fun:find', (nom, cle = 'fun') => {
 });
 // Enregistre l'intro dans TOUS les sites connus du poste (réglage, photo, son),
 // pour qu'elle se joue quel que soit le site choisi au démarrage.
-handle('fun:saveAll', (fun, farce, clic, caca) => {
+handle('fun:saveAll', (fun, farce, clic, caca, bonhomme) => {
   const src = config.dataDir;
   const dirs = [...new Set([src, ...withSites(config).sites.map((x) => x.dataDir)])];
   const copier = (rel, dir) => {
@@ -280,7 +280,7 @@ handle('fun:saveAll', (fun, farce, clic, caca) => {
         if (fun.son) copier(fun.son.rel, dir);
       }
       if (clic && clic.son) copier(clic.son.rel, dir);
-      st.saveSite({ ...st.loadSite(), fun, ...(farce !== undefined ? { farce } : {}), ...(clic !== undefined ? { clic } : {}), ...(caca !== undefined ? { caca } : {}) });
+      st.saveSite({ ...st.loadSite(), fun, ...(farce !== undefined ? { farce } : {}), ...(clic !== undefined ? { clic } : {}), ...(caca !== undefined ? { caca } : {}), ...(bonhomme !== undefined ? { bonhomme } : {}) });
     } catch (err) {
       echecs.push(`${path.basename(dir)} : ${err.message}`);
     }

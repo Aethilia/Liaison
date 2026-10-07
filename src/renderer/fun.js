@@ -546,3 +546,183 @@ function cacaTombe(champ) {
   hote.append(el);
   el.addEventListener('animationend', () => el.remove());
 }
+
+// ---------- Petit bonhomme en pixel art (tenue haute visibilité) ----------
+// Une lettre = un pixel. Palette : cheveux, peau, barbe, gilet jaune et bandes
+// réfléchissantes, haut marine, pantalon jaune, chaussures de sécurité.
+const PIX = {
+  K: '#1b1b1b', H: '#2a1b12', h: '#43301f', S: '#c98d62', s: '#a8704a', B: '#3a281c', W: '#ffffff', E: '#141414', M: '#7a2e22',
+  Y: '#ffe417', y: '#d6bd00', R: '#d9dde2', r: '#9aa1a8', N: '#1f3557', n: '#162741', P: '#f4d20a', p: '#c7a900',
+  O: '#202020', o: '#5c5c5c', G: '#8a8f96',
+};
+const PIX_TETE = [
+  '......HHHH......',
+  '....HHHHHHHH....',
+  '...HHHhhhhHHH...',
+  '...HHSSSSSSHH...',
+  '...HSSSSSSSSH...',
+  '...sSESSSSESs...',
+  '...sSSSSSSSSs...',
+  '....SSSssSSS....',
+  '....BSWWWWSB....',
+  '....BBMMMMBB....',
+  '.....BBBBBB.....',
+  '......SSSS......',
+];
+const PIX_CORPS_BAS = [ // bras le long du corps
+  '...NYYYYYYYYN...',
+  '..NNYYyYYyYYNN..',
+  '..NNRRRRRRRRNN..',
+  '..NnYYYYYYYYnN..',
+  '..NnYYyYYyYYnN..',
+  '..SSRRRRRRRRSS..',
+  '..SSYYYYYYYYSS..',
+  '....KKKKKKKK....',
+];
+const PIX_CORPS_HAUT = [ // bras levés (tient la pancarte)
+  '....YYYYYYYY....',
+  '....YYyYYyYY....',
+  '....RRRRRRRR....',
+  '....YYYYYYYY....',
+  '....YYyYYyYY....',
+  '....RRRRRRRR....',
+  '....YYYYYYYY....',
+  '....KKKKKKKK....',
+];
+const PIX_JAMBES = {
+  droit: ['....PPPPPPPP....', '....PPP..PPP....', '....PPp..pPP....', '....RRR..RRR....', '....PPP..PPP....', '....PPp..pPP....', '...OOOO..OOOO...', '...GOOo..oOOG...'],
+  pas1: ['....PPPPPPPP....', '...PPP...PPP....', '...PPp....pPP...', '..RRR......RRR..', '..PPP......PPP..', '..PPp......pPP..', '.OOOO......OOOO.', '.GOOo......oOOG.'],
+  pas2: ['....PPPPPPPP....', '....PPP.PPP.....', '.....PPPPPp.....', '.....RRRRRR.....', '.....PPPPPP.....', '.....PPpPPp.....', '....OOOOOOO.....', '....GOOoOOG.....'],
+};
+// Bras levés : manches qui montent le long de la tête jusqu'aux mains.
+function pixBrasLeves(lignes) {
+  const out = lignes.map((l) => l.split(''));
+  for (let r = 0; r <= 13; r++) {
+    for (const c of [1, 2, 13, 14]) out[r][c] = r <= 1 ? 'S' : (c === 2 || c === 13 ? 'N' : 'n');
+  }
+  // Épaules : relient les bras levés au gilet.
+  for (const r of [12, 13]) for (const c of [3, 12]) out[r][c] = 'N';
+  return out.map((l) => l.join(''));
+}
+function pixFrame(jambes, brasLeves = false) {
+  const lignes = [...PIX_TETE, ...(brasLeves ? PIX_CORPS_HAUT : PIX_CORPS_BAS), ...PIX_JAMBES[jambes]];
+  return brasLeves ? pixBrasLeves(lignes) : lignes;
+}
+function pixSvg(lignes, cls) {
+  const w = lignes[0].length;
+  const rects = [];
+  lignes.forEach((l, y) => [...l].forEach((ch, x) => { if (PIX[ch]) rects.push(`<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${PIX[ch]}"/>`); }));
+  return `<svg class="${cls}" viewBox="0 0 ${w} ${lignes.length}" shape-rendering="crispEdges">${rects.join('')}</svg>`;
+}
+// Police pixel 5×7 pour la pancarte.
+const PIX_FONT = {
+  "A": [".111.", "1...1", "1...1", "11111", "1...1", "1...1", "1...1"],
+  "B": ["1111.", "1...1", "1...1", "1111.", "1...1", "1...1", "1111."],
+  "C": [".1111", "1....", "1....", "1....", "1....", "1....", ".1111"],
+  "D": ["1111.", "1...1", "1...1", "1...1", "1...1", "1...1", "1111."],
+  "E": ["11111", "1....", "1....", "1111.", "1....", "1....", "11111"],
+  "F": ["11111", "1....", "1....", "1111.", "1....", "1....", "1...."],
+  "G": [".111.", "1...1", "1....", "1.111", "1...1", "1...1", ".111."],
+  "H": ["1...1", "1...1", "1...1", "11111", "1...1", "1...1", "1...1"],
+  "I": ["111", ".1.", ".1.", ".1.", ".1.", ".1.", "111"],
+  "J": ["..111", "...1.", "...1.", "...1.", "1..1.", "1..1.", ".11.."],
+  "K": ["1...1", "1..1.", "1.1..", "11...", "1.1..", "1..1.", "1...1"],
+  "L": ["1....", "1....", "1....", "1....", "1....", "1....", "11111"],
+  "M": ["1...1", "11.11", "1.1.1", "1.1.1", "1...1", "1...1", "1...1"],
+  "N": ["1...1", "11..1", "1.1.1", "1..11", "1...1", "1...1", "1...1"],
+  "O": [".111.", "1...1", "1...1", "1...1", "1...1", "1...1", ".111."],
+  "P": ["1111.", "1...1", "1...1", "1111.", "1....", "1....", "1...."],
+  "Q": [".111.", "1...1", "1...1", "1...1", "1.1.1", "1..1.", ".11.1"],
+  "R": ["1111.", "1...1", "1...1", "1111.", "1.1..", "1..1.", "1...1"],
+  "S": [".1111", "1....", "1....", ".111.", "....1", "....1", "1111."],
+  "T": ["11111", "..1..", "..1..", "..1..", "..1..", "..1..", "..1.."],
+  "U": ["1...1", "1...1", "1...1", "1...1", "1...1", "1...1", ".111."],
+  "V": ["1...1", "1...1", "1...1", "1...1", "1...1", ".1.1.", "..1.."],
+  "W": ["1...1", "1...1", "1...1", "1.1.1", "1.1.1", "11.11", "1...1"],
+  "X": ["1...1", "1...1", ".1.1.", "..1..", ".1.1.", "1...1", "1...1"],
+  "Y": ["1...1", "1...1", ".1.1.", "..1..", "..1..", "..1..", "..1.."],
+  "Z": ["11111", "....1", "...1.", "..1..", ".1...", "1....", "11111"],
+  "0": [".111.", "1...1", "1..11", "1.1.1", "11..1", "1...1", ".111."],
+  "1": [".1.", "11.", ".1.", ".1.", ".1.", ".1.", "111"],
+  "2": [".111.", "1...1", "....1", "...1.", "..1..", ".1...", "11111"],
+  "3": ["1111.", "....1", "....1", ".111.", "....1", "....1", "1111."],
+  "4": ["...1.", "..11.", ".1.1.", "1..1.", "11111", "...1.", "...1."],
+  "5": ["11111", "1....", "1111.", "....1", "....1", "1...1", ".111."],
+  "6": [".111.", "1....", "1....", "1111.", "1...1", "1...1", ".111."],
+  "7": ["11111", "....1", "...1.", "..1..", ".1...", ".1...", ".1..."],
+  "8": [".111.", "1...1", "1...1", ".111.", "1...1", "1...1", ".111."],
+  "9": [".111.", "1...1", "1...1", ".1111", "....1", "....1", ".111."],
+  "'": ["1", "1", ".", ".", ".", ".", "."],
+  "!": ["1", "1", "1", "1", "1", ".", "1"],
+  "?": [".111.", "1...1", "....1", "...1.", "..1..", ".....", "..1.."],
+  "-": ["...", "...", "...", "111", "...", "...", "..."],
+  ".": [".", ".", ".", ".", ".", ".", "1"],
+  " ": ["...", "...", "...", "...", "...", "...", "..."],
+};
+function pixPancarte(texte) {
+  const sansAccent = texte.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’`]/g, "'").toUpperCase();
+  const glyphes = [...sansAccent].map((c) => PIX_FONT[c] || PIX_FONT[' ']);
+  const largeurTexte = glyphes.reduce((a, g) => a + g[0].length + 1, -1);
+  const W = largeurTexte + 6;
+  const lignes = [];
+  const H = 13;
+  for (let y = 0; y < H; y++) {
+    let l = '';
+    for (let x = 0; x < W; x++) l += (y === 0 || y === H - 1 || x === 0 || x === W - 1) ? 'K' : 'C';
+    lignes.push(l.split(''));
+  }
+  let x0 = 3;
+  for (const g of glyphes) {
+    g.forEach((row, y) => [...row].forEach((v, dx) => { if (v === '1') lignes[y + 3][x0 + dx] = 'X'; }));
+    x0 += g[0].length + 1;
+  }
+  // Manche en bois sous la pancarte.
+  for (let y = 0; y < 3; y++) {
+    const l = '.'.repeat(W).split('');
+    l[Math.floor(W / 2)] = 'b';
+    lignes.push(l);
+  }
+  const pal = { ...PIX, C: '#f6ecd2', X: '#d0101a', b: '#8a5a2b' };
+  const rects = [];
+  lignes.forEach((l, y) => l.forEach((ch, x) => { if (pal[ch]) rects.push(`<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${pal[ch]}"/>`); }));
+  return { svg: `<svg class="pix-pancarte" viewBox="0 0 ${W} ${lignes.length}" shape-rendering="crispEdges">${rects.join('')}</svg>`, w: W, h: lignes.length };
+}
+
+// Il entre à gauche, marche jusqu'au milieu, lève la pancarte, puis repart à droite.
+function playBonhomme(texte = "LET'S GO") {
+  return new Promise((resolve) => {
+    const echelle = Math.max(5, Math.round(window.innerHeight / 110)); // taille d'un pixel
+    const L = 16 * echelle;
+    const frames = { pas1: pixSvg(pixFrame('pas1'), 'pix-bonhomme'), droit: pixSvg(pixFrame('droit'), 'pix-bonhomme'), pas2: pixSvg(pixFrame('pas2'), 'pix-bonhomme'), leve: pixSvg(pixFrame('droit', true), 'pix-bonhomme') };
+    const panc = pixPancarte(texte);
+    const corps = h('div', { class: 'pix-corps', style: { width: `${L}px`, height: `${28 * echelle}px` } });
+    const pancarte = h('div', { class: 'pix-panc', style: { width: `${panc.w * echelle}px`, height: `${panc.h * echelle}px`, left: `${(L - panc.w * echelle) / 2}px`, bottom: `${(28 - 2) * echelle}px` } });
+    pancarte.innerHTML = panc.svg;
+    const perso = h('div', { class: 'pix-perso', style: { width: `${L}px` } }, pancarte, corps);
+    const scene = h('div', { class: 'pix-scene', role: 'presentation' }, perso);
+    document.body.append(scene);
+    const montre = (f) => { corps.innerHTML = frames[f]; };
+    const cycle = ['pas1', 'droit', 'pas2', 'droit'];
+    let i = 0;
+    montre('droit');
+    const pas = setInterval(() => { montre(cycle[i++ % 4]); }, 140);
+    const milieu = (window.innerWidth - L) / 2;
+    const fin = window.innerWidth + 20;
+    const marche = (de, a, ms) => perso.animate([{ transform: `translateX(${de}px)` }, { transform: `translateX(${a}px)` }], { duration: ms, fill: 'forwards' }).finished;
+    (async () => {
+      await marche(-L - 20, milieu, 2600);
+      clearInterval(pas);
+      montre('leve');
+      pancarte.classList.add('on');
+      await new Promise((r) => setTimeout(r, 2600));
+      pancarte.classList.remove('on');
+      montre('droit');
+      i = 0;
+      const pas2 = setInterval(() => { montre(cycle[i++ % 4]); }, 140);
+      await marche(milieu, fin, 2200);
+      clearInterval(pas2);
+      scene.remove();
+      resolve();
+    })();
+  });
+}

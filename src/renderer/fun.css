@@ -125,3 +125,13 @@
   74% { transform: translate(0, 0) scale(1); opacity: 1; }
   100% { transform: translate(6px, 46px) rotate(12deg) scale(.9); opacity: 0; }
 }
+
+/* ---------- Petit bonhomme pixel art ---------- */
+.pix-scene { position: fixed; left: 0; right: 0; bottom: 34px; height: 0; z-index: 1400; pointer-events: none; }
+.pix-perso { position: absolute; left: 0; bottom: 0; }
+.pix-corps { position: relative; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .25)); animation: pix-bob .28s steps(2) infinite; }
+.pix-corps svg, .pix-panc svg { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.pix-panc { position: absolute; transform: translateY(40px) scale(.2); opacity: 0; transform-origin: 50% 100%; transition: transform .25s steps(4), opacity .1s; }
+.pix-panc.on { transform: none; opacity: 1; animation: pix-panc 0.5s steps(2) .3s infinite alternate; }
+@keyframes pix-panc { to { transform: translateY(-4px) rotate(-2deg); } }
+@keyframes pix-bob { 50% { transform: translateY(-2px); } }
