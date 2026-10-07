@@ -58,6 +58,7 @@
     funPickSound: () => ok(window.__sonPick || null),
     funReadSound: () => ok(window.__sonUrl || 'data:audio/wav;base64,'),
     funFind: (nom) => ok(site.fun && site.fun.user === nom ? { dataDir: config.dataDir, fun: site.fun } : null),
+    funSaveAll: (fun) => { site = { ...site, fun }; return ok({ sites: 1, echecs: [] }); },
     funReadPhoto: (rel) => ok(photos[rel] || SAMPLE_IMG),
     sitesOverview: () => ok((window.__sites || [{ dataDir: config.dataDir, nom: 'Tronc principal', superviseurs: [] }]).map((x) => ({
       responsables: users, superviseurs: [], ...x, actif: x.dataDir === config.dataDir,

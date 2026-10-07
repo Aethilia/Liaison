@@ -51,8 +51,9 @@ rugit** au centre (la mâchoire s'ouvre), puis textes WordArt et accord de cuivr
 - **Son** : *Choisir un son…* (MP3, WAV, OGG… 10 Mo max) pour un vrai
   rugissement, joué quand la mâchoire s'ouvre ; sinon rugissement synthétisé.
 - **Textes** libres : ruban, titre, sous-titre, bulle. *Tester* la montre.
-- Un clic ou Échap la passe. Réglage par site ; photo et son sont copiés dans
-  le dossier du site (`photos/`, `fun/`).
+- Un clic ou Échap la passe. À l'enregistrement, le réglage, la photo et le son
+  sont recopiés dans **tous les sites** connus du poste (CTVO, CPTP…) : l'intro
+  se joue quel que soit le site ou le poste où il choisit son nom.
 
 ## Observations
 

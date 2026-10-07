@@ -256,6 +256,34 @@ handle('fun:find', (nom) => {
   }
   return null;
 });
+// Enregistre l'intro dans TOUS les sites connus du poste (réglage, photo, son),
+// pour qu'elle se joue quel que soit le site choisi au démarrage.
+handle('fun:saveAll', (fun) => {
+  const src = config.dataDir;
+  const dirs = [...new Set([src, ...withSites(config).sites.map((x) => x.dataDir)])];
+  const copier = (rel, dir) => {
+    if (!rel || dir === src) return;
+    const from = path.resolve(src, rel);
+    const to = path.resolve(dir, rel);
+    if (!to.startsWith(path.resolve(dir) + path.sep) || !fs.existsSync(from) || fs.existsSync(to)) return;
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(from, to);
+  };
+  const echecs = [];
+  for (const dir of dirs) {
+    try {
+      const st = new Store(dir);
+      if (fun) {
+        copier(fun.photo, dir);
+        if (fun.son) copier(fun.son.rel, dir);
+      }
+      st.saveSite({ ...st.loadSite(), fun });
+    } catch (err) {
+      echecs.push(`${path.basename(dir)} : ${err.message}`);
+    }
+  }
+  return { sites: dirs.length, echecs };
+});
 handle('fun:readPhoto', (rel, dataDir) => {
   const img = nativeImage.createFromPath(new Store(funDir(dataDir)).photoPath(rel));
   if (img.isEmpty()) throw new Error('Photo introuvable.');

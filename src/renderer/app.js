@@ -2553,8 +2553,18 @@ function initSettings() {
     const nom = $('#set-site-nom').value.trim();
     const entTon = $('#set-entrees-ton').checked;
     const fun = funSettings();
-    if (!dirChanged && (nom !== ((S.site && S.site.nom) || '') || entTon !== M.entreesTonnage(S.site) || JSON.stringify(fun) !== JSON.stringify((S.site && S.site.fun) || null))) {
-      S.site = await call(api.saveSite({ ...S.site, nom, entreesTonnage: entTon, fun }));
+    if (!dirChanged && (nom !== ((S.site && S.site.nom) || '') || entTon !== M.entreesTonnage(S.site))) {
+      S.site = await call(api.saveSite({ ...S.site, nom, entreesTonnage: entTon }));
+    }
+    // Intro fun : recopiée dans tous les sites du poste (photo et son compris).
+    if (!dirChanged && JSON.stringify(fun) !== JSON.stringify((S.site && S.site.fun) || null)) {
+      try {
+        const r = await call(api.funSaveAll(fun));
+        S.site = { ...S.site, fun };
+        if (r.echecs.length) toast(`Intro non enregistrée sur : ${r.echecs.join(', ')}`, 6000);
+      } catch (err) {
+        toast(`Intro non enregistrée : ${err.message}`);
+      }
     }
     S.config = await call(api.setConfig({
       poste: $('#set-poste').value.trim(), dataDir: $('#set-dir').value, sites: settingsSites.map((x) => ({ dataDir: x.dataDir })),
