@@ -294,7 +294,7 @@ async function chooseUser(u) {
   }
   S.user = u.nom;
   S.userEntry = u;
-  if (S.site && S.site.fun && S.site.fun.user === u.nom) await playFunIntro(S.site.fun, await funPhotoUrl(S.site.fun.photo));
+  if (S.site && S.site.fun && S.site.fun.user === u.nom) await playFunIntro(S.site.fun, await funPhotoUrl(S.site.fun.photo), await funSonUrl(S.site.fun.son));
   try {
     localStorage.setItem('liaison.lastUser', u.nom);
   } catch { /* stockage indisponible */ }
@@ -2359,15 +2359,17 @@ let settingsAgents = [];
 // Intro fun : un seul responsable, photo et textes facultatifs (null = désactivée).
 let settingsFunPhoto = null;
 let settingsFunBouche = null;
+let settingsFunSon = null;
 function funSettings() {
   const user = $('#set-fun-user').value;
   if (!user) return null;
   return {
-    user, photo: settingsFunPhoto, bouche: settingsFunBouche, ruban: $('#set-fun-ruban').value.trim(),
+    user, photo: settingsFunPhoto, bouche: settingsFunBouche, son: settingsFunSon, ruban: $('#set-fun-ruban').value.trim(),
     titre: $('#set-fun-titre').value.trim(), soustitre: $('#set-fun-sous').value.trim(), bulle: $('#set-fun-bulle').value.trim(),
   };
 }
 
+const funSonUrl = (son) => (son && son.rel ? call(api.funReadSound(son.rel)).catch(() => null) : Promise.resolve(null));
 const funPhotoUrl = (rel) => (rel ? call(api.readPhoto(rel)).catch(() => null) : Promise.resolve(null));
 
 async function renderFunPhoto() {
@@ -2378,6 +2380,8 @@ async function renderFunPhoto() {
   $('#set-fun-bouche').style.left = `${b.x * 100}%`;
   $('#set-fun-bouche').style.top = `${b.y * 100}%`;
   $('#set-fun-photo-rm').hidden = !settingsFunPhoto;
+  $('#set-fun-son-nom').textContent = settingsFunSon ? settingsFunSon.nom : 'Rugissement synthétisé';
+  $('#set-fun-son-rm').hidden = !settingsFunSon;
 }
 
 function renderSettingsAgents() {
@@ -2436,6 +2440,7 @@ function openSettings() {
   $('#set-fun-ruban').value = fun.ruban || '';
   settingsFunPhoto = fun.photo || null;
   settingsFunBouche = fun.bouche || null;
+  settingsFunSon = fun.son || null;
   renderFunPhoto();
   $('#set-fun-titre').value = fun.titre || '';
   $('#set-fun-sous').value = fun.soustitre || '';
@@ -2505,7 +2510,17 @@ function initSettings() {
       toast(err.message);
     }
   });
-  $('#set-fun-test').addEventListener('click', async () => playFunIntro(funSettings() || {}, await funPhotoUrl(settingsFunPhoto)));
+  $('#set-fun-test').addEventListener('click', async () => playFunIntro(funSettings() || {}, await funPhotoUrl(settingsFunPhoto), await funSonUrl(settingsFunSon)));
+  $('#set-fun-son').addEventListener('click', async () => {
+    const son = await call(api.funPickSound()).catch((err) => { toast(err.message); return null; });
+    if (!son) return;
+    settingsFunSon = son;
+    renderFunPhoto();
+  });
+  $('#set-fun-son-rm').addEventListener('click', () => {
+    settingsFunSon = null;
+    renderFunPhoto();
+  });
   $('#set-fun-photo').addEventListener('click', async () => {
     const rels = await call(api.pickPhotos(S.date)).catch((err) => { toast(err.message); return []; });
     if (!rels.length) return;

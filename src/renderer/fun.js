@@ -212,7 +212,7 @@ function funPhoto(url) {
 // Bande-son façon générique de cinéma, entièrement synthétisée :
 // coup sourd (0 s), grognement (0,45 s), grand rugissement (1 s), accord de
 // cuivres (2 s), le tout dans l'écho d'une grande salle.
-function funSon(AC = window.AudioContext || window.webkitAudioContext) {
+function funSon(AC = window.AudioContext || window.webkitAudioContext, { rugissement = true } = {}) {
   if (!AC) return null;
   let ctx;
   try {
@@ -364,8 +364,10 @@ function funSon(AC = window.AudioContext || window.webkitAudioContext) {
   };
 
   // 2) Grognement quand la photo apparaît, 3) grand rugissement.
-  voix(t0 + 0.42, 0.4, 85, 110, 70, 0.55, 0.8);
-  voix(t0 + 1.0, 1.35, 105, 190, 78, 1, 1.15);
+  if (rugissement) {
+    voix(t0 + 0.42, 0.4, 85, 110, 70, 0.55, 0.8);
+    voix(t0 + 1.0, 1.35, 105, 190, 78, 1, 1.15);
+  }
 
   // 4) Accord de cuivres majestueux (do majeur) qui enfle puis s'éteint.
   const tc = t0 + 2.05;
@@ -404,9 +406,27 @@ function funSon(AC = window.AudioContext || window.webkitAudioContext) {
   return ctx;
 }
 
-async function playFunIntro(cfg = {}, photoUrl = null) {
+// Vrai son fourni par l'utilisateur : joué quand la mâchoire s'ouvre (1 s),
+// coupé en fondu à la fin de l'intro.
+function funSonPerso(url) {
+  if (!url) return null;
+  const a = new Audio(url);
+  a.preload = 'auto';
+  const timer = setTimeout(() => a.play().catch(() => {}), 950);
+  return {
+    stop: () => {
+      clearTimeout(timer);
+      const fin = setInterval(() => {
+        a.volume = Math.max(0, a.volume - 0.1);
+        if (a.volume <= 0.01) { a.pause(); clearInterval(fin); }
+      }, 40);
+    },
+  };
+}
+
+async function playFunIntro(cfg = {}, photoUrl = null, sonUrl = null) {
   const photo = await funPhoto(photoUrl);
-  const c = { ...FUN_DEFAUT, ...Object.fromEntries(Object.entries(cfg).filter(([k, v]) => v && k !== 'photo' && k !== 'bouche')) };
+  const c = { ...FUN_DEFAUT, ...Object.fromEntries(Object.entries(cfg).filter(([k, v]) => v && !['photo', 'bouche', 'son'].includes(k))) };
   return new Promise((resolve) => {
     // Lettres qui tombent une \u00e0 une (en 0,5 s au plus) ; un texte long est r\u00e9duit pour tenir \u00e0 l'\u00e9cran.
     const lettres = (txt, cls, delai) => (txt ? h('div', { class: cls, style: { fontSize: txt.length > 10 ? `calc(var(--fun-fs) * ${(10 / txt.length).toFixed(2)})` : null } },
@@ -433,6 +453,7 @@ async function playFunIntro(cfg = {}, photoUrl = null) {
       done = true;
       document.removeEventListener('keydown', onKey, true);
       el.classList.add('out');
+      if (perso) perso.stop();
       setTimeout(() => { el.remove(); resolve(); }, 300);
     };
     const onKey = (e) => {
@@ -445,7 +466,8 @@ async function playFunIntro(cfg = {}, photoUrl = null) {
     document.addEventListener('keydown', onKey, true);
     // Dans une fenêtre modale ouverte (bouton « Tester »), sinon elle resterait dessous.
     (document.querySelector('dialog[open]') || document.body).append(el);
-    funSon();
-    setTimeout(end, FUN_DUREE);
+    const perso = funSonPerso(sonUrl);
+    funSon(undefined, { rugissement: !perso });
+    setTimeout(end, perso ? FUN_DUREE + 600 : FUN_DUREE);
   });
 }

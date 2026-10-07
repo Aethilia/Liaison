@@ -55,6 +55,8 @@
     savePhotoData: (d) => { photos['photos/x' + Object.keys(photos).length + '.jpg'] = d; return ok('photos/x' + (Object.keys(photos).length - 1) + '.jpg'); },
     readPhoto: (rel) => ok(photos[rel] || SAMPLE_IMG),
     openPhoto: () => ok(true),
+    funPickSound: () => ok(window.__sonPick || null),
+    funReadSound: () => ok(window.__sonUrl || 'data:audio/wav;base64,'),
     sitesOverview: () => ok((window.__sites || [{ dataDir: config.dataDir, nom: 'Tronc principal', superviseurs: [] }]).map((x) => ({
       responsables: users, superviseurs: [], ...x, actif: x.dataDir === config.dataDir,
     }))),

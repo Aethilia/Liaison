@@ -220,6 +220,30 @@ handle('photo:read', (rel, thumb = false) => {
   return (thumb ? img.resize({ height: 160, quality: 'good' }) : img).toDataURL();
 });
 handle('photo:open', (rel) => shell.openPath(store.photoPath(rel)));
+
+// Son personnel de l'intro fun : copié dans <données>/fun/ pour tous les postes.
+const SON_TYPES = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac', webm: 'audio/webm', flac: 'audio/flac' };
+handle('fun:pickSound', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Choisir le son de l\'intro',
+    filters: [{ name: 'Sons', extensions: Object.keys(SON_TYPES) }],
+    properties: ['openFile'],
+  });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const src = r.filePaths[0];
+  if (fs.statSync(src).size > 10 * 1024 * 1024) throw new Error('Fichier trop lourd (10 Mo maximum).');
+  const ext = path.extname(src).slice(1).toLowerCase();
+  const rel = `fun/son-${Date.now().toString(36)}.${ext}`;
+  fs.mkdirSync(path.join(config.dataDir, 'fun'), { recursive: true });
+  fs.copyFileSync(src, path.join(config.dataDir, rel));
+  return { rel, nom: path.basename(src) };
+});
+handle('fun:readSound', (rel) => {
+  const abs = path.resolve(config.dataDir, rel);
+  if (!abs.startsWith(path.resolve(config.dataDir, 'fun') + path.sep)) throw new Error('Chemin de son invalide.');
+  const type = SON_TYPES[path.extname(abs).slice(1).toLowerCase()] || 'audio/mpeg';
+  return `data:${type};base64,${fs.readFileSync(abs).toString('base64')}`;
+});
 handle('agents:save', (agents) => store.saveAgents(agents));
 
 handle('excel:export', async ({ from, to, suggestedName }) => {
