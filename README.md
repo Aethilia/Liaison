@@ -42,11 +42,17 @@ d'un service, comme si rien n'avait été fait (un service clôturé doit d'abor
 
 ## Intro fun 🔥
 
-⚙ Paramètres → *Intro fun* : choisir **un** responsable et sa photo. Juste
-après le clic sur son nom, une intro plein écran de 3 secondes se joue, façon
-générique de cinéma ringard : anneau doré, ruban, bandes de film, sa photo qui
-rugit au centre, flammes et fanfare. Ruban, titre, sous-titre et bulle sont des
-textes libres ; *Tester* la montre ; un clic ou Échap la passe. Réglage par site.
+⚙ Paramètres → *Intro fun* : choisir **un** responsable. Juste après le clic
+sur son nom, une intro plein écran d'environ 3,5 secondes se joue, façon
+générique de cinéma : anneau doré, ruban gravé, pellicules, et **sa photo qui
+rugit** au centre (la mâchoire s'ouvre), puis textes WordArt et accord de cuivres.
+
+- **Photo** : *Choisir sa photo…*, puis cliquer sur sa bouche dans l'aperçu.
+- **Son** : *Choisir un son…* (MP3, WAV, OGG… 10 Mo max) pour un vrai
+  rugissement, joué quand la mâchoire s'ouvre ; sinon rugissement synthétisé.
+- **Textes** libres : ruban, titre, sous-titre, bulle. *Tester* la montre.
+- Un clic ou Échap la passe. Réglage par site ; photo et son sont copiés dans
+  le dossier du site (`photos/`, `fun/`).
 
 ## Observations
 
