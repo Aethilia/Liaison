@@ -223,17 +223,20 @@ handle('photo:open', (rel) => shell.openPath(store.photoPath(rel)));
 
 // Son personnel de l'intro fun : copié dans <données>/fun/ pour tous les postes.
 const SON_TYPES = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac', webm: 'audio/webm', flac: 'audio/flac' };
-handle('fun:pickSound', async () => {
+const GIF_TYPES = { gif: 'image/gif', webp: 'image/webp', png: 'image/png', apng: 'image/apng' };
+const FUN_TYPES = { ...SON_TYPES, ...GIF_TYPES };
+handle('fun:pickSound', async (genre = 'son') => {
+  const gif = genre === 'gif';
   const r = await dialog.showOpenDialog(win, {
-    title: 'Choisir le son de l\'intro',
-    filters: [{ name: 'Sons', extensions: Object.keys(SON_TYPES) }],
+    title: gif ? 'Choisir un GIF animé' : 'Choisir un son',
+    filters: [gif ? { name: 'Images animées', extensions: Object.keys(GIF_TYPES) } : { name: 'Sons', extensions: Object.keys(SON_TYPES) }],
     properties: ['openFile'],
   });
   if (r.canceled || !r.filePaths[0]) return null;
   const src = r.filePaths[0];
   if (fs.statSync(src).size > 10 * 1024 * 1024) throw new Error('Fichier trop lourd (10 Mo maximum).');
   const ext = path.extname(src).slice(1).toLowerCase();
-  const rel = `fun/son-${Date.now().toString(36)}.${ext}`;
+  const rel = `fun/${gif ? 'gif' : 'son'}-${Date.now().toString(36)}.${ext}`;
   fs.mkdirSync(path.join(config.dataDir, 'fun'), { recursive: true });
   fs.copyFileSync(src, path.join(config.dataDir, rel));
   return { rel, nom: path.basename(src) };
@@ -280,7 +283,10 @@ handle('fun:saveAll', (fun, farce, clic, caca, bonhomme, sons) => {
         if (fun.son) copier(fun.son.rel, dir);
       }
       if (clic && clic.son) copier(clic.son.rel, dir);
-      for (const r of sons || []) if (r && r.son) copier(r.son.rel, dir);
+      for (const r of sons || []) {
+        if (r && r.son) copier(r.son.rel, dir);
+        if (r && r.gif) copier(r.gif.rel, dir);
+      }
       st.saveSite({ ...st.loadSite(), fun, ...(farce !== undefined ? { farce } : {}), ...(clic !== undefined ? { clic } : {}), ...(caca !== undefined ? { caca } : {}), ...(bonhomme !== undefined ? { bonhomme } : {}), ...(sons !== undefined ? { sons } : {}) });
     } catch (err) {
       echecs.push(`${path.basename(dir)} : ${err.message}`);
@@ -303,14 +309,18 @@ handle('fun:sons', (nom) => {
     } catch { continue; }
     const regles = [...(Array.isArray(site.sons) ? site.sons : []), ...(site.clic && site.clic.son ? [{ zone: 'agent', ...site.clic }] : [])];
     if (!regles.length) continue;
-    return regles.filter((r) => r && r.son && (r.user === '*' || memeNom(r.user, nom))).map((r) => {
+    const lire = (f) => {
+      if (!f || !f.rel) return null;
       try {
-        const abs = path.resolve(dir, r.son.rel);
+        const abs = path.resolve(dir, f.rel);
         if (!abs.startsWith(path.resolve(dir, 'fun') + path.sep)) return null;
-        const type = SON_TYPES[path.extname(abs).slice(1).toLowerCase()] || 'audio/mpeg';
-        return { zone: r.zone, url: `data:${type};base64,${fs.readFileSync(abs).toString('base64')}` };
+        const type = FUN_TYPES[path.extname(abs).slice(1).toLowerCase()] || 'audio/mpeg';
+        return `data:${type};base64,${fs.readFileSync(abs).toString('base64')}`;
       } catch { return null; }
-    }).filter(Boolean);
+    };
+    return regles.filter((r) => r && (r.son || r.gif) && (r.user === '*' || memeNom(r.user, nom)))
+      .map((r) => ({ zone: r.zone, url: lire(r.son), gif: lire(r.gif), pos: r.pos, taille: r.taille, duree: r.duree }))
+      .filter((r) => r.url || r.gif);
   }
   return [];
 });
@@ -323,7 +333,7 @@ handle('fun:readSound', (rel, dataDir) => {
   const dir = funDir(dataDir);
   const abs = path.resolve(dir, rel);
   if (!abs.startsWith(path.resolve(dir, 'fun') + path.sep)) throw new Error('Chemin de son invalide.');
-  const type = SON_TYPES[path.extname(abs).slice(1).toLowerCase()] || 'audio/mpeg';
+  const type = FUN_TYPES[path.extname(abs).slice(1).toLowerCase()] || 'audio/mpeg';
   return `data:${type};base64,${fs.readFileSync(abs).toString('base64')}`;
 });
 handle('agents:save', (agents) => store.saveAgents(agents));

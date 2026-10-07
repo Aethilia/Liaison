@@ -748,15 +748,39 @@ const ZONES_SON = [
   ['boutons', 'N’importe quel bouton', 'button'],
   ['partout', 'N’importe où (chaque clic)', '*'],
 ];
-const zoneSon = (id) => ZONES_SON.find((z) => z[0] === id);
+// Moments (pas des clics) qui peuvent aussi déclencher un son ou un GIF.
+const ZONES_EVT = [
+  ['evt-entree', 'Ouverture de la main courante'],
+  ['evt-cloture', 'Clôture du service'],
+];
+const zoneSon = (id) => ZONES_SON.find((z) => z[0] === id) || ZONES_EVT.find((z) => z[0] === id);
+const GIF_POSITIONS = [['centre', 'Au centre'], ['clic', 'À côté du clic'], ['bas-droite', 'En bas à droite'], ['bas-gauche', 'En bas à gauche'], ['haut', 'En haut'], ['plein', 'Plein écran']];
+const GIF_TAILLES = [['petit', 'Petit'], ['moyen', 'Moyen'], ['grand', 'Grand']];
+const GIF_DUREES = [1, 2, 3, 5, 8, 10];
 
 // Règles chargées pour la personne connectée : [{ zone, url }], dans l'ordre des zones.
 let sonsActifs = [];
 function sonPourClic(cible) {
   if (!cible || !cible.closest || cible.closest('dialog, .fun-intro, .ecran-bleu, .coin-discret')) return null;
   for (const r of sonsActifs) {
-    const z = zoneSon(r.zone);
-    if (z && r.url && cible.closest(z[2])) return r.url;
+    const z = ZONES_SON.find((x) => x[0] === r.zone);
+    if (z && cible.closest(z[2])) return r;
   }
   return null;
+}
+
+// GIF animé posé par-dessus l'appli (on clique à travers), puis disparaît.
+function montrerGif(url, { pos = 'centre', taille = 'moyen', duree = 3, x = null, y = null } = {}) {
+  if (!url) return;
+  const px = { petit: 120, moyen: 240, grand: 420 }[taille] || 240;
+  const img = h('img', { src: url, alt: '', class: `fun-gif pos-${pos}` });
+  if (pos !== 'plein') img.style.maxWidth = img.style.maxHeight = `${px}px`;
+  if (pos === 'clic' && x != null) {
+    img.style.left = `${Math.min(window.innerWidth - px - 8, x + 14)}px`;
+    img.style.top = `${Math.max(8, Math.min(window.innerHeight - px - 8, y - px / 2))}px`;
+  }
+  document.body.append(img);
+  const ms = Math.max(1, Math.min(10, Number(duree) || 3)) * 1000;
+  setTimeout(() => img.classList.add('fin'), ms - 300);
+  setTimeout(() => img.remove(), ms);
 }

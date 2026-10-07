@@ -141,3 +141,13 @@
 .son-regle { display: flex; align-items: center; gap: 4px; padding: 5px 8px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; font-size: 13px; }
 .son-regle .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sons-ajout select { flex: 1; min-width: 0; }
+
+/* GIF animé posé sur l'appli (on clique à travers) */
+.fun-gif { position: fixed; z-index: 2500; pointer-events: none; animation: fun-gif-in .3s cubic-bezier(.2, 1.6, .4, 1); transition: opacity .3s, transform .3s; }
+.fun-gif.fin { opacity: 0; transform: scale(.8); }
+.fun-gif.pos-centre { left: 50%; top: 50%; translate: -50% -50%; }
+.fun-gif.pos-bas-droite { right: 24px; bottom: 40px; }
+.fun-gif.pos-bas-gauche { left: 24px; bottom: 40px; }
+.fun-gif.pos-haut { left: 50%; top: 70px; translate: -50% 0; }
+.fun-gif.pos-plein { inset: 0; width: 100vw; height: 100vh; object-fit: contain; background: rgba(0, 0, 0, .35); }
+@keyframes fun-gif-in { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }

@@ -266,20 +266,31 @@
         <small>Faux écran bleu Windows en plein écran pendant 10 secondes quand cette personne choisit son site, puis l'appli reprend normalement (Échap pour l'arrêter).</small>
       </div>
       <div class="field">
-        <span>Sons au clic</span>
+        <span>Sons et GIF</span>
         <div id="sons-liste" class="sons-liste"></div>
         <div class="row sons-ajout">
           <select id="son-zone"></select>
           <select id="son-user"></select>
         </div>
         <div class="row sons-ajout">
-          <button type="button" id="son-fichier" class="btn ghost">Choisir le son…</button>
+          <button type="button" id="son-fichier" class="btn ghost">Choisir un son…</button>
           <span id="son-fichier-nom" class="muted">Aucun son</span>
+        </div>
+        <div class="row sons-ajout">
+          <button type="button" id="gif-fichier" class="btn ghost">Choisir un GIF…</button>
+          <span id="gif-fichier-nom" class="muted">Aucun GIF</span>
+        </div>
+        <div class="row sons-ajout">
+          <select id="gif-pos" title="Où apparaît le GIF"></select>
+          <select id="gif-taille" title="Taille du GIF"></select>
+          <select id="gif-duree" title="Durée d'affichage"></select>
+        </div>
+        <div class="row sons-ajout">
           <span class="spacer"></span>
           <button type="button" id="son-tester" class="btn ghost">Tester</button>
           <button type="button" id="son-ajouter" class="btn">Ajouter</button>
         </div>
-        <small>Choisissez une zone, la personne et un son (MP3, WAV…), puis « Ajouter ». Le son se lance à chaque clic dans cette zone quand la personne est connectée. Plusieurs règles possibles ; la croix en retire une.</small>
+        <small>Une règle = un déclencheur (un clic dans une zone, ou un moment), une personne, et un son et/ou un GIF animé (position, taille et durée réglables). Plusieurs règles possibles ; la croix en retire une. On peut cliquer à travers le GIF.</small>
       </div>
       <div class="field">
         <span>Petite surprise dans les bennes 💩</span>

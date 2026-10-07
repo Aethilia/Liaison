@@ -55,12 +55,13 @@
     savePhotoData: (d) => { photos['photos/x' + Object.keys(photos).length + '.jpg'] = d; return ok('photos/x' + (Object.keys(photos).length - 1) + '.jpg'); },
     readPhoto: (rel) => ok(photos[rel] || SAMPLE_IMG),
     openPhoto: () => ok(true),
-    funPickSound: () => ok(window.__sonPick || null),
-    funReadSound: () => ok(window.__sonUrl || 'data:audio/wav;base64,'),
+    funPickSound: (genre) => ok(genre === 'gif' ? (window.__gifPick || null) : (window.__sonPick || null)),
+    funReadSound: (rel) => ok(String(rel).includes('gif') ? (window.__gifUrl || '') : (window.__sonUrl || 'data:audio/wav;base64,')),
     funFind: (nom, cle = 'fun') => ok(site[cle] && (site[cle].user === nom || site[cle].user === '*') ? { dataDir: config.dataDir, fun: site[cle] } : null),
     funSaveAll: (fun, farce, clic, caca, bonhomme, sons) => { site = { ...site, fun, ...(farce !== undefined ? { farce } : {}), ...(clic !== undefined ? { clic } : {}), ...(caca !== undefined ? { caca } : {}), ...(bonhomme !== undefined ? { bonhomme } : {}), ...(sons !== undefined ? { sons } : {}) }; return ok({ sites: 1, echecs: [] }); },
     setFullScreen: () => ok(true),
-    funSons: (nom) => ok([...(site.sons || []), ...(site.clic && site.clic.son ? [{ zone: 'agent', ...site.clic }] : [])].filter((r) => r.user === '*' || r.user === nom).map((r) => ({ zone: r.zone, url: window.__sonUrl || 'data:audio/wav;base64,' }))),
+    funSons: (nom) => ok([...(site.sons || []), ...(site.clic && site.clic.son ? [{ zone: 'agent', ...site.clic }] : [])].filter((r) => r.user === '*' || r.user === nom)
+      .map((r) => ({ zone: r.zone, url: r.son ? (window.__sonUrl || 'data:audio/wav;base64,') : null, gif: r.gif ? (window.__gifUrl || null) : null, pos: r.pos, taille: r.taille, duree: r.duree }))),
     funReadPhoto: (rel) => ok(photos[rel] || SAMPLE_IMG),
     sitesOverview: () => ok((window.__sites || [{ dataDir: config.dataDir, nom: 'Tronc principal', superviseurs: [] }]).map((x) => ({
       responsables: users, superviseurs: [], ...x, actif: x.dataDir === config.dataDir,
