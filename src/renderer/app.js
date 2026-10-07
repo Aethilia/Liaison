@@ -2358,11 +2358,12 @@ let settingsAgents = [];
 
 // Intro fun : un seul responsable, photo et textes facultatifs (null = désactivée).
 let settingsFunPhoto = null;
+let settingsFunBouche = null;
 function funSettings() {
   const user = $('#set-fun-user').value;
   if (!user) return null;
   return {
-    user, photo: settingsFunPhoto, ruban: $('#set-fun-ruban').value.trim(),
+    user, photo: settingsFunPhoto, bouche: settingsFunBouche, ruban: $('#set-fun-ruban').value.trim(),
     titre: $('#set-fun-titre').value.trim(), soustitre: $('#set-fun-sous').value.trim(), bulle: $('#set-fun-bulle').value.trim(),
   };
 }
@@ -2371,8 +2372,11 @@ const funPhotoUrl = (rel) => (rel ? call(api.readPhoto(rel)).catch(() => null) :
 
 async function renderFunPhoto() {
   const url = await funPhotoUrl(settingsFunPhoto);
-  $('#set-fun-photo-img').hidden = !url;
+  $('#set-fun-photo-box').hidden = !url;
   if (url) $('#set-fun-photo-img').src = url;
+  const b = settingsFunBouche || FUN_BOUCHE;
+  $('#set-fun-bouche').style.left = `${b.x * 100}%`;
+  $('#set-fun-bouche').style.top = `${b.y * 100}%`;
   $('#set-fun-photo-rm').hidden = !settingsFunPhoto;
 }
 
@@ -2431,6 +2435,7 @@ function openSettings() {
     ...[...new Set([...S.users, fun.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === fun.user }, u)));
   $('#set-fun-ruban').value = fun.ruban || '';
   settingsFunPhoto = fun.photo || null;
+  settingsFunBouche = fun.bouche || null;
   renderFunPhoto();
   $('#set-fun-titre').value = fun.titre || '';
   $('#set-fun-sous').value = fun.soustitre || '';
@@ -2505,6 +2510,12 @@ function initSettings() {
     const rels = await call(api.pickPhotos(S.date)).catch((err) => { toast(err.message); return []; });
     if (!rels.length) return;
     settingsFunPhoto = rels[0];
+    settingsFunBouche = null;
+    renderFunPhoto();
+  });
+  $('#set-fun-photo-img').addEventListener('click', (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    settingsFunBouche = { x: Math.round(((e.clientX - r.left) / r.width) * 1000) / 1000, y: Math.round(((e.clientY - r.top) / r.height) * 1000) / 1000 };
     renderFunPhoto();
   });
   $('#set-fun-photo-rm').addEventListener('click', () => {

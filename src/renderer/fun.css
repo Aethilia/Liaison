@@ -21,16 +21,22 @@
 .fun-scene.seule { top: 8vh; animation: fun-zoom .7s cubic-bezier(.2, 1.4, .4, 1) .05s forwards; }
 .fun-star-box { position: absolute; left: 50%; top: 53.7%; width: 45.5%; height: 55.6%; transform: translate(-50%, -50%); overflow: hidden; border-radius: 50%; }
 .fun-star { position: absolute; inset: 0; transform: translateY(105%); animation: fun-star-in .4s cubic-bezier(.2, 1.6, .4, 1) .45s forwards, fun-roar 1.1s ease-out 1s; }
-.fun-star.photo img { width: 100%; height: 100%; object-fit: cover; display: block; animation: fun-roar-img .14s ease-in-out 1s 8 alternate; }
+.fun-star.photo { animation: fun-star-in .4s cubic-bezier(.2, 1.6, .4, 1) .45s forwards, fun-roar 1.1s ease-out 1s, fun-tremble .09s linear 1.05s 11 alternate; }
+.fun-img { position: absolute; }
+.fun-img img { width: 100%; height: 100%; display: block; }
+.fun-machoire { position: absolute; inset: 0; animation: fun-machoire 1.15s cubic-bezier(.3, 1.6, .5, 1) 1s; filter: drop-shadow(0 -2px 2px rgba(0, 0, 0, .5)); }
+@keyframes fun-machoire { 0% { transform: none; } 14% { transform: translateY(15%) rotate(-3deg); } 30% { transform: translateY(13%) rotate(3deg); } 50% { transform: translateY(16%) rotate(-2deg); } 70% { transform: translateY(14%) rotate(2deg); } 88% { transform: translateY(12%); } 100% { transform: none; } }
+.fun-gueule { position: absolute; height: 0; border-radius: 10% 10% 50% 50% / 10% 10% 60% 60%; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 35%, #5a0008 0%, #2a0004 55%, #0a0000 100%); box-shadow: inset 0 6px 10px #000;
+  animation: fun-gueule 1.15s cubic-bezier(.3, 1.6, .5, 1) 1s; }
+@keyframes fun-gueule { 0% { height: 0; } 14% { height: 17%; } 30% { height: 15%; } 50% { height: 18%; } 70% { height: 16%; } 88% { height: 14%; } 100% { height: 0; } }
+.fun-gueule .dents { position: absolute; left: 6%; right: 6%; top: 0; height: 22%; background: #f4f1e6;
+  clip-path: polygon(0 0, 100% 0, 96% 70%, 90% 100%, 84% 70%, 72% 100%, 62% 70%, 50% 100%, 38% 70%, 28% 100%, 16% 70%, 10% 100%, 4% 70%); }
+.fun-gueule .langue { position: absolute; left: 22%; right: 22%; bottom: -10%; height: 45%; border-radius: 50% 50% 40% 40%; background: radial-gradient(ellipse at 50% 30%, #ff7a8a, #c2304a); }
+@keyframes fun-tremble { from { translate: -2px 1px; } to { translate: 2px -1px; } }
 .fun-star.emoji { display: grid; place-items: center; font-size: min(17vw, 22vh); line-height: 1; }
 @keyframes fun-star-in { to { transform: translateY(0); } }
 @keyframes fun-roar { 0% { transform: scale(1); } 12% { transform: scale(1.18) rotate(-4deg); } 70% { transform: scale(1.12) rotate(3deg); } 100% { transform: scale(1); } }
-@keyframes fun-roar-img { from { transform: rotate(-3deg) scaleY(1); filter: saturate(1); } to { transform: rotate(3deg) scaleY(1.06); filter: saturate(1.8) contrast(1.2); } }
-/* Crocs de dessin animé qui apparaissent au rugissement */
-.fun-crocs { position: absolute; left: 22%; right: 22%; bottom: 12%; height: 13%; background: #fff; border: 3px solid #000; opacity: 0;
-  clip-path: polygon(0 0, 100% 0, 92% 100%, 84% 0, 76% 100%, 68% 0, 60% 100%, 52% 0, 44% 100%, 36% 0, 28% 100%, 20% 0, 12% 100%, 4% 0);
-  animation: fun-crocs 1.1s ease-out 1s; }
-@keyframes fun-crocs { 0% { opacity: 0; transform: scaleY(.2); } 10%, 80% { opacity: 1; transform: scaleY(1); } 100% { opacity: 0; } }
 .fun-etoiles span { position: absolute; font-size: 34px; opacity: 0; animation: fun-twinkle .5s ease-in-out infinite alternate; }
 @keyframes fun-twinkle { from { opacity: 0; transform: scale(.4) rotate(0); } to { opacity: 1; transform: scale(1.3) rotate(40deg); } }
 .fun-rugit { position: absolute; left: 2vw; top: 16vh; color: #fff200; font-size: min(5.5vw, 8vh); -webkit-text-stroke: 3px #b30000; text-shadow: 5px 5px 0 #000;
@@ -79,7 +85,9 @@
 
 /* Paramètres : aperçu de la photo */
 .fun-photo-row { align-items: center; }
-.fun-photo-row img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; border: 3px solid #e8b923; flex: 0 0 auto; }
+.fun-photo-box { position: relative; flex: 0 0 auto; line-height: 0; border: 3px solid #e8b923; border-radius: 8px; overflow: hidden; }
+.fun-photo-box img { width: 110px; height: auto; cursor: crosshair; }
+.fun-photo-box i { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #e0233c; border: 2px solid #fff; box-shadow: 0 0 0 1px #000; pointer-events: none; }
 .fun-embleme.dessus { position: absolute; inset: 0; pointer-events: none; filter: none; }
 
 /* Emblème : reflet qui balaie l'or, ouverture sombre façon cinéma */

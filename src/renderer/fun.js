@@ -171,11 +171,42 @@ function funEmbleme(ruban) {
   return [dessous, dessus];
 }
 
-// La star : la photo de la personne (ronde), ou un lion en emoji s'il n'y en a pas.
-function funStar(photoUrl) {
-  return photoUrl
-    ? h('div', { class: 'fun-star photo' }, h('img', { src: photoUrl, alt: '' }))
-    : h('div', { class: 'fun-star emoji' }, '🦁');
+// La star : la photo de la personne, animée en « papier découpé » : la mâchoire
+// (sous la bouche) se détache et s'ouvre sur une gueule sombre pendant le
+// rugissement. `bouche` = position de la bouche dans la photo (0..1).
+const FUN_BOUCHE = { x: 0.5, y: 0.68 };
+
+function funStar(photo, bouche) {
+  if (!photo) return h('div', { class: 'fun-star emoji' }, '🦁');
+  const b = { ...FUN_BOUCHE, ...(bouche || {}) };
+  const a = photo.width / photo.height || 1;
+  // Photo « cover » dans le carré de l'ouverture (en % de ce carré).
+  const g = a < 1 ? { w: 100, h: 100 / a, l: 0, t: (100 - 100 / a) / 2 } : { w: 100 * a, h: 100, l: (100 - 100 * a) / 2, t: 0 };
+  const mx = g.l + b.x * g.w;
+  const my = g.t + b.y * g.h;
+  const rx = 21;
+  const ry = 24;
+  const calque = () => h('div', { class: 'fun-img', style: { left: `${g.l}%`, top: `${g.t}%`, width: `${g.w}%`, height: `${g.h}%` } }, h('img', { src: photo.url, alt: '' }));
+  // Mâchoire : demi-ellipse sous la ligne de la bouche.
+  const poly = Array.from({ length: 19 }, (_, i) => {
+    const t = Math.PI * (i / 18);
+    return `${(mx + rx * Math.cos(t)).toFixed(1)}% ${(my + ry * Math.sin(t)).toFixed(1)}%`;
+  });
+  const jaw = h('div', { class: 'fun-machoire', style: { clipPath: `polygon(${poly.join(', ')})`, transformOrigin: `${mx}% ${my}%` } }, calque());
+  const gueule = h('div', { class: 'fun-gueule', style: { left: `${mx - rx * 0.86}%`, top: `${my - 1.5}%`, width: `${rx * 1.72}%` } },
+    h('i', { class: 'dents' }), h('i', { class: 'langue' }));
+  return h('div', { class: 'fun-star photo' }, calque(), gueule, jaw);
+}
+
+// Charge la photo pour connaître ses proportions (null si illisible).
+function funPhoto(url) {
+  if (!url) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ url, width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
 
 // Rugissement (grondement + souffle), puis fanfare ringarde, grésillement.
@@ -271,8 +302,9 @@ function funSon() {
   setTimeout(() => ctx.close().catch(() => {}), 5000);
 }
 
-function playFunIntro(cfg = {}, photoUrl = null) {
-  const c = { ...FUN_DEFAUT, ...Object.fromEntries(Object.entries(cfg).filter(([k, v]) => v && k !== 'photo')) };
+async function playFunIntro(cfg = {}, photoUrl = null) {
+  const photo = await funPhoto(photoUrl);
+  const c = { ...FUN_DEFAUT, ...Object.fromEntries(Object.entries(cfg).filter(([k, v]) => v && k !== 'photo' && k !== 'bouche')) };
   return new Promise((resolve) => {
     // Lettres qui tombent une \u00e0 une (en 0,5 s au plus) ; un texte long est r\u00e9duit pour tenir \u00e0 l'\u00e9cran.
     const lettres = (txt, cls, delai) => (txt ? h('div', { class: cls, style: { fontSize: txt.length > 10 ? `calc(var(--fun-fs) * ${(10 / txt.length).toFixed(2)})` : null } },
@@ -282,7 +314,7 @@ function playFunIntro(cfg = {}, photoUrl = null) {
     const etoiles = h('div', { class: 'fun-etoiles' },
       Array.from({ length: 14 }, (_, i) => h('span', { style: { left: `${(i * 37) % 100}%`, top: `${(i * 53) % 90}%`, animationDelay: `${1.1 + (i % 5) * 0.15}s` } }, i % 2 ? '✨' : '⭐')));
     const avecTexte = !!(c.titre || c.soustitre);
-    const scene = h('div', { class: `fun-scene${avecTexte ? '' : ' seule'}` }, ...(([dessous, dessus]) => [dessous, h('div', { class: 'fun-star-box' }, funStar(photoUrl)), dessus])(funEmbleme(c.ruban)));
+    const scene = h('div', { class: `fun-scene${avecTexte ? '' : ' seule'}` }, ...(([dessous, dessus]) => [dessous, h('div', { class: 'fun-star-box' }, funStar(photo, cfg.bouche)), dessus])(funEmbleme(c.ruban)));
     const el = h('div', { class: 'fun-intro', role: 'presentation' },
       h('div', { class: 'fun-spots' }),
       flammes,
