@@ -209,97 +209,199 @@ function funPhoto(url) {
   });
 }
 
-// Rugissement (grondement + souffle), puis fanfare ringarde, grésillement.
-function funSon() {
-  const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC) return;
+// Bande-son façon générique de cinéma, entièrement synthétisée :
+// coup sourd (0 s), grognement (0,45 s), grand rugissement (1 s), accord de
+// cuivres (2 s), le tout dans l'écho d'une grande salle.
+function funSon(AC = window.AudioContext || window.webkitAudioContext) {
+  if (!AC) return null;
   let ctx;
   try {
-    ctx = new AC();
+    ctx = typeof AC === 'function' ? new AC() : AC;
   } catch {
-    return;
+    return null;
   }
+  const sr = ctx.sampleRate;
   const t0 = ctx.currentTime + 0.05;
+  const rnd = (() => { let x = 1234567; return () => ((x = (x * 1103515245 + 12345) % 2147483648) / 2147483648); })();
+
+  // Sortie : compresseur + réverbération de salle (réponse impulsionnelle générée).
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -16;
+  comp.ratio.value = 4;
   const master = ctx.createGain();
-  master.gain.value = 0.5;
-  master.connect(ctx.destination);
-  const noiseBuf = (sec, amp = 1) => {
-    const b = ctx.createBuffer(1, ctx.sampleRate * sec, ctx.sampleRate);
+  master.gain.value = 0.9;
+  comp.connect(master).connect(ctx.destination);
+  const dry = ctx.createGain();
+  dry.gain.value = 0.85;
+  dry.connect(comp);
+  const conv = ctx.createConvolver();
+  const irLen = Math.floor(sr * 2.4);
+  const ir = ctx.createBuffer(2, irLen, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c);
+    for (let i = 0; i < irLen; i++) d[i] = (rnd() * 2 - 1) * Math.pow(1 - i / irLen, 3.2) * (i < sr * 0.01 ? i / (sr * 0.01) : 1);
+  }
+  conv.buffer = ir;
+  const wet = ctx.createGain();
+  wet.gain.value = 0.32;
+  conv.connect(wet).connect(comp);
+  const out = ctx.createGain();
+  out.connect(dry);
+  out.connect(conv);
+
+  const bruit = (sec) => {
+    const b = ctx.createBuffer(1, Math.max(1, Math.floor(sr * sec)), sr);
     const d = b.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * amp;
-    return b;
+    for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = b;
+    return src;
   };
-  const env = (g, t, a, peak, dur) => {
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + a);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  const filtre = (type, f, q = 1) => {
+    const n = ctx.createBiquadFilter();
+    n.type = type;
+    n.frequency.value = f;
+    n.Q.value = q;
+    return n;
+  };
+  const sature = (k) => {
+    const w = ctx.createWaveShaper();
+    const c = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; c[i] = Math.tanh(k * x) / Math.tanh(k); }
+    w.curve = c;
+    return w;
   };
 
-  // Rugissement à 1,0 s : deux scies graves modulées + souffle filtré.
-  const tr = t0 + 1.0;
-  const lfo = ctx.createOscillator();
-  lfo.frequency.value = 23;
-  const lfoGain = ctx.createGain();
-  lfoGain.gain.value = 18;
-  lfo.connect(lfoGain);
-  const roarGain = ctx.createGain();
-  env(roarGain, tr, 0.08, 0.6, 1.1);
-  const lp = ctx.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(600, tr);
-  lp.frequency.linearRampToValueAtTime(1400, tr + 0.25);
-  lp.frequency.linearRampToValueAtTime(350, tr + 1.1);
-  lp.Q.value = 6;
-  for (const f of [70, 105]) {
+  // 1) Coup sourd de cinéma : sinus qui plonge + choc de bruit grave.
+  {
     const o = ctx.createOscillator();
-    o.type = 'sawtooth';
-    o.frequency.setValueAtTime(f * 1.3, tr);
-    o.frequency.exponentialRampToValueAtTime(f, tr + 1.1);
-    lfoGain.connect(o.frequency);
-    o.connect(lp);
-    o.start(tr);
-    o.stop(tr + 1.2);
-  }
-  const souffle = ctx.createBufferSource();
-  souffle.buffer = noiseBuf(1.2);
-  const bp = ctx.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.value = 500;
-  bp.Q.value = 0.8;
-  const sg = ctx.createGain();
-  env(sg, tr, 0.06, 0.5, 1.1);
-  souffle.connect(bp).connect(sg).connect(master);
-  souffle.start(tr);
-  lp.connect(roarGain).connect(master);
-  lfo.start(tr);
-  lfo.stop(tr + 1.2);
-
-  // Grésillement de barbecue tout du long.
-  const gr = ctx.createBufferSource();
-  gr.buffer = noiseBuf(3.5, 0.3);
-  const hp = ctx.createBiquadFilter();
-  hp.type = 'highpass';
-  hp.frequency.value = 3000;
-  const gg = ctx.createGain();
-  env(gg, t0, 0.3, 0.25, 3.5);
-  gr.connect(hp).connect(gg).connect(master);
-  gr.start(t0);
-
-  // Fanfare 8 bits à 2,1 s : ta-ta-ta-taaa !
-  const tf = t0 + 2.1;
-  const notes = [[523, 0, 0.12], [523, 0.14, 0.12], [523, 0.28, 0.12], [659, 0.42, 0.22], [784, 0.68, 0.14], [659, 0.84, 0.12], [1047, 1.0, 0.5],
-    [262, 0, 0.36], [330, 0.42, 0.24], [392, 1.0, 0.5]];
-  for (const [f, d, dur] of notes) {
-    const o = ctx.createOscillator();
-    o.type = f > 300 ? 'square' : 'sawtooth';
-    o.frequency.value = f;
+    o.frequency.setValueAtTime(110, t0);
+    o.frequency.exponentialRampToValueAtTime(32, t0 + 0.9);
     const g = ctx.createGain();
-    env(g, tf + d, 0.015, f > 300 ? 0.16 : 0.1, dur);
-    o.connect(g).connect(master);
-    o.start(tf + d);
-    o.stop(tf + d + dur + 0.05);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.9, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.4);
+    o.connect(g).connect(out);
+    o.start(t0);
+    o.stop(t0 + 1.5);
+    const n = bruit(0.6);
+    const lp = filtre('lowpass', 260, 0.7);
+    const gn = ctx.createGain();
+    gn.gain.setValueAtTime(0.7, t0);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5);
+    n.connect(lp).connect(gn).connect(out);
+    n.start(t0);
   }
-  setTimeout(() => ctx.close().catch(() => {}), 5000);
+
+  // Voix de fauve : cordes vocales « rugueuses » (hauteur qui tremble, grain,
+  // sous-harmonique), saturées, filtrées par la gueule (formants), + souffle.
+  const voix = (t, dur, f0, fPic, fFin, fort, ouverture) => {
+    const corps = ctx.createGain();
+    corps.gain.value = 0;
+    // Tremblement de hauteur et grain d'amplitude (bruit très grave).
+    const jit = bruit(dur + 0.2);
+    const jlp = filtre('lowpass', 28, 0.5);
+    const jg = ctx.createGain();
+    jg.gain.value = f0 * 0.12;
+    jit.connect(jlp).connect(jg);
+    const am = bruit(dur + 0.2);
+    const alp = filtre('lowpass', 70, 0.5);
+    const ag = ctx.createGain();
+    ag.gain.value = fort * 0.55;
+    am.connect(alp).connect(ag).connect(corps.gain);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(fort, t + dur * 0.12);
+    env.gain.setValueAtTime(fort, t + dur * 0.55);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    corps.gain.setValueAtTime(fort, t);
+    for (const [mul, type, vol] of [[1, 'sawtooth', 1], [0.5, 'sawtooth', 0.6], [1.007, 'square', 0.25], [1.5, 'sawtooth', 0.2]]) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(f0 * mul, t);
+      o.frequency.linearRampToValueAtTime(fPic * mul, t + dur * 0.32);
+      o.frequency.exponentialRampToValueAtTime(fFin * mul, t + dur);
+      const jm = ctx.createGain();
+      jm.gain.value = mul;
+      jg.connect(jm).connect(o.frequency);
+      const ov = ctx.createGain();
+      ov.gain.value = vol;
+      o.connect(ov).connect(corps);
+      o.start(t);
+      o.stop(t + dur + 0.1);
+    }
+    const sat = sature(3.5);
+    corps.connect(sat);
+    // Gueule : formants qui s'ouvrent puis se referment.
+    const sortie = ctx.createGain();
+    sortie.gain.value = 0.22;
+    for (const [f, fo, q, g] of [[320, 680 * ouverture, 5, 1], [1050, 1350, 6, 0.55], [2400, 2700, 8, 0.25]]) {
+      const bp = filtre('bandpass', f, q);
+      bp.frequency.setValueAtTime(f, t);
+      bp.frequency.linearRampToValueAtTime(fo, t + dur * 0.3);
+      bp.frequency.linearRampToValueAtTime(f * 0.9, t + dur);
+      const gg = ctx.createGain();
+      gg.gain.value = g;
+      sat.connect(bp).connect(gg).connect(sortie);
+    }
+    const corpsBas = filtre('lowpass', 700, 0.8);
+    const cb = ctx.createGain();
+    cb.gain.value = 0.5;
+    sat.connect(corpsBas).connect(cb).connect(sortie);
+    sortie.connect(env).connect(out);
+    // Souffle rauque de la gueule.
+    const souffle = bruit(dur + 0.3);
+    const sbp = filtre('bandpass', 700, 0.6);
+    sbp.frequency.setValueAtTime(500, t);
+    sbp.frequency.linearRampToValueAtTime(1300, t + dur * 0.35);
+    sbp.frequency.linearRampToValueAtTime(600, t + dur + 0.3);
+    const sg = ctx.createGain();
+    sg.gain.setValueAtTime(0.0001, t);
+    sg.gain.exponentialRampToValueAtTime(fort * 0.5, t + dur * 0.15);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.3);
+    souffle.connect(sbp).connect(sg).connect(out);
+    for (const n of [jit, am, souffle]) { n.start(t); n.stop(t + dur + 0.3); }
+  };
+
+  // 2) Grognement quand la photo apparaît, 3) grand rugissement.
+  voix(t0 + 0.42, 0.4, 85, 110, 70, 0.55, 0.8);
+  voix(t0 + 1.0, 1.35, 105, 190, 78, 1, 1.15);
+
+  // 4) Accord de cuivres majestueux (do majeur) qui enfle puis s'éteint.
+  const tc = t0 + 2.05;
+  for (const [f, v] of [[65.4, 0.5], [130.8, 0.6], [196, 0.45], [261.6, 0.45], [329.6, 0.35], [392, 0.25]]) {
+    for (const det of [-4, 4]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      o.detune.value = det;
+      const lp = filtre('lowpass', 400, 1.2);
+      lp.frequency.setValueAtTime(350, tc);
+      lp.frequency.linearRampToValueAtTime(2600, tc + 0.5);
+      lp.frequency.linearRampToValueAtTime(900, tc + 1.6);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, tc);
+      g.gain.exponentialRampToValueAtTime(v * 0.09, tc + 0.35);
+      g.gain.setValueAtTime(v * 0.09, tc + 1.1);
+      g.gain.exponentialRampToValueAtTime(0.0001, tc + 1.7);
+      o.connect(lp).connect(g).connect(out);
+      o.start(tc);
+      o.stop(tc + 1.8);
+    }
+  }
+  // Roulement de timbale sous l'accord.
+  {
+    const n = bruit(1.5);
+    const bp = filtre('bandpass', 90, 1.5);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, tc);
+    g.gain.exponentialRampToValueAtTime(0.5, tc + 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, tc + 1.5);
+    n.connect(bp).connect(g).connect(out);
+    n.start(tc);
+  }
+  if (typeof AC === 'function') setTimeout(() => ctx.close().catch(() => {}), 5500);
+  return ctx;
 }
 
 async function playFunIntro(cfg = {}, photoUrl = null) {
