@@ -19,42 +19,162 @@ function svgEl(markup, viewBox, cls) {
   return svg;
 }
 
-// Anneau doré, ruban et bandes de film (dessin original, façon générique ciné).
+// Emblème façon générique de cinéma (dessin original) : anneau doré en relief,
+// ruban gravé à pans repliés, pellicules enroulées, reflet qui balaie l'or.
+// Repère : viewBox 660×450, centre (330, 250), ouverture de rayon 150.
+const CX = 330;
+const CY = 250;
+const pt = (r, deg) => [CX + r * Math.cos(deg * Math.PI / 180), CY - r * Math.sin(deg * Math.PI / 180)];
+const f1 = (n) => n.toFixed(1);
+
+// Dégradés partagés (suffixe pour garder des id uniques par calque).
+function funDefs(k) {
+  return `
+    <linearGradient id="or${k}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff8d6"/><stop offset=".18" stop-color="#f3cf63"/><stop offset=".38" stop-color="#b9861f"/>
+      <stop offset=".5" stop-color="#7a520c"/><stop offset=".62" stop-color="#d9ab3c"/><stop offset=".8" stop-color="#fff0b0"/><stop offset="1" stop-color="#a87418"/>
+    </linearGradient>
+    <linearGradient id="orV${k}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/><stop offset=".3" stop-color="#e8bf4f"/><stop offset=".55" stop-color="#9b6a14"/>
+      <stop offset=".75" stop-color="#e3b648"/><stop offset="1" stop-color="#7a4f0a"/>
+    </linearGradient>
+    <linearGradient id="orSombre${k}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8a5c10"/><stop offset=".5" stop-color="#5a3a05"/><stop offset="1" stop-color="#3d2603"/>
+    </linearGradient>
+    <linearGradient id="reflet${k}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".85"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>`;
+}
+
+// Pellicule enroulée : bande le long d'une courbe de Bézier, largeur qui « vrille ».
+function funPellicule(P, k) {
+  const N = 60;
+  const at = (t) => {
+    const u = 1 - t;
+    const x = u * u * u * P[0][0] + 3 * u * u * t * P[1][0] + 3 * u * t * t * P[2][0] + t * t * t * P[3][0];
+    const y = u * u * u * P[0][1] + 3 * u * u * t * P[1][1] + 3 * u * t * t * P[2][1] + t * t * t * P[3][1];
+    const dx = 3 * u * u * (P[1][0] - P[0][0]) + 6 * u * t * (P[2][0] - P[1][0]) + 3 * t * t * (P[3][0] - P[2][0]);
+    const dy = 3 * u * u * (P[1][1] - P[0][1]) + 6 * u * t * (P[2][1] - P[1][1]) + 3 * t * t * (P[3][1] - P[2][1]);
+    const l = Math.hypot(dx, dy) || 1;
+    return { x, y, nx: -dy / l, ny: dx / l };
+  };
+  const pts = Array.from({ length: N + 1 }, (_, i) => {
+    const t = i / N;
+    const w = 21 * (0.3 + 0.7 * Math.abs(Math.cos(t * Math.PI * 1.25 + 0.5)));
+    return { ...at(t), w, t };
+  });
+  // Tronçons : clairs quand la bande est de face, sombres quand elle vrille.
+  let seg = '';
+  for (let i = 0; i < N; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const face = a.w / 21;
+    const fill = face > 0.7 ? `url(#orV${k})` : face > 0.5 ? `url(#or${k})` : `url(#orSombre${k})`;
+    seg += `<path d="M${f1(a.x + a.nx * a.w)} ${f1(a.y + a.ny * a.w)} L${f1(b.x + b.nx * b.w)} ${f1(b.y + b.ny * b.w)} L${f1(b.x - b.nx * b.w)} ${f1(b.y - b.ny * b.w)} L${f1(a.x - a.nx * a.w)} ${f1(a.y - a.ny * a.w)} Z" fill="${fill}" stroke="${fill}" stroke-width=".6"/>`;
+  }
+  const bord = (sg) => `<path d="M${pts.map((q) => `${f1(q.x + sg * q.nx * q.w)} ${f1(q.y + sg * q.ny * q.w)}`).join(' L')}" fill="none" stroke="#4a3003" stroke-width="1.6"/>`;
+  // Perforations près des deux bords, seulement là où la bande est assez de face.
+  let trous = '';
+  for (let i = 1; i < N; i += 2) {
+    const q = pts[i];
+    if (q.w < 11) continue;
+    for (const sg of [1, -1]) {
+      const x = q.x + sg * q.nx * q.w * 0.68;
+      const y = q.y + sg * q.ny * q.w * 0.68;
+      const ang = Math.atan2(q.ny, q.nx) * 180 / Math.PI;
+      trous += `<rect x="${f1(x - 2.6)}" y="${f1(y - 2 * q.w / 21)}" width="5.2" height="${f1(4 * q.w / 21)}" rx="1" fill="#2a1800" transform="rotate(${f1(ang)} ${f1(x)} ${f1(y)})"/>`;
+    }
+  }
+  return `<g filter="url(#ombre${k})">${seg}${bord(1)}${bord(-1)}${trous}</g>`;
+}
+
 function funEmbleme(ruban) {
   const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  const film = (x, flip) => `
-    <g transform="translate(${x} 0) scale(${flip ? -1 : 1} 1)">
-      <path d="M0 330 C60 300, 120 360, 190 330 S300 300, 330 345 L330 395 C300 352, 250 380, 190 380 S60 350, 0 380 Z" fill="url(#or)" stroke="#5c3b00" stroke-width="3"/>
-      ${Array.from({ length: 9 }, (_, i) => `<rect x="${12 + i * 35}" y="${343 + Math.sin(i) * 6}" width="14" height="9" rx="2" fill="#2a1600" opacity=".75"/>`).join('')}
-    </g>`;
-  const defs = `
-    <defs>
-      <linearGradient id="or" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#fff6c2"/><stop offset=".25" stop-color="#e8b923"/><stop offset=".5" stop-color="#8a5a00"/>
-        <stop offset=".72" stop-color="#ffd84d"/><stop offset="1" stop-color="#7a4b00"/>
-      </linearGradient>
-      <radialGradient id="fond" cx=".5" cy=".55" r=".5"><stop offset="0" stop-color="#ffcf3a"/><stop offset=".6" stop-color="#ff5a00"/><stop offset="1" stop-color="#7a0f00"/></radialGradient>
-      <path id="arc" d="M128 200 A215 200 0 0 1 532 200"/>
-    </defs>`;
-  // Deux calques : l'anneau sous la photo, le ruban par-dessus.
-  const dessous = svgEl(`${defs}
-    <g class="fun-films">${film(0, false)}${film(660, true)}</g>
-    <circle cx="330" cy="250" r="150" fill="url(#fond)"/>
-    <circle cx="330" cy="250" r="168" fill="none" stroke="url(#or)" stroke-width="36"/>
-    <circle cx="330" cy="250" r="186" fill="none" stroke="#5c3b00" stroke-width="3"/>
-    <circle cx="330" cy="250" r="150" fill="none" stroke="#5c3b00" stroke-width="3"/>`, '0 0 660 450', 'fun-embleme');
-  const dessus = svgEl(`${defs.replace(/id="(or|fond|arc)"/g, 'id="$1-2"').replace(/url\(#or\)/g, 'url(#or-2)')}
-    <path d="M118 210 Q330 20 542 210 L560 150 Q330 -30 100 150 Z" fill="url(#or-2)" stroke="#5c3b00" stroke-width="3"/>
-    <text font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="${ruban.length > 22 ? 23 : 28}" letter-spacing="2" fill="#4a2c00">
-      <textPath href="#arc-2" startOffset="50%" text-anchor="middle">${esc(ruban)}</textPath>
-    </text>`, '0 0 660 450', 'fun-embleme dessus');
+  // Perles tout autour de l'anneau.
+  const perles = Array.from({ length: 48 }, (_, i) => {
+    const [x, y] = pt(205, i * 7.5);
+    return `<circle cx="${f1(x)}" cy="${f1(y)}" r="3.6" fill="url(#orV0)" stroke="#5a3a05" stroke-width=".8"/>`;
+  }).join('');
+  const ombre = (k) => `<filter id="ombre${k}" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity=".6"/></filter>`;
+
+  const dessous = svgEl(`
+    <defs>${funDefs(0)}${ombre(0)}
+      <radialGradient id="halo0" cx=".5" cy=".55" r=".5"><stop offset="0" stop-color="#ffd76a" stop-opacity=".55"/><stop offset=".6" stop-color="#ff9a1a" stop-opacity=".15"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+      <radialGradient id="fond0" cx=".5" cy=".42" r=".6"><stop offset="0" stop-color="#3b2a10"/><stop offset=".7" stop-color="#140c03"/><stop offset="1" stop-color="#000"/></radialGradient>
+      <clipPath id="clipOr0"><circle cx="${CX}" cy="${CY}" r="212"/></clipPath>
+    </defs>
+    <ellipse cx="${CX}" cy="${CY}" rx="330" ry="225" fill="url(#halo0)"/>
+    <g class="fun-films">
+      ${funPellicule([[250, 420], [120, 500], [-30, 430], [30, 300]], 0)}
+      ${funPellicule([[410, 420], [540, 500], [690, 430], [630, 300]], 0)}
+    </g>
+    <g filter="url(#ombre0)">
+      <circle cx="${CX}" cy="${CY}" r="150" fill="url(#fond0)"/>
+      <circle cx="${CX}" cy="${CY}" r="173" fill="none" stroke="url(#or0)" stroke-width="46"/>
+      <circle cx="${CX}" cy="${CY}" r="190" fill="none" stroke="#fff6cf" stroke-width="2" opacity=".55"/>
+      <circle cx="${CX}" cy="${CY}" r="157" fill="none" stroke="#fff6cf" stroke-width="2" opacity=".45"/>
+      <circle cx="${CX}" cy="${CY}" r="173" fill="none" stroke="#6b4508" stroke-width="1.5" stroke-dasharray="2 6" opacity=".7"/>
+      <circle cx="${CX}" cy="${CY}" r="196" fill="none" stroke="#3d2603" stroke-width="3"/>
+      <circle cx="${CX}" cy="${CY}" r="150" fill="none" stroke="#3d2603" stroke-width="4"/>
+      ${perles}
+      <circle cx="${CX}" cy="${CY}" r="212" fill="none" stroke="url(#or0)" stroke-width="5"/>
+    </g>
+    <g clip-path="url(#clipOr0)"><rect class="fun-reflet" x="-200" y="-40" width="420" height="540" fill="url(#reflet0)" opacity=".7"/></g>`, '0 -40 660 540', 'fun-embleme');
+
+  // Ruban : arc épais au-dessus de l'anneau, pans repliés en queue d'aronde.
+  const R1 = 214;
+  const R2 = 262;
+  const A1 = 150;
+  const A2 = 30;
+  const [ax1, ay1] = pt(R2, A1); const [bx1, by1] = pt(R2, A2);
+  const [bx2, by2] = pt(R1, A2); const [ax2, ay2] = pt(R1, A1);
+  const bande = `M${f1(ax1)} ${f1(ay1)} A${R2} ${R2} 0 0 1 ${f1(bx1)} ${f1(by1)} L${f1(bx2)} ${f1(by2)} A${R1} ${R1} 0 0 0 ${f1(ax2)} ${f1(ay2)} Z`;
+  // Pans du ruban : rubans pliés qui pendent derrière les extrémités, encoche en V.
+  const pan = (side) => {
+    const A = side < 0 ? A1 : A2;
+    const dec = side < 0 ? -7 : 7;
+    const E1 = pt(R2 - 6, A + dec);
+    const E2 = pt(R1 + 2, A + dec);
+    const d = [side * 100, 58];
+    const M = [(E1[0] + E2[0]) / 2 + d[0] * 0.72, (E1[1] + E2[1]) / 2 + d[1] * 0.72];
+    const q = (p) => `${f1(p[0])} ${f1(p[1])}`;
+    const add = (p) => [p[0] + d[0], p[1] + d[1]];
+    const bout = side < 0 ? [ax2, ay2] : [bx2, by2];
+    return {
+      queue: `M${q(E1)} L${q(add(E1))} L${q(M)} L${q(add(E2))} L${q(E2)} Z`,
+      pli: `M${q(bout)} L${q(E2)} L${q(pt(R1 - 6, A + dec * 0.4))} Z`,
+    };
+  };
+  const L = pan(-1);
+  const R = pan(1);
+  const [tx1, ty1] = pt(238, A1 + 2); const [tx2, ty2] = pt(238, A2 - 2);
+  const taille = Math.max(16, Math.min(30, 560 / Math.max(10, ruban.length)));
+  const dessus = svgEl(`
+    <defs>${funDefs(1)}${ombre(1)}
+      <path id="arc1" d="M${f1(tx1)} ${f1(ty1)} A238 238 0 0 1 ${f1(tx2)} ${f1(ty2)}"/>
+      <clipPath id="clipRuban1"><path d="${bande}"/></clipPath>
+    </defs>
+    <g filter="url(#ombre1)">
+      <path d="${L.queue}" fill="url(#orSombre1)" stroke="#3d2603" stroke-width="2"/>
+      <path d="${R.queue}" fill="url(#orSombre1)" stroke="#3d2603" stroke-width="2"/>
+      <path d="${L.pli}" fill="#4a2f04"/><path d="${R.pli}" fill="#4a2f04"/>
+      <path d="${bande}" fill="url(#orV1)" stroke="#3d2603" stroke-width="2.5"/>
+    </g>
+    <path d="M${f1(pt(R2 - 5, A1 - 1)[0])} ${f1(pt(R2 - 5, A1 - 1)[1])} A${R2 - 5} ${R2 - 5} 0 0 1 ${f1(pt(R2 - 5, A2 + 1)[0])} ${f1(pt(R2 - 5, A2 + 1)[1])}" fill="none" stroke="#fff6cf" stroke-width="1.6" opacity=".7"/>
+    <path d="M${f1(pt(R1 + 5, A1 - 1)[0])} ${f1(pt(R1 + 5, A1 - 1)[1])} A${R1 + 5} ${R1 + 5} 0 0 1 ${f1(pt(R1 + 5, A2 + 1)[0])} ${f1(pt(R1 + 5, A2 + 1)[1])}" fill="none" stroke="#5a3a05" stroke-width="1.2" opacity=".7"/>
+    <g font-family="'Trajan Pro', 'Cinzel', Georgia, 'Times New Roman', serif" font-weight="700" font-size="${f1(taille)}" letter-spacing="3">
+      <text fill="#fff4c8" opacity=".75" transform="translate(0 1.4)"><textPath href="#arc1" startOffset="50%" text-anchor="middle" dominant-baseline="middle">${esc(ruban)}</textPath></text>
+      <text fill="#3a2302"><textPath href="#arc1" startOffset="50%" text-anchor="middle" dominant-baseline="middle">${esc(ruban)}</textPath></text>
+    </g>
+    <g clip-path="url(#clipRuban1)"><rect class="fun-reflet" x="-200" y="-40" width="420" height="540" fill="url(#reflet1)" opacity=".7"/></g>`, '0 -40 660 540', 'fun-embleme dessus');
   return [dessous, dessus];
 }
 
 // La star : la photo de la personne (ronde), ou un lion en emoji s'il n'y en a pas.
 function funStar(photoUrl) {
   return photoUrl
-    ? h('div', { class: 'fun-star photo' }, h('img', { src: photoUrl, alt: '' }), h('div', { class: 'fun-crocs' }))
+    ? h('div', { class: 'fun-star photo' }, h('img', { src: photoUrl, alt: '' }))
     : h('div', { class: 'fun-star emoji' }, '🦁');
 }
 
