@@ -135,3 +135,9 @@
 .pix-panc.on { transform: none; opacity: 1; animation: pix-panc 0.5s steps(2) .3s infinite alternate; }
 @keyframes pix-panc { to { transform: translateY(-4px) rotate(-2deg); } }
 @keyframes pix-bob { 50% { transform: translateY(-2px); } }
+
+/* Menu secret : règles de sons au clic */
+.sons-liste { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.son-regle { display: flex; align-items: center; gap: 4px; padding: 5px 8px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; font-size: 13px; }
+.son-regle .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sons-ajout select { flex: 1; min-width: 0; }

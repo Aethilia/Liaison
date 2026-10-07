@@ -266,16 +266,20 @@
         <small>Faux écran bleu Windows en plein écran pendant 10 secondes quand cette personne choisit son site, puis l'appli reprend normalement (Échap pour l'arrêter).</small>
       </div>
       <div class="field">
-        <span>Son au clic sur « Nom de l'agent »</span>
-        <div class="row">
-          <select id="set-clic-user"><option value="">Personne</option></select>
-          <button type="button" id="set-clic-test" class="btn ghost">Tester</button>
+        <span>Sons au clic</span>
+        <div id="sons-liste" class="sons-liste"></div>
+        <div class="row sons-ajout">
+          <select id="son-zone"></select>
+          <select id="son-user"></select>
         </div>
-        <div class="row fun-photo-row">
-          <button type="button" id="set-clic-son" class="btn ghost">Choisir le son…</button>
-          <span id="set-clic-son-nom" class="muted">Aucun son</span>
+        <div class="row sons-ajout">
+          <button type="button" id="son-fichier" class="btn ghost">Choisir le son…</button>
+          <span id="son-fichier-nom" class="muted">Aucun son</span>
+          <span class="spacer"></span>
+          <button type="button" id="son-tester" class="btn ghost">Tester</button>
+          <button type="button" id="son-ajouter" class="btn">Ajouter</button>
         </div>
-        <small>Le son se lance à chaque clic dans une case « Nom de l'agent » (absents), quand cette personne est connectée.</small>
+        <small>Choisissez une zone, la personne et un son (MP3, WAV…), puis « Ajouter ». Le son se lance à chaque clic dans cette zone quand la personne est connectée. Plusieurs règles possibles ; la croix en retire une.</small>
       </div>
       <div class="field">
         <span>Petite surprise dans les bennes 💩</span>

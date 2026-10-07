@@ -260,7 +260,7 @@ handle('fun:find', (nom, cle = 'fun') => {
 });
 // Enregistre l'intro dans TOUS les sites connus du poste (réglage, photo, son),
 // pour qu'elle se joue quel que soit le site choisi au démarrage.
-handle('fun:saveAll', (fun, farce, clic, caca, bonhomme) => {
+handle('fun:saveAll', (fun, farce, clic, caca, bonhomme, sons) => {
   const src = config.dataDir;
   const dirs = [...new Set([src, ...withSites(config).sites.map((x) => x.dataDir)])];
   const copier = (rel, dir) => {
@@ -280,7 +280,8 @@ handle('fun:saveAll', (fun, farce, clic, caca, bonhomme) => {
         if (fun.son) copier(fun.son.rel, dir);
       }
       if (clic && clic.son) copier(clic.son.rel, dir);
-      st.saveSite({ ...st.loadSite(), fun, ...(farce !== undefined ? { farce } : {}), ...(clic !== undefined ? { clic } : {}), ...(caca !== undefined ? { caca } : {}), ...(bonhomme !== undefined ? { bonhomme } : {}) });
+      for (const r of sons || []) if (r && r.son) copier(r.son.rel, dir);
+      st.saveSite({ ...st.loadSite(), fun, ...(farce !== undefined ? { farce } : {}), ...(clic !== undefined ? { clic } : {}), ...(caca !== undefined ? { caca } : {}), ...(bonhomme !== undefined ? { bonhomme } : {}), ...(sons !== undefined ? { sons } : {}) });
     } catch (err) {
       echecs.push(`${path.basename(dir)} : ${err.message}`);
     }
@@ -291,6 +292,27 @@ handle('fun:saveAll', (fun, farce, clic, caca, bonhomme) => {
 handle('win:fullscreen', (on) => {
   win.setFullScreen(!!on);
   return true;
+});
+// Sons au clic de la personne : règles du premier site qui en a, sons lus.
+handle('fun:sons', (nom) => {
+  const dirs = [config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)];
+  for (const dir of [...new Set(dirs)]) {
+    let site;
+    try {
+      site = new Store(dir).loadSite();
+    } catch { continue; }
+    const regles = [...(Array.isArray(site.sons) ? site.sons : []), ...(site.clic && site.clic.son ? [{ zone: 'agent', ...site.clic }] : [])];
+    if (!regles.length) continue;
+    return regles.filter((r) => r && r.son && (r.user === '*' || memeNom(r.user, nom))).map((r) => {
+      try {
+        const abs = path.resolve(dir, r.son.rel);
+        if (!abs.startsWith(path.resolve(dir, 'fun') + path.sep)) return null;
+        const type = SON_TYPES[path.extname(abs).slice(1).toLowerCase()] || 'audio/mpeg';
+        return { zone: r.zone, url: `data:${type};base64,${fs.readFileSync(abs).toString('base64')}` };
+      } catch { return null; }
+    }).filter(Boolean);
+  }
+  return [];
 });
 handle('fun:readPhoto', (rel, dataDir) => {
   const img = nativeImage.createFromPath(new Store(funDir(dataDir)).photoPath(rel));

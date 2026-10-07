@@ -2403,20 +2403,31 @@ let settingsFunPhoto = null;
 let settingsFunBouche = null;
 let settingsFunSon = null;
 let settingsClicSon = null;
+let settingsSons = [];
+
+function renderSonsListe() {
+  const nomUser = (u) => (u === '*' ? 'tout le monde' : u);
+  $('#sons-liste').replaceChildren(...(settingsSons.length ? settingsSons.map((r, i) => h('div', { class: 'son-regle' },
+    h('b', {}, (zoneSon(r.zone) || [null, r.zone])[1]),
+    h('span', { class: 'muted' }, ` · ${nomUser(r.user)} · ${r.son.nom}`),
+    h('span', { class: 'spacer' }),
+    h('button', { type: 'button', class: 'o-btn', title: 'Écouter', onclick: async () => jouerSonClic(await call(api.funReadSound(r.son.rel)).catch(() => null)) }, icon('send', 13)),
+    h('button', { type: 'button', class: 'o-btn rm', title: 'Retirer cette règle', onclick: () => { settingsSons.splice(i, 1); renderSonsListe(); } }, icon('x', 14))))
+    : [h('div', { class: 'muted' }, 'Aucun son au clic pour l\'instant.')]));
+}
 
 // Son au clic sur « Nom de l'agent » (menu secret) : chargé pour la personne connectée.
-let sonClic = null;
 let cacaActif = false;
 async function chargerSonClic() {
-  sonClic = null;
+  sonsActifs = [];
   cacaActif = false;
   if (!S.user) return;
   cacaActif = !!(await call(api.funFind(S.user, 'caca')).catch(() => null));
-  const trouve = await call(api.funFind(S.user, 'clic')).catch(() => null);
-  if (!trouve || !trouve.fun.son) return;
-  sonClic = await call(api.funReadSound(trouve.fun.son.rel, trouve.dataDir)).catch(() => null);
+  const regles = await call(api.funSons(S.user)).catch(() => []);
+  const rang = (z) => ZONES_SON.findIndex((x) => x[0] === z);
+  sonsActifs = regles.filter((r) => rang(r.zone) >= 0).sort((a, b) => rang(a.zone) - rang(b.zone));
 }
-function jouerSonClic(url = sonClic) {
+function jouerSonClic(url) {
   if (!url) return;
   const a = new Audio(url);
   a.play().catch(() => {});
@@ -2454,10 +2465,14 @@ async function openFunDialog() {
   $('#set-farce-user').replaceChildren(h('option', { value: '' }, 'Personne'),
     ...[...new Set([...S.users, farce.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === farce.user }, u)));
   $('#set-farce-freq').value = farce.frequence || 'toujours';
-  const clic = (S.site && S.site.clic) || {};
-  $('#set-clic-user').replaceChildren(h('option', { value: '' }, 'Personne'), h('option', { value: '*', selected: clic.user === '*' }, 'Tout le monde'),
-    ...[...new Set([...S.users, clic.user].filter((u) => u && u !== '*'))].map((u) => h('option', { value: u, selected: u === clic.user }, u)));
-  settingsClicSon = clic.son || null;
+  // Sons au clic : l'ancien réglage « Nom de l'agent » devient une règle.
+  const clic = S.site && S.site.clic;
+  settingsSons = [...((S.site && S.site.sons) || []), ...(clic && clic.son ? [{ zone: 'agent', user: clic.user, son: clic.son }] : [])];
+  $('#son-zone').replaceChildren(...ZONES_SON.map(([id, label]) => h('option', { value: id }, label)));
+  $('#son-user').replaceChildren(h('option', { value: '*' }, 'Tout le monde'), ...S.users.map((u) => h('option', { value: u }, u)));
+  settingsClicSon = null;
+  $('#son-fichier-nom').textContent = 'Aucun son';
+  renderSonsListe();
   const bonh = (S.site && S.site.bonhomme) || {};
   $('#set-bonhomme-user').replaceChildren(h('option', { value: '' }, 'Personne'),
     ...[...new Set([...S.users, bonh.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === bonh.user }, u)));
@@ -2466,7 +2481,6 @@ async function openFunDialog() {
   const caca = (S.site && S.site.caca) || {};
   $('#set-caca-user').replaceChildren(h('option', { value: '' }, 'Personne'), h('option', { value: '*', selected: caca.user === '*' }, 'Tout le monde'),
     ...[...new Set([...S.users, caca.user].filter((u) => u && u !== '*'))].map((u) => h('option', { value: u, selected: u === caca.user }, u)));
-  $('#set-clic-son-nom').textContent = settingsClicSon ? settingsClicSon.nom : 'Aucun son';
   $('#fun-dialog').showModal();
 }
 
@@ -2475,13 +2489,13 @@ async function saveFunDialog() {
   if ($('#fun-dialog').returnValue !== 'save') return;
   const fun = funSettings();
   const farce = $('#set-farce-user').value ? { user: $('#set-farce-user').value, frequence: $('#set-farce-freq').value } : null;
-  const clic = $('#set-clic-user').value && settingsClicSon ? { user: $('#set-clic-user').value, son: settingsClicSon } : null;
+  const clic = null; // remplacé par la liste des sons au clic
   const caca = $('#set-caca-user').value ? { user: $('#set-caca-user').value } : null;
   const bonhomme = $('#set-bonhomme-user').value
     ? { user: $('#set-bonhomme-user').value, frequence: $('#set-bonhomme-freq').value, texte: $('#set-bonhomme-texte').value.trim() } : null;
   try {
-    const r = await call(api.funSaveAll(fun, farce, clic, caca, bonhomme));
-    S.site = { ...S.site, fun, farce, clic, caca, bonhomme };
+    const r = await call(api.funSaveAll(fun, farce, clic, caca, bonhomme, settingsSons));
+    S.site = { ...S.site, fun, farce, clic, caca, bonhomme, sons: settingsSons };
     chargerSonClic();
     toast(r.echecs.length ? `Non enregistré sur : ${r.echecs.join(', ')}` : 'Enregistré.', r.echecs.length ? 6000 : 2500);
   } catch (err) {
@@ -2623,20 +2637,28 @@ function initSettings() {
     $('#fun-dialog').close('cancel');
     playBonhomme($('#set-bonhomme-texte').value.trim() || undefined).then(() => $('#fun-dialog').showModal());
   });
-  $('#set-clic-son').addEventListener('click', async () => {
+  $('#son-fichier').addEventListener('click', async () => {
     const son = await call(api.funPickSound()).catch((err) => { toast(err.message); return null; });
     if (!son) return;
     settingsClicSon = son;
-    $('#set-clic-son-nom').textContent = son.nom;
+    $('#son-fichier-nom').textContent = son.nom;
   });
-  $('#set-clic-test').addEventListener('click', async () => {
+  $('#son-tester').addEventListener('click', async () => {
     if (!settingsClicSon) return toast('Choisissez d\'abord un son.');
     jouerSonClic(await call(api.funReadSound(settingsClicSon.rel)).catch(() => null));
     return null;
   });
+  $('#son-ajouter').addEventListener('click', () => {
+    if (!settingsClicSon) return toast('Choisissez d\'abord un son.');
+    settingsSons.push({ zone: $('#son-zone').value, user: $('#son-user').value, son: settingsClicSon });
+    settingsClicSon = null;
+    $('#son-fichier-nom').textContent = 'Aucun son';
+    renderSonsListe();
+    return null;
+  });
   // Un clic dans n'importe quelle case « Nom de l'agent » (lignes ajoutées comprises).
   document.addEventListener('mousedown', (e) => {
-    if (sonClic && e.target.closest && e.target.closest('#form [data-agent]')) jouerSonClic();
+    if (sonsActifs.length) jouerSonClic(sonPourClic(e.target));
   }, true);
   $('#fun-dialog').addEventListener('close', saveFunDialog);
   $('#set-fun-test').addEventListener('click', async () => playFunIntro(funSettings() || {}, await funPhotoUrl(settingsFunPhoto), await funSonUrl(settingsFunSon)));

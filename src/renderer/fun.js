@@ -726,3 +726,37 @@ function playBonhomme(texte = "LET'S GO") {
     })();
   });
 }
+
+// ---------- Sons au clic (menu secret) : une règle = zone + personne + son ----------
+// Ordre = priorité : la première zone qui correspond au clic l'emporte.
+const ZONES_SON = [
+  ['agent', 'Nom de l’agent (absents)', '#form [data-agent]'],
+  ['motif', 'Motif d’absence', '#form [data-bind$=".motif"]'],
+  ['responsable', 'Responsable du service', '#form [data-bind="responsable"]'],
+  ['obs', 'Observations (saisie et texte)', '#qa-texte, #form [data-bind^="observations."]'],
+  ['tache', 'Nouvelle tâche pour la relève', '#task-new'],
+  ['entrees', 'Entrées (plateaux, PL, tonnage)', '#form [data-bind^="entrees."]'],
+  ['sorties', 'Sorties (nombre, tonnage)', '#form [data-bind^="sorties."], #form [data-bind^="sortiesExtra."]'],
+  ['bennes', 'Bennes (%)', '#form [data-bind^="bennes."]'],
+  ['plateaux', 'Plateaux (%)', '#form [data-bind^="plateaux."]'],
+  ['nc', 'Déchets non conformes', '#form [data-bind^="nonConformes."]'],
+  ['stockage', 'Stockage', '#form [data-bind^="stockage."], #form .stk-etat button'],
+  ['commandes', 'Commandes', '#form [data-bind^="commandes."], #form .cmd-recue'],
+  ['onglets', 'Onglets du haut', '.view-btn'],
+  ['cloture', 'Clôturer / Rouvrir le service', '.service-banner .btn.solid, .service-banner .btn:has(svg)'],
+  ['champs', 'N’importe quelle case de saisie', 'input, textarea, select'],
+  ['boutons', 'N’importe quel bouton', 'button'],
+  ['partout', 'N’importe où (chaque clic)', '*'],
+];
+const zoneSon = (id) => ZONES_SON.find((z) => z[0] === id);
+
+// Règles chargées pour la personne connectée : [{ zone, url }], dans l'ordre des zones.
+let sonsActifs = [];
+function sonPourClic(cible) {
+  if (!cible || !cible.closest || cible.closest('dialog, .fun-intro, .ecran-bleu, .coin-discret')) return null;
+  for (const r of sonsActifs) {
+    const z = zoneSon(r.zone);
+    if (z && r.url && cible.closest(z[2])) return r.url;
+  }
+  return null;
+}
