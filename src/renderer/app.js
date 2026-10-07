@@ -294,7 +294,7 @@ async function chooseUser(u) {
   }
   S.user = u.nom;
   S.userEntry = u;
-  if (S.site && S.site.fun && S.site.fun.user === u.nom) await playFunIntro(S.site.fun);
+  if (S.site && S.site.fun && S.site.fun.user === u.nom) await playFunIntro(S.site.fun, await funPhotoUrl(S.site.fun.photo));
   try {
     localStorage.setItem('liaison.lastUser', u.nom);
   } catch { /* stockage indisponible */ }
@@ -2356,11 +2356,24 @@ async function autoUpdateAtLaunch() {
 let settingsUsers = [];
 let settingsAgents = [];
 
-// Intro fun : un seul responsable, textes facultatifs (null = désactivée).
+// Intro fun : un seul responsable, photo et textes facultatifs (null = désactivée).
+let settingsFunPhoto = null;
 function funSettings() {
   const user = $('#set-fun-user').value;
   if (!user) return null;
-  return { user, titre: $('#set-fun-titre').value.trim(), soustitre: $('#set-fun-sous').value.trim(), bulle: $('#set-fun-bulle').value.trim() };
+  return {
+    user, photo: settingsFunPhoto, ruban: $('#set-fun-ruban').value.trim(),
+    titre: $('#set-fun-titre').value.trim(), soustitre: $('#set-fun-sous').value.trim(), bulle: $('#set-fun-bulle').value.trim(),
+  };
+}
+
+const funPhotoUrl = (rel) => (rel ? call(api.readPhoto(rel)).catch(() => null) : Promise.resolve(null));
+
+async function renderFunPhoto() {
+  const url = await funPhotoUrl(settingsFunPhoto);
+  $('#set-fun-photo-img').hidden = !url;
+  if (url) $('#set-fun-photo-img').src = url;
+  $('#set-fun-photo-rm').hidden = !settingsFunPhoto;
 }
 
 function renderSettingsAgents() {
@@ -2416,6 +2429,9 @@ function openSettings() {
   const fun = (S.site && S.site.fun) || {};
   $('#set-fun-user').replaceChildren(h('option', { value: '' }, 'Personne'),
     ...[...new Set([...S.users, fun.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === fun.user }, u)));
+  $('#set-fun-ruban').value = fun.ruban || '';
+  settingsFunPhoto = fun.photo || null;
+  renderFunPhoto();
   $('#set-fun-titre').value = fun.titre || '';
   $('#set-fun-sous').value = fun.soustitre || '';
   $('#set-fun-bulle').value = fun.bulle || '';
@@ -2484,7 +2500,17 @@ function initSettings() {
       toast(err.message);
     }
   });
-  $('#set-fun-test').addEventListener('click', () => playFunIntro(funSettings() || {}));
+  $('#set-fun-test').addEventListener('click', async () => playFunIntro(funSettings() || {}, await funPhotoUrl(settingsFunPhoto)));
+  $('#set-fun-photo').addEventListener('click', async () => {
+    const rels = await call(api.pickPhotos(S.date)).catch((err) => { toast(err.message); return []; });
+    if (!rels.length) return;
+    settingsFunPhoto = rels[0];
+    renderFunPhoto();
+  });
+  $('#set-fun-photo-rm').addEventListener('click', () => {
+    settingsFunPhoto = null;
+    renderFunPhoto();
+  });
   $('#settings').addEventListener('close', async () => {
     if ($('#settings').returnValue !== 'save') return;
     await flush();

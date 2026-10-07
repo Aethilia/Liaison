@@ -213,12 +213,18 @@
           <select id="set-fun-user"><option value="">Personne</option></select>
           <button type="button" id="set-fun-test" class="btn ghost">Tester</button>
         </div>
-        <div class="row">
-          <input id="set-fun-titre" type="text" placeholder="Merguez">
-          <input id="set-fun-sous" type="text" placeholder="de salopard">
+        <div class="row fun-photo-row">
+          <img id="set-fun-photo-img" alt="" hidden>
+          <button type="button" id="set-fun-photo" class="btn ghost">Choisir sa photo…</button>
+          <button type="button" id="set-fun-photo-rm" class="btn ghost" hidden>Retirer la photo</button>
         </div>
-        <input id="set-fun-bulle" type="text" placeholder="GROSSE MERGUEZ À VOLONTÉ !">
-        <small>Animation de 3 secondes avec son, jouée juste après le clic sur ce nom (un clic ou Échap pour passer). Textes vides = textes par défaut.</small>
+        <input id="set-fun-ruban" type="text" placeholder="Texte du ruban doré (ex. RUGIT · GRATIA · LIAISON)">
+        <div class="row">
+          <input id="set-fun-titre" type="text" placeholder="Gros titre (facultatif)">
+          <input id="set-fun-sous" type="text" placeholder="Sous-titre arc-en-ciel (facultatif)">
+        </div>
+        <input id="set-fun-bulle" type="text" placeholder="Texte de la bulle (facultatif)">
+        <small>Animation de 3 secondes avec rugissement, jouée juste après le clic sur ce nom (un clic ou Échap pour passer). Sa photo apparaît au centre de l'anneau doré.</small>
       </div>
       <div class="field">
         <span>Version</span>

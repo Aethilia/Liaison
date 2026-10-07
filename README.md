@@ -42,10 +42,11 @@ d'un service, comme si rien n'avait été fait (un service clôturé doit d'abor
 
 ## Intro fun 🔥
 
-⚙ Paramètres → *Intro fun* : choisir **un** responsable. Juste après le clic
-sur son nom, une intro plein écran de 3 secondes (flammes, WordArt
-arc-en-ciel, merguez volantes, fanfare) se joue ; un clic ou Échap la passe.
-Les trois textes sont modifiables, *Tester* la montre. Réglage par site.
+⚙ Paramètres → *Intro fun* : choisir **un** responsable et sa photo. Juste
+après le clic sur son nom, une intro plein écran de 3 secondes se joue, façon
+générique de cinéma ringard : anneau doré, ruban, bandes de film, sa photo qui
+rugit au centre, flammes et fanfare. Ruban, titre, sous-titre et bulle sont des
+textes libres ; *Tester* la montre ; un clic ou Échap la passe. Réglage par site.
 
 ## Observations
 
