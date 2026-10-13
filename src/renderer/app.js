@@ -509,6 +509,7 @@ function markDirty() {
 
 async function save({ force = false } = {}) {
   clearTimeout(S.saveTimer);
+  appliquerAbsentsPlanning();
   if (S.saving) {
     await S.saving;
     if (!S.dirty) return;
@@ -728,7 +729,7 @@ function renderForm() {
 
   const motifs = h('datalist', { id: 'motifs' }, M.MOTIFS.map((m) => h('option', { value: m })));
   const prevAbsents = S.prev ? S.prev.absents.filter((a) => a.nom) : [];
-  const absents = card('Agents absents', 'users', [
+  const absents = S.agentsPlanning ? carteAbsentsPlanning(s, closed) : card('Agents absents', 'users', [
     h('div', { class: 'absents' },
       s.absents.map((_, i) => h('div', { class: `absent${i >= M.NB_ABSENTS ? ' extra' : ''}` },
         field(`absents.${i}.nom`, 'text', { placeholder: 'Nom de l\'agent', 'data-agent': '1' }),
@@ -1272,6 +1273,63 @@ function submitQuickAdd() {
   $('#qa-texte').focus();
 }
 
+// ---------- Agents absents d'après le planning ----------
+// Affichés en lecture seule ; recopiés dans le service seulement quand il est
+// enregistré (un service où personne n'a rien saisi reste vide dans le récap).
+async function synchroAbsentsPlanning() {
+  if (!S.agentsPlanning) return;
+  const date = S.date;
+  const service = S.service;
+  const list = await absentsPlanning(date, service).catch(() => null);
+  if (date !== S.date || service !== S.service) return;
+  const avant = JSON.stringify(S.planAbs || null);
+  S.planAbs = { date, service, list: list || [] };
+  if (avant !== JSON.stringify(S.planAbs) && S.view === 'saisie' && S.screen === 'app') {
+    const el = document.getElementById('absents-planning');
+    if (el) el.replaceWith(carteAbsentsPlanning(cur(), isLocked(cur())));
+    const s = cur();
+    // Service déjà commencé : on garde ses absents à jour avec le planning.
+    if (!isLocked(s) && s.rev > 0 && !M.isEmpty(s) && absentsDifferent(s)) markDirty();
+  }
+}
+
+function absentsDifferent(s) {
+  const voulu = (S.planAbs.list || []).map((a) => `${a.nom}|${a.motif}`).join(';');
+  const actuel = s.absents.filter((a) => a.nom).map((a) => `${a.nom}|${a.motif}`).join(';');
+  return voulu !== actuel;
+}
+
+function appliquerAbsentsPlanning() {
+  // Seulement quand une vraie saisie est enregistrée (jamais sur un service vide).
+  if (!S.agentsPlanning || !S.planAbs || !S.dirty) return;
+  const s = S.data && S.data[S.planAbs.service];
+  if (!s || s.date !== S.planAbs.date || isLocked(s) || !absentsDifferent(s)) return;
+  const list = S.planAbs.list.map((a) => ({ nom: a.nom, motif: a.motif }));
+  while (list.length < M.NB_ABSENTS) list.push({ nom: '', motif: '' });
+  s.absents = list;
+  S.dirty = true;
+}
+
+function carteAbsentsPlanning(s, closed) {
+  const eq = PLAN_EQUIPES.find((e) => e.id === s.service);
+  // Service clôturé : on montre ce qui a été enregistré ; sinon le planning du jour.
+  const list = closed ? s.absents.filter((a) => a.nom) : ((S.planAbs && S.planAbs.date === s.date && S.planAbs.service === s.service) ? S.planAbs.list : null);
+  const corps = list === null
+    ? h('div', { class: 'muted' }, 'Chargement du planning…')
+    : list.length
+      ? h('div', { class: 'abs-plan' }, list.map((a) => h('div', { class: 'abs-plan-ligne' },
+        h('span', { class: 'abs-plan-nom' }, a.nom),
+        h('span', { class: 'abs-plan-motif', style: { '--c': couleurMotif(a.motif) } }, a.motif || '—'))))
+      : h('div', { class: 'empty' }, `Aucun absent prévu au planning${eq ? ` pour l'équipe ${eq.label.toLowerCase()}` : ''}.`);
+  const carte = card('Agents absents', 'users', [
+    corps,
+    h('div', { class: 'absents-foot' },
+      h('button', { class: 'btn small ghost', onclick: () => { planState.date = s.date; planState.vue = 'semaine'; setView('planning'); } }, icon('users', 14), 'Voir / modifier dans le planning')),
+  ], { hint: closed ? 'Enregistrés à la clôture' : `D'après le planning${eq ? ` · équipe ${eq.label.toLowerCase()}` : ''}` });
+  carte.id = 'absents-planning';
+  return carte;
+}
+
 function addAbsent() {
   const s = cur();
   // On réutilise d'abord une des 4 lignes de la feuille si elle est vide.
@@ -1691,6 +1749,7 @@ async function goTo(date, service = S.service) {
   S.conflict = null;
   await loadDay();
   renderSaisie();
+  synchroAbsentsPlanning();
   if (S.view === 'recap') {
     const d = M.parseISODate(date);
     S.recapMonth = { year: d.getFullYear(), month: d.getMonth() + 1 };
@@ -1707,6 +1766,7 @@ async function switchService(id) {
   S.service = id;
   await loadPrev();
   renderSaisie();
+  synchroAbsentsPlanning();
 }
 
 function setView(view, { silent = false } = {}) {
@@ -1722,6 +1782,7 @@ function setView(view, { silent = false } = {}) {
   if (silent) return;
   if (view === 'inventaire') renderInventaire();
   if (view === 'planning') { fermerPalette(); renderPlanning(); }
+  if (view === 'saisie') synchroAbsentsPlanning();
   if (view === 'dashboard') renderDashboard();
   if (view === 'recap') {
     const d = M.parseISODate(S.date);
@@ -1756,6 +1817,7 @@ async function poll() {
   }
   if (Date.now() - invState.loadedAt > 60000) loadInventaire();
   if (S.view !== 'saisie' || S.saving || $('#fiche').open) return;
+  synchroAbsentsPlanning();
   let revs;
   try {
     revs = await call(api.dayRevs(S.date));

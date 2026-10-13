@@ -99,3 +99,9 @@ dialog.plan-detail { width: min(560px, 94vw); }
 .ag-vide { padding: 4px 6px 10px; }
 .ag-ajout input { flex: 1; min-width: 0; }
 .ag-ligne .haut svg, .ag-ligne .bas svg { transform: rotate(90deg); }
+
+/* Agents absents (saisie) d'après le planning */
+.abs-plan { display: flex; flex-direction: column; gap: 6px; }
+.abs-plan-ligne { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: #f8fafc; border: 1px solid #eef1f5; }
+.abs-plan-nom { flex: 1; font-weight: 700; }
+.abs-plan-motif { font-size: 12px; font-weight: 700; color: #fff; background: var(--c); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }

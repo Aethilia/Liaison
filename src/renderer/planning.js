@@ -8,7 +8,7 @@
 const PLAN_EQUIPES = [
   { id: 'matin', label: 'Matin', heures: '5H-13H', couleur: () => SVC.matin.couleur },
   { id: 'apresmidi', label: 'Après-midi', heures: '13H-20H', couleur: () => SVC.apresmidi.couleur },
-  { id: 'nuit', label: 'Nuit', heures: '20H-4H', couleur: () => SVC.nuit.couleur },
+  { id: 'nuit', label: 'Nuit', heures: '20H → 4H', couleur: () => SVC.nuit.couleur },
   { id: 'responsables', label: 'Responsables', heures: '', couleur: () => '#0f766e' },
   { id: 'autres', label: 'Autres', heures: '', couleur: () => '#64748b' },
 ];
@@ -111,11 +111,12 @@ function vueSemaine(head) {
     for (const a of agents) {
       lignes.push(h('tr', { class: 'plan-agent', style: { '--eq': eq.couleur() } },
         h('th', { class: 'c-agent' }, a.nom),
-        jours.map((d) => caseAgent(a, d, (sem.cases[a.id] || {})[d], { we: estWeekEnd(d), auj: d === auj }))));
+        jours.map((d) => caseAgent(a, d, (sem.cases[a.id] || {})[d], { we: estWeekEnd(d), auj: d === auj, nuit: eq.id === 'nuit' }))));
     }
   }
   const legende = h('div', { class: 'plan-legende' }, PLAN_CODES.map((c) => h('span', { class: 'leg' }, h('i', { style: { background: c.couleur } }, c.code), c.label)),
-    h('span', { class: 'leg muted' }, 'Case vide = travaille normalement'));
+    h('span', { class: 'leg muted' }, 'Case vide = travaille normalement'),
+    h('span', { class: 'leg muted' }, 'Nuit : une case = une vacation, du soir 20H au lendemain 4H'));
   const notes = h('textarea', { class: 'plan-notes-txt', rows: 4, placeholder: 'Notes de la semaine (formations, travaux, remplacements…)' });
   notes.value = sem.notes || '';
   notes.addEventListener('change', async () => {
@@ -132,13 +133,17 @@ function vueSemaine(head) {
       h('div', { class: 'card-body' }, notes)));
 }
 
-function caseAgent(agent, date, val, { we, auj }) {
+// Nuit : une seule vacation, rattachée au jour où elle commence (20H → 4H le lendemain).
+const libelleJour = (date, nuit) => (nuit ? `nuit du ${fmtJourCourt(date)} au ${fmtJourCourt(isoAjout(date, 1))}` : fmtJour(date));
+const fmtJourCourt = (iso) => new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric' }).format(M.parseISODate(iso));
+
+function caseAgent(agent, date, val, { we, auj, nuit = false }) {
   const c = val && planCode(val.code);
   const td = h('td', {
     class: `plan-case${we ? ' we' : ''}${auj ? ' auj' : ''}${c ? ' rempli' : ''}`,
-    tabIndex: 0, title: `${agent.nom} — ${fmtJour(date)}${c ? ` : ${c.label}` : ''}${val && val.texte ? ` (${val.texte})` : ''}`,
-    onclick: (e) => ouvrirPalette(e.currentTarget, agent, date, val),
-    onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrirPalette(e.currentTarget, agent, date, val); } },
+    tabIndex: 0, title: `${agent.nom} — ${libelleJour(date, nuit)}${c ? ` : ${c.label}` : ''}${val && val.texte ? ` (${val.texte})` : ''}`,
+    onclick: (e) => ouvrirPalette(e.currentTarget, agent, date, val, nuit),
+    onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrirPalette(e.currentTarget, agent, date, val, nuit); } },
   });
   if (c) td.append(h('span', { class: 'plan-code', style: { '--c': c.couleur } }, val.code === 'H' && val.texte ? val.texte : c.code));
   else if (val && val.texte) td.append(h('span', { class: 'plan-texte' }, val.texte));
@@ -153,7 +158,7 @@ function fermerPalette() {
 }
 
 // Petite palette posée sous la case : un clic sur un code l'enregistre.
-function ouvrirPalette(td, agent, date, val) {
+function ouvrirPalette(td, agent, date, val, nuit = false) {
   fermerPalette();
   const texte = h('input', { type: 'text', placeholder: 'Horaire ou note (ex. 13H-18H, +3h30)', value: (val && val.texte) || '', maxLength: 40 });
   const choisir = async (code) => {
@@ -161,6 +166,7 @@ function ouvrirPalette(td, agent, date, val) {
     fermerPalette();
     try {
       planState.semaine = await call(api.planSetCase(agent.id, date, { code: code === null ? '' : code || (t ? 'H' : ''), texte: code === null ? '' : t }, S.user));
+      planSemCache.delete(lundiDe(date));
     } catch (err) {
       toast(`Non enregistré : ${err.message}`);
     }
@@ -168,7 +174,7 @@ function ouvrirPalette(td, agent, date, val) {
   };
   texte.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); choisir((val && val.code && val.code !== 'H') ? val.code : 'H'); } if (e.key === 'Escape') fermerPalette(); });
   planPop = h('div', { class: 'plan-pop', role: 'dialog' },
-    h('div', { class: 'pop-titre' }, h('b', {}, agent.nom), h('span', { class: 'muted' }, ` · ${fmtJour(date)}`)),
+    h('div', { class: 'pop-titre' }, h('b', {}, agent.nom), h('span', { class: 'muted' }, ` · ${libelleJour(date, nuit)}`)),
     h('div', { class: 'pop-codes' }, PLAN_CODES.map((c) => h('button', {
       class: `pop-code${val && val.code === c.code ? ' on' : ''}`, style: { '--c': c.couleur }, title: c.label, onclick: () => choisir(c.code),
     }, h('b', {}, c.code), h('span', {}, c.label)))),
@@ -343,3 +349,28 @@ async function rafraichirAgentsAbsents() {
   S.agents = planState.agents.map((a) => a.nom).sort((a, b) => a.localeCompare(b, 'fr'));
   S.agentsPlanning = true;
 }
+
+// Absents d'un service d'après le planning : agents de l'équipe du service
+// dont la case du jour porte un code d'absence. null si pas de planning.
+const planSemCache = new Map(); // lundi → { at, sem }
+async function absentsPlanning(date, service) {
+  if (!planState.agents.length) return null;
+  const lundi = lundiDe(date);
+  let entree = planSemCache.get(lundi);
+  if (!entree || Date.now() - entree.at > 5000) {
+    const sem = await call(api.planSemaine(date)).catch(() => null);
+    entree = { at: Date.now(), sem: sem || { cases: {} } };
+    planSemCache.set(lundi, entree);
+  }
+  const out = [];
+  for (const a of planState.agents.filter((x) => x.equipe === service)) {
+    const v = (entree.sem.cases[a.id] || {})[date];
+    const c = v && planCode(v.code);
+    if (c && c.absence) out.push({ nom: a.nom, motif: v.texte ? `${c.label} · ${v.texte}` : c.label, code: c.code });
+  }
+  return out;
+}
+const couleurMotif = (motif) => {
+  const c = PLAN_CODES.find((x) => String(motif || '').startsWith(x.label));
+  return c ? c.couleur : '#94a3b8';
+};

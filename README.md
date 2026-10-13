@@ -94,6 +94,12 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   codes (R repos, CP, MAL, ABS, naissance, FOR, VM, INT, T travaille le
   week-end, H horaire/note libre). Case vide = travaille normalement. Chaque
   équipe affiche le nombre de présents par jour ; notes de la semaine à droite.
+- **Nuit** : une case = une vacation, du soir 20H au lendemain 4H (rattachée
+  au jour où elle commence, comme le service de nuit de la main courante).
+- **Agents absents** de la main courante : remplis automatiquement d'après le
+  planning (équipe du service, codes d'absence), non modifiables à la main ;
+  enregistrés dans le service dès qu'il y a une saisie (un jour sans saisie
+  reste vide dans le récap).
 - **Synthèse** du mois par agent : jours travaillés, nombre de chaque code,
   barre de répartition ; un clic sur un agent ouvre son mois en calendrier.
 
