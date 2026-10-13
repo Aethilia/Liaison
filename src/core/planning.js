@@ -31,7 +31,12 @@ function nettoyerCase(valeur) {
   const texte = String((valeur && valeur.texte) || '').trim();
   const hs = Number(valeur && valeur.hs);
   const v = { code, texte };
-  if (Number.isFinite(hs) && hs > 0) v.hs = Math.round(hs * 100) / 100;
+  if (Number.isFinite(hs) && hs > 0) {
+    v.hs = Math.round(hs * 100) / 100;
+    // Type d'heures supp ponctuelles : bleues (normales), rouges (dimanche /
+    // férié), vertes (nuit). Absent : déduit du jour à l'affichage.
+    if (['bleu', 'rouge', 'vert'].includes(valeur.hsType)) v.hsType = valeur.hsType;
+  }
   const couleur = couleurValide(valeur && valeur.couleur);
   if (couleur) v.couleur = couleur;
   return code || texte || v.hs ? v : null;

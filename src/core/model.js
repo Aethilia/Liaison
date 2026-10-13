@@ -409,6 +409,30 @@ function currentService(now = new Date(), site) {
   return { date: today, service: 'nuit' };
 }
 
+// Jours fériés (France) d'une année : fixes + ceux qui suivent Pâques.
+const feriesCache = new Map();
+function joursFeries(annee) {
+  if (feriesCache.has(annee)) return feriesCache.get(annee);
+  // Dimanche de Pâques (algorithme de Meeus / Jones / Butcher).
+  const a = annee % 19; const b = Math.floor(annee / 100); const c = annee % 100;
+  const d = Math.floor(b / 4); const e = b % 4; const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3); const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4); const k = c % 4; const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mois = Math.floor((h + l - 7 * m + 114) / 31); const jour = ((h + l - 7 * m + 114) % 31) + 1;
+  const p2 = (n) => String(n).padStart(2, '0');
+  const paques = `${annee}-${p2(mois)}-${p2(jour)}`;
+  const out = new Map([
+    [`${annee}-01-01`, 'Jour de l\'an'], [addDays(paques, 1), 'Lundi de Pâques'], [`${annee}-05-01`, 'Fête du Travail'],
+    [`${annee}-05-08`, 'Victoire 1945'], [addDays(paques, 39), 'Ascension'], [addDays(paques, 50), 'Lundi de Pentecôte'],
+    [`${annee}-07-14`, 'Fête nationale'], [`${annee}-08-15`, 'Assomption'], [`${annee}-11-01`, 'Toussaint'],
+    [`${annee}-11-11`, 'Armistice'], [`${annee}-12-25`, 'Noël'],
+  ]);
+  feriesCache.set(annee, out);
+  return out;
+}
+const ferie = (iso) => joursFeries(Number(iso.slice(0, 4))).get(iso) || null;
+
 function toISODate(d) {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -436,7 +460,7 @@ const api = {
   boxNames, boxAlerts, boxUnique, boxTitres, boxCle, matieresDuSite, entreesTonnage, deuxServices, servicesDuSite, setProfil, SERVICES_TOUS,
   SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
-  toISODate, parseISODate, addDays, daysInMonth,
+  toISODate, parseISODate, addDays, daysInMonth, joursFeries, ferie,
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

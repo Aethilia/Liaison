@@ -99,9 +99,18 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
 - **Heures supp** : petite case « + … h supp » dans la palette (1, 2,5 ou
   3h30), seule (code HS) ou avec un autre code. Badge « +1h » dans la case,
   total du mois par agent dans la synthèse (colonne *H. supp*).
-- **Samedi après-midi** (équipe 13H-20H) : un samedi laissé vide compte
-  automatiquement +7h supp (affiché en contour, calculé à l'affichage, rien
-  n'est enregistré). Une case saisie (R, CP…) prime.
+- **Heures supp, trois types** : 🔵 bleues (normales), 🔴 rouges (dimanche /
+  férié), 🟢 vertes (nuit). Synthèse : une colonne par type + total (au survol :
+  part régulière / ponctuelle).
+  - *Régulières* (CTVO, calculées à l'affichage, rien n'est enregistré) :
+    matin et nuit +1h verte par jour travaillé du lundi au vendredi ;
+    après-midi +7h bleues le samedi (case vide) ; jour férié travaillé
+    (jour normalement travaillé ou case remplie) : 7h rouges pour tout le
+    monde, sans heure verte. Les cases automatiques sont en contour ; une
+    case saisie (R, CP…) prime.
+  - *Ponctuelles* : « + … h supp » dans la palette, type au choix (rouge
+    proposé un dimanche ou un férié, bleu sinon).
+  - Jours fériés calculés automatiquement (colonne rouge « Férié »).
 - **Couleurs et repères** : chaque semaine a ses **repères** (textes colorés,
   à droite de la grille, ex. « Congé de naissance du 14/10 au 14/11 » en
   violet) ; la palette d'une case permet de lui donner la couleur d'un repère,
