@@ -159,6 +159,8 @@ function promptText(title, placeholder = '', { type = 'text', text = '' } = {}) 
   input.value = '';
   input.placeholder = placeholder;
   dlg.returnValue = '';
+  // Entrée valide (sinon le formulaire prendrait le premier bouton : Annuler).
+  input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); dlg.close('ok'); } };
   dlg.showModal();
   input.focus();
   return new Promise((resolve) => {
@@ -182,8 +184,11 @@ const isClosed = (s) => !!(s && s.cloture);
 const isTooNew = (s) => !!(s && s.appVersion && S.config && M.compareVersions(s.appVersion, S.config.appVersion) > 0);
 const isLocked = (s) => isClosed(s) || isTooNew(s);
 const realObs = (s) => s.observations.filter((o) => o.heure || o.texte);
-const boxAlerts = (s) => M.boxAlerts(s);
-const boxNames = (s) => M.boxNames(S.site, s);
+// Réglages du site actif, avec son nom (CPTP : deux services, un seul bloc de stockage).
+const siteProfil = () => ({ ...(S.site || {}), nom: (S.site && S.site.nom) || S.siteName || '' });
+const boxAlerts = (s) => M.boxAlerts(s, siteProfil());
+const boxNames = (s) => M.boxNames(siteProfil(), s);
+const boxTitres = () => M.boxTitres(siteProfil());
 
 function serviceState(s) {
   const live = M.currentService();
@@ -196,6 +201,14 @@ const statePill = (s, extra = '') => {
   const st = serviceState(s);
   return h('span', { class: `pill ${st.cls} ${extra}` }, st.icon ? icon(st.icon, 12) : null, st.label);
 };
+// Services du site actif (CPTP : matin 6H-13H et soir 18H-3H) : M.SERVICES et SVC suivent.
+function appliquerProfil() {
+  M.setProfil(siteProfil());
+  for (const d of M.SERVICES_TOUS) Object.assign(SVC[d.id], d);
+  for (const d of M.SERVICES) Object.assign(SVC[d.id], d);
+  if (S.service && !M.SERVICES.some((d) => d.id === S.service)) S.service = M.currentService().service;
+  majPlanEquipes();
+}
 const svcStyle = (id) => ({ '--c': SVC[id].couleur, '--c2': SVC[id].c2 });
 
 /* ---------- Écrans ---------- */
@@ -243,6 +256,7 @@ async function loadSites() {
   }
   const actif = S.sites.find((x) => x.actif);
   S.siteName = actif ? actif.nom : '';
+  appliquerProfil();
 }
 
 // Étape 1 : choix du responsable
@@ -491,6 +505,7 @@ async function loadDay() {
   S.data = await call(api.loadDay(S.date));
   try {
     S.site = await call(api.loadSite());
+    appliquerProfil();
   } catch { /* on garde les couleurs déjà connues */ }
   await loadPrev();
 }
@@ -761,7 +776,8 @@ function renderForm() {
             style: { '--sw': col ? col.couleur : 'transparent' }, onclick: (e) => openColorPicker(e.currentTarget, row),
           }),
           row.extra ? field(`${base}.nom`, 'text', { placeholder: 'Matière ponctuelle', class: 'extra-name' }) : h('span', {}, row.nom),
-          row.extra && !closed ? h('button', { class: 'o-btn rm', title: 'Supprimer cette sortie', 'aria-label': 'Supprimer cette sortie', onclick: () => removeExtraSortie(row.index) }, icon('x', 14)) : null)),
+          row.extra && !closed ? h('button', { class: 'o-btn rm', title: 'Supprimer cette sortie', 'aria-label': 'Supprimer cette sortie', onclick: () => removeExtraSortie(row.index) }, icon('x', 14)) : null,
+          !row.extra && !closed ? h('button', { class: 'o-btn rm mat-rm', title: 'Retirer cette matière pour le site', 'aria-label': `Retirer ${row.nom}`, onclick: () => removeMatiere(row.nom) }, icon('x', 13)) : null)),
       h('td', {}, field(`${base}.nb`, 'int', { 'data-nb': base })),
       row.externe ? h('td', { class: 'ext' }, 'service externe') : h('td', {}, tonField(base, row.data))));
     const n = peseeCount(row);
@@ -777,18 +793,22 @@ function renderForm() {
       h('thead', {}, h('tr', {}, h('th', {}, 'Matière'), h('th', {}, 'Nb sorties'), h('th', {}, 'Tonnage (T)'))),
       h('tbody', {}, sortieRows),
       h('tfoot', {}, h('tr', { class: 'total' }, h('td', {}, 'TOTAL'), h('td', { id: 'calc-nb' }), h('td', { id: 'calc-ton' })))),
-    closed ? null : h('div', { class: 'absents-foot' }, h('button', { class: 'btn small', onclick: addExtraSortie }, icon('plus', 14), 'Sortie ponctuelle')),
+    closed ? null : h('div', { class: 'absents-foot' },
+      h('button', { class: 'btn small', onclick: addMatiere, title: 'Nouvelle matière proposée à chaque service du site' }, icon('plus', 14), 'Matière'),
+      h('button', { class: 'btn small ghost', onclick: addExtraSortie, title: 'Sortie pour ce service seulement (ex. sapins)' }, icon('plus', 14), 'Sortie ponctuelle')),
   ], { hint: 'Plusieurs bennes : 5,54+4,74' });
 
+  const titres = boxTitres();
   const boxRow = (group, nom) => h('div', { class: 'box-row' },
     h('span', {}, nom),
     h('div', { class: 'bar', 'data-bar': `${group}.${nom}` }, h('i')),
-    h('div', { class: 'pct' }, field(`${group}.${nom}`, 'pct', { 'aria-label': `${group === 'bennes' ? 'Benne' : 'Plateau'} ${nom}` })),
+    h('div', { class: 'pct' }, field(`${group}.${nom}`, 'pct', { 'aria-label': `${group === 'bennes' ? titres.benne : titres.plateau} ${nom}` })),
     closed ? null : h('button', { class: 'o-btn rm box-rm', title: 'Retirer cette ligne pour le site', 'aria-label': `Retirer ${nom}`, onclick: () => removeBox(group, nom) }, icon('x', 13)));
   const noms = boxNames(s);
   const boxGroup = (group, titre) => h('div', {}, h('h4', {}, titre), noms[group].map((n) => boxRow(group, n)),
-    closed ? null : h('button', { class: 'btn small ghost box-add', onclick: () => addBox(group) }, icon('plus', 13), group === 'bennes' ? 'Benne' : 'Plateau'));
-  const boxs = card('État des boxs', 'box', h('div', { class: 'boxs' }, boxGroup('bennes', 'Bennes'), boxGroup('plateaux', 'Plateaux')),
+    closed ? null : h('button', { class: 'btn small ghost box-add', onclick: () => addBox(group) }, icon('plus', 13), group === 'bennes' ? (M.boxUnique(siteProfil()) ? 'Ligne' : 'Benne') : 'Plateau'));
+  const unBloc = M.boxUnique(siteProfil()) && !noms.plateaux.length;
+  const boxs = card('État des boxs', 'box', h('div', { class: `boxs${unBloc ? ' un-bloc' : ''}` }, boxGroup('bennes', titres.bennes), unBloc ? null : boxGroup('plateaux', titres.plateaux)),
   { hint: `Remplissage en % · alerte à ${M.SEUIL_ALERTE} %` });
 
   const ncRows = s.nonConformes.map((x, i) => {
@@ -850,7 +870,7 @@ function renderForm() {
     commandes = card('Commandes', 'send', [
       cmdRows.length ? h('div', { class: 'cmd-list' }, cmdRows) : h('div', { class: 'empty' }, 'Aucune commande.'),
       closed ? null : h('div', { class: 'absents-foot' }, h('button', { class: 'btn small', onclick: addCommande }, icon('plus', 14), 'Ajouter une commande')),
-    ], { wide: true, hint: 'Affichées en information à l\'après-midi et à la nuit' });
+    ], { wide: true, hint: `Affichées en information ${M.SERVICES.filter((d) => d.id !== M.SERVICE_COMMANDES).map((d) => ({ apresmidi: 'à l\'après-midi', nuit: d.label === 'Soir' ? 'au soir' : 'à la nuit' })[d.id]).join(' et ')}` });
   } else {
     const m = S.data[M.SERVICE_COMMANDES];
     const list = m ? m.commandes.filter((x) => x.quoi || x.quantite || x.fournisseur) : [];
@@ -932,8 +952,10 @@ async function saveBoxList(group, update) {
   } catch {
     site = { ...S.site };
   }
-  const current = M.boxNames(site, null);
-  site.boxs = { ...current, [group]: update(current[group]) };
+  const profil = { ...site, nom: site.nom || S.siteName || '' };
+  const current = M.boxNames(profil, null);
+  // Bloc unique (CPTP) : seule la liste « stockage » est touchée.
+  site.boxs = M.boxUnique(profil) ? { ...(site.boxs || {}), [M.boxCle(profil, group)]: update(current[group]) } : { ...current, [group]: update(current[group]) };
   try {
     S.site = await call(api.saveSite(site));
   } catch (err) {
@@ -942,8 +964,8 @@ async function saveBoxList(group, update) {
 }
 
 async function addBox(group) {
-  const label = group === 'bennes' ? 'benne' : 'plateau';
-  const nom = (await promptText(`Ajouter ${label === 'benne' ? 'une benne' : 'un plateau'}`, 'Nom (ex. Gravats)', { text: 'La ligne sera ajoutée pour tous les services du site.' }) || '').trim().replace(/\./g, ' ');
+  const quoi = group === 'plateaux' ? 'un plateau' : M.boxUnique(siteProfil()) ? 'une ligne de stockage' : 'une benne';
+  const nom = (await promptText(`Ajouter ${quoi}`, 'Nom (ex. Gravats)', { text: 'La ligne sera ajoutée pour tous les services du site.' }) || '').trim().replace(/\./g, ' ');
   if (!nom) return;
   if (boxNames(cur())[group].some((n) => n.toLowerCase() === nom.toLowerCase())) {
     toast(`« ${nom} » existe déjà.`);
@@ -963,6 +985,47 @@ async function removeBox(group, nom) {
     markDirty();
   }
   delete s[group][nom];
+  renderForm();
+}
+
+// Matières en sortie : liste permanente du site (site.json), comme les boxs.
+async function saveMatieres(update) {
+  let site;
+  try {
+    site = await call(api.loadSite()); // version la plus récente (autre poste)
+  } catch {
+    site = { ...S.site };
+  }
+  site.matieres = update(M.matieresDuSite(site));
+  try {
+    S.site = await call(api.saveSite(site));
+    appliquerProfil();
+  } catch (err) {
+    toast(`Non enregistré : ${err.message}`);
+  }
+}
+
+async function addMatiere() {
+  const nom = (await promptText('Ajouter une matière', 'Nom (ex. Carton)', { text: 'La matière sera proposée en sortie pour tous les services du site.' }) || '').trim().replace(/\./g, ' ');
+  if (!nom) return;
+  if (M.allSorties(cur()).some((r) => !r.extra && r.nom.toLowerCase() === nom.toLowerCase())) {
+    toast(`« ${nom} » existe déjà.`);
+    return;
+  }
+  await saveMatieres((list) => [...list, nom]);
+  renderForm();
+}
+
+async function removeMatiere(nom) {
+  if (await ask('Retirer cette matière ?', `« ${nom} » ne sera plus proposée en sortie sur ce site (les services déjà saisis gardent leurs chiffres).`,
+    [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+  await saveMatieres((list) => list.filter((n) => n !== nom));
+  const s = cur();
+  const v = s.sorties[nom];
+  if (v && (v.nb != null || v.tonnage != null) && !isLocked(s)) {
+    s.sorties[nom] = M.MATIERES_EXTERNES.includes(nom) ? { nb: null } : { nb: null, tonnage: null, pesees: [] };
+    markDirty();
+  }
   renderForm();
 }
 
@@ -1641,8 +1704,8 @@ function renderFiche() {
             h('tfoot', {}, h('tr', { class: 'tot' }, h('td', {}, 'Total'), h('td', {}, plural(t.sortiesNb, 'sortie')), h('td', {}, fmtTon(t.tonnage))))),
         ]),
         ficheCard('État des boxs', 'box', [
-          subTitle('BENNES', 0), boxNames(s).bennes.map((b) => miniBar(b, s.bennes[b])),
-          subTitle('PLATEAUX', 10), boxNames(s).plateaux.map((p) => miniBar(p, s.plateaux[p])),
+          subTitle(boxTitres().bennes.toUpperCase(), 0), boxNames(s).bennes.map((b) => miniBar(b, s.bennes[b])),
+          boxNames(s).plateaux.length ? [subTitle(boxTitres().plateaux.toUpperCase(), 10), boxNames(s).plateaux.map((p) => miniBar(p, s.plateaux[p]))] : null,
         ]))),
     h('div', { class: 'fiche-foot' },
       h('span', { class: 'spacer' }),
@@ -1863,7 +1926,7 @@ async function poll() {
 async function renderRecap() {
   const { year, month } = S.recapMonth;
   const days = await call(api.loadMonth(year, month));
-  const parMatiere = Object.fromEntries(M.MATIERES.map((m) => [m, { nb: 0, tonnage: 0 }]));
+  const parMatiere = Object.fromEntries(M.matieresDuSite(siteProfil()).map((m) => [m, { nb: 0, tonnage: 0 }]));
   const ponctuelles = new Set();
   const parNc = {};
   const parMotif = {};
@@ -1957,7 +2020,7 @@ async function renderRecap() {
       kpi('Entrées (passages)', `${fmtNum(tot.entrees)}${tot.entTon ? ` · ${fmtNum(Math.round(tot.entTon * 10) / 10)} T` : ''}`, 'truck', '#2e75b6', '#e7f1fb'),
       kpi('Sorties · tonnage', `${fmtNum(tot.nb)} · ${fmtNum(Math.round(tot.tonnage * 10) / 10)} T`, 'upload', '#c55a11', '#fdf0e6'),
       kpi('Observations', fmtNum(tot.obs), 'note', '#8e44ad', '#f3e8fa'),
-      kpi('Services clôturés', `${tot.clos} / ${days.length * 3}`, 'lock', '#1f8a4c', '#e5f6ec')),
+      kpi('Services clôturés', `${tot.clos} / ${days.length * M.SERVICES.length}`, 'lock', '#1f8a4c', '#e5f6ec')),
     recapCharts(days),
     h('div', { class: 'recap-grid' },
       h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('list', 16)), 'Par jour', h('span', { class: 'hint' }, 'Cliquer sur un jour ou une pastille pour voir le détail')),
@@ -2345,7 +2408,7 @@ function buildPrint() {
         h('td', { class: 'c' }, s.entrees.pl ?? ''), h('td', { class: 'c' }, h('b', {}, 'TOTAL')), h('td', { class: 'c' }, h('b', {}, t.entrees)),
         ...(s.entrees.tonnage != null ? [h('td', {}, 'Tonnage'), h('td', { class: 'c' }, fmtTon(s.entrees.tonnage))] : []))),
       h('div', { class: 'p-sec' }, 'SORTIES  ·  ÉTAT DES BOXS'),
-      h('table', {}, h('tr', {}, ['Matière', 'Nb sorties', 'Tonnage', 'Bennes', 'Remplissage', 'Plateaux', 'Remplissage'].map((x) => h('th', {}, x))),
+      h('table', {}, h('tr', {}, ['Matière', 'Nb sorties', 'Tonnage', boxTitres().bennes, 'Remplissage', noms.plateaux.length ? boxTitres().plateaux : '', noms.plateaux.length ? 'Remplissage' : ''].map((x) => h('th', {}, x))),
         boxRows,
         h('tr', { class: 'tot' }, h('td', {}, 'TOTAL'), h('td', { class: 'c' }, t.sortiesNb), h('td', { class: 'c' }, fmtTon(t.tonnage)), h('td', { colspan: 4, style: { background: 'transparent', border: 0 } }))),
       s.nonConformes.length ? h('div', { class: 'p-sec' }, 'DÉCHETS NON CONFORMES') : null,
@@ -2816,6 +2879,7 @@ function initSettings() {
     const entTon = $('#set-entrees-ton').checked;
     if (!dirChanged && (nom !== ((S.site && S.site.nom) || '') || entTon !== M.entreesTonnage(S.site))) {
       S.site = await call(api.saveSite({ ...S.site, nom, entreesTonnage: entTon }));
+      appliquerProfil();
     }
     S.config = await call(api.setConfig({
       poste: $('#set-poste').value.trim(), dataDir: $('#set-dir').value, sites: settingsSites.map((x) => ({ dataDir: x.dataDir })),
@@ -2855,6 +2919,7 @@ async function loadSiteData() {
   await rafraichirAgentsAbsents();
   S.ncTypes = await safe(api.loadNcTypes(), []);
   S.site = await safe(api.loadSite(), { couleurs: {} });
+  appliquerProfil();
   await loadTasks();
   await loadInventaire();
   if (S.view === 'inventaire' && S.screen === 'app') renderInventaire({ reload: false });

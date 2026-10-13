@@ -5,14 +5,19 @@
 // dimanche avec un code par jour (repos, CP, maladie…), notes de la semaine,
 // synthèse mensuelle par agent et gestion de la liste des agents.
 
-const PLAN_EQUIPES = [
-  { id: 'matin', label: 'Matin', heures: '5H-13H', couleur: () => SVC.matin.couleur },
-  { id: 'apresmidi', label: 'Après-midi', heures: '13H-20H', couleur: () => SVC.apresmidi.couleur },
-  { id: 'nuit', label: 'Nuit', heures: '20H → 4H', couleur: () => SVC.nuit.couleur },
-  { id: 'responsables', label: 'Responsables', heures: '', couleur: () => '#0f766e' },
-  { id: 'autres', label: 'Autres', heures: '', couleur: () => '#64748b' },
-];
+// Équipes : les services du site (CPTP : matin et soir), puis responsables et autres.
+const PLAN_EQUIPES = [];
+const heuresEquipe = (d) => d.horaires.replace(/\s*-\s*/, d.id === 'nuit' ? ' → ' : '-');
+function majPlanEquipes() {
+  // Une équipe retirée du site reste affichée tant qu'un agent y est rangé.
+  const svcs = M.SERVICES_TOUS.filter((d) => M.SERVICES.some((x) => x.id === d.id) || planState.agents.some((a) => a.equipe === d.id));
+  PLAN_EQUIPES.splice(0, PLAN_EQUIPES.length,
+    ...svcs.map((d) => ({ id: d.id, label: SVC[d.id].label, heures: heuresEquipe(SVC[d.id]), couleur: () => SVC[d.id].couleur })),
+    { id: 'responsables', label: 'Responsables', heures: '', couleur: () => '#0f766e' },
+    { id: 'autres', label: 'Autres', heures: '', couleur: () => '#64748b' });
+}
 // Codes du planning. `absence` : l'agent n'est pas là (compte dans « Agents absents »).
+// `signale` : l'agent est là mais apparaît aussi dans « Agents absents » (retard).
 const PLAN_CODES = [
   { code: 'R', label: 'Repos', couleur: '#94a3b8', absence: true },
   { code: 'CP', label: 'Congés payés', couleur: '#1baf7a', absence: true },
@@ -20,6 +25,7 @@ const PLAN_CODES = [
   { code: 'ABS', label: 'Absence', couleur: '#eb6834', absence: true },
   { code: 'CN', label: 'Naissance', couleur: '#e87ba4', absence: true },
   { code: 'FOR', label: 'Formation', couleur: '#4a3aa7', absence: true },
+  { code: 'RET', label: 'Retard', couleur: '#d9480f', signale: true },
   { code: 'VM', label: 'Visite médicale', couleur: '#2a78d6' },
   { code: 'INT', label: 'Intempéries', couleur: '#5b6b7f', absence: true },
   { code: 'T', label: 'Travaille (WE)', couleur: '#0f766e' },
@@ -47,6 +53,7 @@ async function loadPlanAgents() {
   } catch {
     planState.agents = [];
   }
+  majPlanEquipes();
   return planState.agents;
 }
 
@@ -56,6 +63,7 @@ async function renderPlanning({ reload = true } = {}) {
     const d = M.parseISODate(planState.date);
     planState.mois = { y: d.getFullYear(), m: d.getMonth() + 1 };
   }
+  majPlanEquipes();
   if (reload) {
     await loadPlanAgents();
     if (planState.vue === 'semaine') planState.semaine = await call(api.planSemaine(planState.date)).catch(() => null);
@@ -116,7 +124,7 @@ function vueSemaine(head) {
   }
   const legende = h('div', { class: 'plan-legende' }, PLAN_CODES.map((c) => h('span', { class: 'leg' }, h('i', { style: { background: c.couleur } }, c.code), c.label)),
     h('span', { class: 'leg muted' }, 'Case vide = travaille normalement'),
-    h('span', { class: 'leg muted' }, 'Nuit : une case = une vacation, du soir 20H au lendemain 4H'));
+    h('span', { class: 'leg muted' }, legendeNuit()));
   const notes = h('textarea', { class: 'plan-notes-txt', rows: 4, placeholder: 'Notes de la semaine (formations, travaux, remplacements…)' });
   notes.value = sem.notes || '';
   notes.addEventListener('change', async () => {
@@ -133,8 +141,14 @@ function vueSemaine(head) {
       h('div', { class: 'card-body' }, notes)));
 }
 
-// Nuit : une seule vacation, rattachée au jour où elle commence (20H → 4H le lendemain).
-const libelleJour = (date, nuit) => (nuit ? `nuit du ${fmtJourCourt(date)} au ${fmtJourCourt(isoAjout(date, 1))}` : fmtJour(date));
+// Nuit (ou soir au CPTP) : une seule vacation, rattachée au jour où elle commence (20H → 4H le lendemain).
+const libelleJour = (date, nuit) => (nuit ? `${SVC.nuit.label.toLowerCase()} du ${fmtJourCourt(date)} au ${fmtJourCourt(isoAjout(date, 1))}` : fmtJour(date));
+function legendeNuit() {
+  const [debut, fin] = SVC.nuit.horaires.split(/\s*-\s*/);
+  return `${SVC.nuit.label} : une case = une vacation, de ${debut} au lendemain ${fin}`;
+}
+// Durée d'un retard : « 30 » → « 30 min ».
+const dureeRetard = (t) => (/^\d+$/.test(t) ? `${t} min` : t);
 const fmtJourCourt = (iso) => new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric' }).format(M.parseISODate(iso));
 
 function caseAgent(agent, date, val, { we, auj, nuit = false }) {
@@ -160,9 +174,19 @@ function fermerPalette() {
 // Petite palette posée sous la case : un clic sur un code l'enregistre.
 function ouvrirPalette(td, agent, date, val, nuit = false) {
   fermerPalette();
-  const texte = h('input', { type: 'text', placeholder: 'Horaire ou note (ex. 13H-18H, +3h30)', value: (val && val.texte) || '', maxLength: 40 });
+  const texte = h('input', { type: 'text', placeholder: val && val.code === 'RET' ? 'Durée du retard (ex. 30 min)' : 'Horaire ou note (ex. 13H-18H, +3h30)', value: (val && val.texte) || '', maxLength: 40 });
+  let enAttente = null; // code choisi qui attend sa précision (retard → durée)
   const choisir = async (code) => {
-    const t = texte.value.trim();
+    let t = texte.value.trim();
+    // Retard : on demande la durée avant d'enregistrer.
+    if (code === 'RET' && !t) {
+      enAttente = 'RET';
+      planPop.querySelectorAll('.pop-code').forEach((b) => b.classList.toggle('on', b.dataset.code === 'RET'));
+      texte.placeholder = 'Durée du retard (ex. 30 min), puis OK';
+      texte.focus();
+      return;
+    }
+    if (code === 'RET') t = dureeRetard(t);
     fermerPalette();
     try {
       planState.semaine = await call(api.planSetCase(agent.id, date, { code: code === null ? '' : code || (t ? 'H' : ''), texte: code === null ? '' : t }, S.user));
@@ -172,13 +196,14 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
     }
     renderPlanning({ reload: false });
   };
-  texte.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); choisir((val && val.code && val.code !== 'H') ? val.code : 'H'); } if (e.key === 'Escape') fermerPalette(); });
+  const valider = () => choisir(enAttente || ((val && val.code && val.code !== 'H') ? val.code : 'H'));
+  texte.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); valider(); } if (e.key === 'Escape') fermerPalette(); });
   planPop = h('div', { class: 'plan-pop', role: 'dialog' },
     h('div', { class: 'pop-titre' }, h('b', {}, agent.nom), h('span', { class: 'muted' }, ` · ${libelleJour(date, nuit)}`)),
     h('div', { class: 'pop-codes' }, PLAN_CODES.map((c) => h('button', {
-      class: `pop-code${val && val.code === c.code ? ' on' : ''}`, style: { '--c': c.couleur }, title: c.label, onclick: () => choisir(c.code),
+      class: `pop-code${val && val.code === c.code ? ' on' : ''}`, style: { '--c': c.couleur }, title: c.label, 'data-code': c.code, onclick: () => choisir(c.code),
     }, h('b', {}, c.code), h('span', {}, c.label)))),
-    h('div', { class: 'pop-texte' }, texte, h('button', { class: 'btn small', onclick: () => choisir((val && val.code && val.code !== 'H') ? val.code : 'H') }, 'OK')),
+    h('div', { class: 'pop-texte' }, texte, h('button', { class: 'btn small', onclick: valider }, 'OK')),
     h('button', { class: 'btn ghost small pop-effacer', onclick: () => choisir(null) }, icon('x', 13), 'Effacer (travaille normalement)'));
   document.body.append(planPop);
   const r = td.getBoundingClientRect();
@@ -259,7 +284,7 @@ async function vueSynthese(head) {
 
 // Détail d'un agent : mini calendrier du mois.
 function detailAgent(agent, cases, debut, fin) {
-  const eq = PLAN_EQUIPES.find((e) => e.id === agent.equipe) || PLAN_EQUIPES[4];
+  const eq = PLAN_EQUIPES.find((e) => e.id === agent.equipe) || PLAN_EQUIPES[PLAN_EQUIPES.length - 1];
   const premier = M.parseISODate(debut);
   const decal = (premier.getDay() + 6) % 7;
   const cellules = [...Array(decal).fill(null)];
@@ -351,7 +376,7 @@ async function rafraichirAgentsAbsents() {
 }
 
 // Absents d'un service d'après le planning : agents de l'équipe du service
-// dont la case du jour porte un code d'absence. null si pas de planning.
+// dont la case du jour porte un code d'absence (ou un retard). null si pas de planning.
 const planSemCache = new Map(); // lundi → { at, sem }
 async function absentsPlanning(date, service) {
   if (!planState.agents.length) return null;
@@ -366,7 +391,7 @@ async function absentsPlanning(date, service) {
   for (const a of planState.agents.filter((x) => x.equipe === service)) {
     const v = (entree.sem.cases[a.id] || {})[date];
     const c = v && planCode(v.code);
-    if (c && c.absence) out.push({ nom: a.nom, motif: v.texte ? `${c.label} · ${v.texte}` : c.label, code: c.code });
+    if (c && (c.absence || c.signale)) out.push({ nom: a.nom, motif: v.texte ? `${c.label} · ${v.texte}` : c.label, code: c.code });
   }
   return out;
 }

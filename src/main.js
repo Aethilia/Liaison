@@ -191,7 +191,8 @@ handle('auth:verify', (dataDir, nom, pin) => {
 });
 handle('dashboard:site', (dataDir) => {
   if (!config.sites.some((x) => x.dataDir === dataDir)) throw new Error('Site inconnu sur ce poste.');
-  return summarizeSite(new Store(dataDir));
+  const st = new Store(dataDir);
+  return summarizeSite(st, new Date(), 7, { ...st.loadSite(), nom: siteName(st, dataDir) });
 });
 handle('site:save', (site) => store.saveSite(site));
 handle('nc:load', () => store.loadNcTypes());

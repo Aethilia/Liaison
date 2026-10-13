@@ -9,16 +9,16 @@ const { Inventaire } = require('./inventaire');
 const ORDER = Object.fromEntries(M.SERVICES.map((d, i) => [d.id, i]));
 const key = (date, service) => `${date}#${ORDER[service]}`;
 
-const boxAlerts = M.boxAlerts;
 
-function summarizeSite(store, now = new Date(), nbJours = 7) {
-  const live = M.currentService(now);
+function summarizeSite(store, now = new Date(), nbJours = 7, site = store.loadSite()) {
+  const services = M.servicesDuSite(site);
+  const live = M.currentService(now, site);
   const dates = [];
   for (let i = nbJours - 1; i >= 0; i--) dates.push(M.addDays(live.date, -i));
   const days = store.loadRange(dates);
   const liveKey = key(live.date, live.service);
 
-  const today = M.SERVICES.map((def) => {
+  const today = services.map((def) => {
     const s = days[days.length - 1].services[def.id];
     const obs = s.observations.filter((o) => o.heure || o.texte);
     return {
@@ -27,7 +27,7 @@ function summarizeSite(store, now = new Date(), nbJours = 7) {
       responsable: s.responsable,
       observations: obs.length,
       importantes: obs.filter((o) => o.important).length,
-      alertes: boxAlerts(s).length,
+      alertes: M.boxAlerts(s, site).length,
       totaux: M.totals(s),
     };
   });
@@ -38,7 +38,7 @@ function summarizeSite(store, now = new Date(), nbJours = 7) {
   const nonConformes = [];
   let dernier = null;
   for (const d of days) {
-    for (const def of M.SERVICES) {
+    for (const def of services) {
       const s = d.services[def.id];
       const k = key(d.date, def.id);
       if (k > liveKey) continue;
@@ -48,7 +48,7 @@ function summarizeSite(store, now = new Date(), nbJours = 7) {
       }
       for (const o of s.observations) if (o.important && o.texte) importantes.push({ date: d.date, service: def.id, heure: o.heure, texte: o.texte, auteur: o.auteur });
       for (const x of s.nonConformes) if (x.type) nonConformes.push({ date: d.date, service: def.id, type: x.type, quantite: x.quantite, unite: x.unite, provenance: x.provenance });
-      if (!M.isEmpty(s)) dernier = { date: d.date, service: def.id, alertes: boxAlerts(s) };
+      if (!M.isEmpty(s)) dernier = { date: d.date, service: def.id, alertes: M.boxAlerts(s, site) };
     }
   }
 

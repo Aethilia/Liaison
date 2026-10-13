@@ -91,7 +91,7 @@ function buildDaySheet(ws, model, day, { tasks = [], site = {}, siteName = '' } 
   ws.pageSetup = { ...clone(model.pageSetup), printArea: undefined };
   model.columns.forEach((col, i) => { ws.getColumn(i + 1).width = col.width; });
 
-  M.SERVICES.forEach((def, idx) => {
+  M.servicesDuSite({ ...site, nom: site.nom || siteName }).forEach((def, idx) => {
     const s = M.normalize(day.services[def.id], day.date, def.id);
     if (idx > 0) ws.getRow(b.row - 1).addPageBreak();
 
@@ -153,11 +153,14 @@ function buildDaySheet(ws, model, day, { tasks = [], site = {}, siteName = '' } 
     b.section('SORTIES', def, 'A', 'D');
     b.section('ÉTAT DES BOXS', def, 'E', 'H');
     b.next(H.section);
-    b.colHeads([['A', 'B', 'Matière'], ['C', 'C', 'Nb sorties'], ['D', 'D', 'Tonnage'], ['E', 'E', 'Bennes'], ['F', 'F', 'Remplissage'], ['G', 'G', 'Plateaux'], ['H', 'H', 'Remplissage']], def);
-    const rows = M.allSorties(s);
+    const profil = { ...site, nom: site.nom || siteName };
+    const noms = M.boxNames(profil, s);
+    const titres = M.boxTitres(profil);
+    const avecPlateaux = noms.plateaux.length > 0 || !M.boxUnique(profil);
+    b.colHeads([['A', 'B', 'Matière'], ['C', 'C', 'Nb sorties'], ['D', 'D', 'Tonnage'], ['E', 'E', titres.bennes], ['F', 'F', 'Remplissage'], ['G', 'G', avecPlateaux ? titres.plateaux : ''], ['H', 'H', avecPlateaux ? 'Remplissage' : '']], def);
+    const rows = M.allSorties(s, profil);
     const first = b.row;
     const couleurs = { ...M.COULEURS_DEFAUT, ...(site.couleurs || {}) };
-    const noms = M.boxNames(site, s);
     for (let i = 0; i < Math.max(rows.length, noms.bennes.length, noms.plateaux.length); i++) {
       const r = rows[i];
       if (r) {

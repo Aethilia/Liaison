@@ -330,6 +330,7 @@ table.grid input:hover:not(:read-only) { border-color: var(--line); }
 .total-box b { font-size: 26px; line-height: 1.1; }
 
 .boxs { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.boxs.un-bloc { grid-template-columns: 1fr; }
 .boxs h4 { margin: 0 0 8px; font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
 .box-row { display: grid; grid-template-columns: 74px 1fr 66px 22px; align-items: center; gap: 8px; margin-bottom: 7px; font-weight: 600; }
 .bar { height: 10px; background: var(--line-soft); border-radius: 6px; overflow: hidden; }
@@ -715,6 +716,8 @@ dialog#inv-dialog.wide { width: min(820px, 94vw); }
 .box-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .box-row .box-rm { opacity: 0; transition: opacity .15s; padding: 2px; }
 .box-row:hover .box-rm, .box-row .box-rm:focus { opacity: 1; }
+.mat-name .mat-rm { opacity: 0; transition: opacity .15s; padding: 2px; margin-left: auto; }
+tr:hover .mat-name .mat-rm, .mat-name .mat-rm:focus { opacity: 1; }
 .btn.box-add { margin-top: 2px; }
 
 /* Mise à jour automatique au lancement */

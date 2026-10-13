@@ -110,10 +110,10 @@ function readDataSheet(ws) {
 }
 
 // Onglet « Photos » : une miniature par photo, avec sa date, son service et ce qu'elle illustre.
-function writePhotosSheet(wb, days, loadPhoto) {
+function writePhotosSheet(wb, days, loadPhoto, services = M.SERVICES) {
   const entries = [];
   for (const day of days) {
-    for (const def of M.SERVICES) {
+    for (const def of services) {
       const sv = M.normalize(day.services[def.id], day.date, def.id);
       for (const o of sv.observations) for (const rel of o.photos) entries.push({ day, def, quoi: `Observation ${o.heure || ''} : ${o.texte}`, rel });
       for (const x of sv.nonConformes) for (const rel of x.photos) entries.push({ day, def, quoi: `Non conforme : ${x.type}${x.provenance ? ` — ${x.provenance}` : ''}`, rel });
@@ -147,11 +147,12 @@ async function exportWorkbook(days, file, { tasks = [], site = {}, siteName = ''
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(TEMPLATE);
   const model = wb.getWorksheet(MODEL_SHEET);
-  const charts = days.length ? buildSynthese(wb.addWorksheet(SYNTHESE_SHEET), days, { siteName }) : [];
+  const services = M.servicesDuSite({ ...site, nom: site.nom || siteName });
+  const charts = days.length ? buildSynthese(wb.addWorksheet(SYNTHESE_SHEET), days, { siteName, services }) : [];
   for (const day of days) {
     buildDaySheet(wb.addWorksheet(sheetName(day.date)), model, day, { tasks, site, siteName });
   }
-  writePhotosSheet(wb, days, loadPhoto);
+  writePhotosSheet(wb, days, loadPhoto, services);
   writeDataSheet(wb, days, tasks);
   wb.calcProperties = { fullCalcOnLoad: true };
   if (days.length) wb.views = [{ activeTab: 2, firstSheet: 0 }];

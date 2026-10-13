@@ -370,3 +370,46 @@ test('planning : agents, cases par semaine, notes et période', () => {
   assert.equal(per[a.id]['2026-10-14'].texte, '13H-18H');
   assert.equal(per[b.id]['2026-10-19'].code, 'MAL');
 });
+
+test('CPTP : deux services (matin 6H-13H, soir 18H-3H), un seul bloc de stockage', async () => {
+  const cptp = { nom: 'CPTP' };
+  assert.deepEqual(M.servicesDuSite(cptp).map((d) => `${d.id}:${d.label}:${d.horaires}`), ['matin:Matin:6H - 13H', 'nuit:Soir:18H - 3H']);
+  assert.equal(M.servicesDuSite({ nom: 'CTVO' }).length, 3);
+  assert.equal(M.servicesDuSite({ nom: 'CPTP', deuxServices: false }).length, 3);
+  assert.deepEqual(M.currentService(new Date(2026, 9, 2, 5, 30), cptp), { date: '2026-10-01', service: 'nuit' });
+  assert.deepEqual(M.currentService(new Date(2026, 9, 2, 6, 0), cptp), { date: '2026-10-02', service: 'matin' });
+  assert.deepEqual(M.currentService(new Date(2026, 9, 2, 14, 0), cptp), { date: '2026-10-02', service: 'nuit' });
+  assert.deepEqual(M.currentService(new Date(2026, 9, 3, 2, 0), cptp), { date: '2026-10-02', service: 'nuit' });
+  assert.deepEqual(M.previousService('2026-10-02', 'nuit', cptp), { date: '2026-10-02', service: 'matin' });
+  assert.deepEqual(M.nextService('2026-10-02', 'matin', cptp), { date: '2026-10-02', service: 'nuit' });
+  // Sans site : comportement habituel à trois services.
+  assert.deepEqual(M.nextService('2026-10-02', 'matin'), { date: '2026-10-02', service: 'apresmidi' });
+
+  const s = M.emptyService('2026-10-02', 'matin');
+  assert.deepEqual(M.boxNames(cptp, s), { bennes: ['Stockage'], plateaux: [] });
+  assert.deepEqual(M.boxNames({ nom: 'CPTP', boxs: { stockage: ['Quai A', 'Quai B'], bennes: ['Fer'] } }, s).bennes, ['Quai A', 'Quai B']);
+  s.bennes.Stockage = 85;
+  assert.deepEqual(M.boxAlerts(s, cptp).map((a) => a.type), ['Stockage']);
+
+  const X = require('../src/core/excel');
+  const file = path.join(tmp(), 'cptp.xlsx');
+  await X.exportWorkbook([{ date: '2026-10-02', services: { matin: s, nuit: M.emptyService('2026-10-02', 'nuit') } }], file, { site: cptp });
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(file);
+  const vals = [];
+  wb.worksheets.find((w) => w.name.startsWith('02')).eachRow((r) => r.eachCell((c) => vals.push(c.value)));
+  assert.ok(vals.includes('SERVICE SOIR  ·  18H - 3H') && vals.includes('SERVICE MATIN  ·  6H - 13H'));
+  assert.ok(!vals.some((v) => typeof v === 'string' && v.includes('APRÈS-MIDI')));
+  assert.ok(vals.includes('Stockage') && !vals.includes('Bennes'));
+});
+
+test('sorties : matières ajoutées ou retirées pour le site', () => {
+  const site = { matieres: ['Fer', 'DIB', 'Carton'] };
+  const s = M.normalize({ sorties: { Bois: { nb: 2 }, Carton: { nb: 1, tonnage: 0.5 } } }, '2026-10-02', 'matin');
+  // Bois a été retiré du site mais garde ses chiffres dans ce service.
+  assert.deepEqual(M.allSorties(s, site).filter((r) => !r.extra).map((r) => r.nom), ['Fer', 'DIB', 'Carton', 'Bois']);
+  assert.equal(M.allSorties(s, site).find((r) => r.nom === 'Bois').externe, true);
+  assert.equal(M.totals(s).tonnage, 0.5);
+  assert.equal(M.stats([{ date: s.date, services: { matin: s } }]).matieres.find((m) => m.nom === 'Carton').tonnage, 0.5);
+  assert.deepEqual(M.allSorties(M.emptyService('2026-10-02', 'matin')).map((r) => r.nom), M.MATIERES);
+});

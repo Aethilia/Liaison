@@ -30,9 +30,11 @@ const NB_ABSENTS = 4;
 const NB_OBSERVATIONS = 12;
 const SEUIL_ALERTE = 80; // % de remplissage à partir duquel la case passe en rouge
 
+const sortieVide = (m) => (MATIERES_EXTERNES.includes(m) ? { nb: null } : { nb: null, tonnage: null, pesees: [] });
+
 function emptyService(date, service) {
   const sorties = {};
-  for (const m of MATIERES) sorties[m] = MATIERES_EXTERNES.includes(m) ? { nb: null } : { nb: null, tonnage: null, pesees: [] };
+  for (const m of MATIERES) sorties[m] = sortieVide(m);
   const bennes = {};
   for (const b of BENNES) bennes[b] = null;
   const plateaux = {};
@@ -69,8 +71,9 @@ function normalize(data, date, service) {
   while (out.absents.length < NB_ABSENTS) out.absents.push({ nom: '', motif: '' });
   out.entrees = { ...base.entrees, ...(data.entrees || {}) };
   out.sorties = {};
-  for (const m of MATIERES) {
-    out.sorties[m] = { ...base.sorties[m], ...((data.sorties || {})[m] || {}) };
+  // Matières d'origine, plus celles ajoutées par le site (présentes dans le fichier).
+  for (const m of new Set([...MATIERES, ...Object.keys(data.sorties || {})])) {
+    out.sorties[m] = { ...(base.sorties[m] || sortieVide(m)), ...((data.sorties || {})[m] || {}) };
     if (!MATIERES_EXTERNES.includes(m)) out.sorties[m].pesees = cleanPesees(out.sorties[m].pesees);
   }
   // Les champs inconnus (ajoutés par une version plus récente) sont conservés tels quels.
@@ -132,22 +135,41 @@ function entreesTonnage(site) {
   return /cptp/i.test((site && site.nom) || '');
 }
 
+// État des boxs en un seul bloc « Stockage » (CPTP, ou réglage `boxUnique`) :
+// les lignes sont rangées dans `bennes`, il n'y a plus de plateaux.
+function boxUnique(site) {
+  if (site && typeof site.boxUnique === 'boolean') return site.boxUnique;
+  return /cptp/i.test((site && site.nom) || '');
+}
+
+// Clé de la liste dans site.boxs (le bloc unique a sa propre liste « stockage »).
+const boxCle = (site, group) => (boxUnique(site) && group === 'bennes' ? 'stockage' : group);
+
+function boxTitres(site) {
+  return boxUnique(site)
+    ? { bennes: 'Stockage', plateaux: 'Plateaux', benne: 'Stockage', plateau: 'Plateau' }
+    : { bennes: 'Bennes', plateaux: 'Plateaux', benne: 'Benne', plateau: 'Plateau' };
+}
+
 // Bennes et plateaux affichés : liste du site (modifiable) ou liste d'origine,
 // plus ceux encore renseignés dans le service (lignes retirées depuis).
 function boxNames(site, s) {
   const cfg = (site && site.boxs) || {};
+  const unique = boxUnique(site);
   const out = {};
-  for (const [k, def] of [['bennes', BENNES], ['plateaux', PLATEAUX]]) {
-    const list = Array.isArray(cfg[k]) ? cfg[k].filter((n) => typeof n === 'string' && n) : [...def];
+  for (const [k, def] of [['bennes', unique ? ['Stockage'] : BENNES], ['plateaux', unique ? [] : PLATEAUX]]) {
+    const saved = unique ? (k === 'bennes' ? cfg.stockage : null) : cfg[k];
+    const list = Array.isArray(saved) ? saved.filter((n) => typeof n === 'string' && n) : [...def];
     if (s && s[k]) for (const [n, v] of Object.entries(s[k])) if (v != null && !list.includes(n)) list.push(n);
     out[k] = list;
   }
   return out;
 }
 
-function boxAlerts(s) {
+function boxAlerts(s, site) {
+  const t = boxTitres(site);
   const list = (k, type) => Object.entries(s[k] || {}).filter(([, v]) => v != null && v >= SEUIL_ALERTE).map(([nom, v]) => ({ type, nom, v }));
-  return [...list('bennes', 'Benne'), ...list('plateaux', 'Plateau')];
+  return [...list('bennes', t.benne), ...list('plateaux', t.plateau)];
 }
 
 // Tonnage saisi : « 5,54 », « 5T540 » ou plusieurs bennes « 5,54+4T740+3 ».
@@ -168,10 +190,19 @@ function parseTonnage(str) {
   return { ok: true, total, pesees: values.length > 1 ? values : [] };
 }
 
-// Toutes les lignes de sorties : matières habituelles puis ponctuelles.
-function allSorties(s) {
+// Matières en sortie d'un site : liste réglée (ajouts / retraits) ou liste d'origine.
+function matieresDuSite(site) {
+  const list = site && Array.isArray(site.matieres) ? site.matieres.filter((n) => typeof n === 'string' && n) : null;
+  return list || [...MATIERES];
+}
+
+// Toutes les lignes de sorties : matières du site (plus celles retirées depuis
+// mais renseignées dans ce service) puis ponctuelles.
+function allSorties(s, site) {
+  const noms = matieresDuSite(siteDe(site));
+  for (const [m, v] of Object.entries(s.sorties)) if (!noms.includes(m) && v && (v.nb != null || v.tonnage != null)) noms.push(m);
   return [
-    ...MATIERES.map((m) => ({ nom: m, externe: MATIERES_EXTERNES.includes(m), data: s.sorties[m], extra: false })),
+    ...noms.map((m) => ({ nom: m, externe: MATIERES_EXTERNES.includes(m), data: s.sorties[m] || (s.sorties[m] = sortieVide(m)), extra: false })),
     ...(s.sortiesExtra || []).map((x, i) => ({ nom: x.nom, externe: false, data: x, extra: true, index: i })),
   ];
 }
@@ -246,22 +277,22 @@ function layoutObservations(s, width = LARGEUR_LIGNE_NB) {
 }
 
 // Chiffres d'une période (récap, feuille Synthèse) : days = [{ date, services }].
-function stats(days) {
+function stats(days, services = SERVICES) {
   const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   const matieres = new Map();
-  const services = Object.fromEntries(SERVICES.map((d) => [d.id, { service: d.id, plateaux: 0, pl: 0 }]));
+  const entSvc = Object.fromEntries(services.map((d) => [d.id, { service: d.id, plateaux: 0, pl: 0 }]));
   const motifs = new Map();
   const nc = new Map();
   const parJour = [];
   const k = { entrees: 0, sorties: 0, tonnage: 0, observations: 0, importantes: 0, clos: 0, services: 0, nonConformes: 0, absents: 0 };
   for (const day of days) {
     let tonJour = 0;
-    for (const def of SERVICES) {
+    for (const def of services) {
       const s = normalize(day.services[def.id], day.date, def.id);
       k.services += 1;
       if (s.cloture) k.clos += 1;
-      services[def.id].plateaux += n(s.entrees.plateaux);
-      services[def.id].pl += n(s.entrees.pl);
+      entSvc[def.id].plateaux += n(s.entrees.plateaux);
+      entSvc[def.id].pl += n(s.entrees.pl);
       for (const r of allSorties(s)) {
         const nom = r.nom || 'Sortie ponctuelle';
         const m = matieres.get(nom) || { nom, nb: 0, tonnage: 0, externe: r.externe, extra: r.extra };
@@ -292,7 +323,7 @@ function stats(days) {
     parJour.push({ date: day.date, tonnage: Math.round(tonJour * 1000) / 1000 });
   }
   const list = [...matieres.values()].map((m) => ({ ...m, tonnage: Math.round(m.tonnage * 1000) / 1000 }));
-  const entrees = Object.values(services);
+  const entrees = Object.values(entSvc);
   k.entrees = entrees.reduce((a, e) => a + e.plateaux + e.pl, 0);
   k.sorties = list.reduce((a, m) => a + m.nb, 0);
   k.tonnage = Math.round(list.reduce((a, m) => a + m.tonnage, 0) * 1000) / 1000;
@@ -317,23 +348,61 @@ function compareVersions(a, b) {
   return 0;
 }
 
+// Organisation des services d'un site. Par défaut matin / après-midi / nuit ;
+// le CPTP (ou tout site réglé avec `deuxServices`) ne tourne qu'en matin 6H-13H
+// et soir 18H-3H. Le soir garde l'identifiant « nuit » : même logique de date
+// (une vacation rattachée au jour où elle commence).
+const SERVICES_TOUS = SERVICES.map((d) => ({ ...d }));
+const PROFIL_DEUX = {
+  matin: { horaires: '6H - 13H', titre: 'SERVICE MATIN  ·  6H - 13H' },
+  nuit: { label: 'Soir', horaires: '18H - 3H', titre: 'SERVICE SOIR  ·  18H - 3H' },
+};
+let profil = null; // site actif (interface) : réglé par setProfil
+
+function deuxServices(site) {
+  if (site && typeof site.deuxServices === 'boolean') return site.deuxServices;
+  return /cptp/i.test((site && site.nom) || '');
+}
+
+function servicesDuSite(site) {
+  if (!deuxServices(site)) return SERVICES_TOUS.map((d) => ({ ...d }));
+  return SERVICES_TOUS.filter((d) => d.id !== 'apresmidi').map((d) => ({ ...d, ...PROFIL_DEUX[d.id] }));
+}
+
+// Interface : SERVICES devient la liste du site choisi (modifiée sur place).
+function setProfil(site) {
+  profil = site || null;
+  SERVICES.splice(0, SERVICES.length, ...servicesDuSite(profil));
+  return SERVICES;
+}
+
+const siteDe = (site) => (site === undefined ? profil : site);
+
 // Service précédent dans l'ordre de relève : nuit (veille) → matin → après-midi → nuit.
-function previousService(date, service) {
+function previousService(date, service, site) {
+  const deux = deuxServices(siteDe(site));
   if (service === 'matin') return { date: addDays(date, -1), service: 'nuit' };
-  if (service === 'apresmidi') return { date, service: 'matin' };
+  if (service === 'apresmidi' || deux) return { date, service: 'matin' };
   return { date, service: 'apresmidi' };
 }
 
-function nextService(date, service) {
-  if (service === 'matin') return { date, service: 'apresmidi' };
+function nextService(date, service, site) {
+  const deux = deuxServices(siteDe(site));
+  if (service === 'matin') return { date, service: deux ? 'nuit' : 'apresmidi' };
   if (service === 'apresmidi') return { date, service: 'nuit' };
   return { date: addDays(date, 1), service: 'matin' };
 }
 
 // Service en cours selon l'heure : entre minuit et 5H on est encore sur la nuit de la veille.
-function currentService(now = new Date()) {
+// Deux services : avant 6H soir de la veille, matin jusqu'à 13H, puis le soir.
+function currentService(now = new Date(), site) {
   const h = now.getHours();
   const today = toISODate(now);
+  if (deuxServices(siteDe(site))) {
+    if (h < 6) return { date: addDays(today, -1), service: 'nuit' };
+    if (h < 13) return { date: today, service: 'matin' };
+    return { date: today, service: 'nuit' };
+  }
   if (h < 5) return { date: addDays(today, -1), service: 'nuit' };
   if (h < 13) return { date: today, service: 'matin' };
   if (h < 20) return { date: today, service: 'apresmidi' };
@@ -364,7 +433,7 @@ function daysInMonth(year, month) {
 
 const api = {
   stats, compareVersions, UNITES, ETATS_STOCKAGE, SERVICE_COMMANDES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
-  boxNames, boxAlerts, entreesTonnage,
+  boxNames, boxAlerts, boxUnique, boxTitres, boxCle, matieresDuSite, entreesTonnage, deuxServices, servicesDuSite, setProfil, SERVICES_TOUS,
   SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth,

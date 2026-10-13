@@ -91,13 +91,16 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   20H-4H, Responsables, Autres), ordre réglable. Ce sont **les seuls agents
   proposés** dans « Agents absents » de la main courante.
 - **Semaine** (lundi → dimanche) : un clic sur une case ouvre la palette des
-  codes (R repos, CP, MAL, ABS, naissance, FOR, VM, INT, T travaille le
-  week-end, H horaire/note libre). Case vide = travaille normalement. Chaque
+  codes (R repos, CP, MAL, ABS, naissance, FOR, RET retard, VM, INT, T
+  travaille le week-end, H horaire/note libre). Case vide = travaille normalement. Chaque
   équipe affiche le nombre de présents par jour ; notes de la semaine à droite.
 - **Nuit** : une case = une vacation, du soir 20H au lendemain 4H (rattachée
   au jour où elle commence, comme le service de nuit de la main courante).
+- **Retard** (RET) : la palette demande la durée (« 30 » devient « 30 min »).
+  L'agent reste compté présent, mais apparaît dans « Agents absents » avec la
+  durée (ex. *Retard · 30 min*).
 - **Agents absents** de la main courante : remplis automatiquement d'après le
-  planning (équipe du service, codes d'absence), non modifiables à la main ;
+  planning (équipe du service, codes d'absence et retards), non modifiables à la main ;
   enregistrés dans le service dès qu'il y a une saisie (un jour sans saisie
   reste vide dans le récap).
 - **Synthèse** du mois par agent : jours travaillés, nombre de chaque code,
@@ -152,6 +155,18 @@ Les lignes de bennes et de plateaux se règlent pour le site : **+ Benne** /
 ligne. Le changement vaut pour tous les services suivants ; les services déjà
 saisis gardent leurs chiffres (y compris dans l'export Excel).
 
+Au **CPTP**, un seul bloc **Stockage** (lignes en %, « + Ligne » pour en
+ajouter) remplace bennes et plateaux (réglage `boxUnique` dans `site.json`).
+
+## CPTP : deux services
+
+Le CPTP tourne en **Matin 6H-13H** et **Soir 18H-3H** (pas d'après-midi) : choix
+du service, onglets, planning (équipes Matin / Soir), récap, fiche, impression,
+tableau de bord et export Excel n'affichent que ces deux services. À partir de
+13H l'application propose le soir ; entre minuit et 6H, le soir de la veille.
+Activé d'office pour un site nommé CPTP (réglage `deuxServices` dans
+`site.json`).
+
 ## Tonnage des entrées (CPTP)
 
 Sur le site **CPTP**, la carte *Entrées — passages de véhicules* a une case
@@ -177,6 +192,9 @@ Les deux figurent dans la fiche, l'impression, la recherche et l'export Excel.
 - **Plusieurs bennes** : taper `5,54+4,74` dans la case tonnage, ou indiquer le
   nombre de sorties (2 ou plus) pour faire apparaître une case par pesée. Le
   total se calcule seul ; dans Excel la cellule contient la formule `=5.54+4.74`.
+- **Matières du site** : « + Matière » ajoute une matière proposée à tous les
+  services du site ; la petite croix (au survol) la retire. Les services déjà
+  saisis gardent leurs chiffres.
 - **Sorties ponctuelles** (ex. sapins en hiver) : « + Sortie ponctuelle »,
   supprimables, comptées dans les totaux et le récap.
 - **Couleurs** : la pastille devant chaque matière choisit sa couleur (nom seul

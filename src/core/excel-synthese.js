@@ -37,8 +37,8 @@ const styles = {
 };
 
 // Écrit l'onglet et renvoie la description des graphiques à ajouter.
-function buildSynthese(ws, days, { siteName = '' } = {}) {
-  const st = M.stats(days);
+function buildSynthese(ws, days, { siteName = '', services = M.SERVICES } = {}) {
+  const st = M.stats(days, services);
   const charts = [];
   ws.columns = [{ width: 28 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 3 }, ...Array.from({ length: 9 }, () => ({ width: 11 }))];
   ws.views = [{ showGridLines: false }];
@@ -131,8 +131,8 @@ function buildSynthese(ws, days, { siteName = '' } = {}) {
   // 2. Entrées de véhicules par service (camembert aux couleurs des services).
   const ent = st.entrees.map((e) => ({ ...e, total: e.plateaux + e.pl }));
   block('ENTRÉES DE VÉHICULES PAR SERVICE', ['Service', 'Plateaux', 'Poids lourds', 'Total'],
-    ent.map((e) => [{ value: M.SERVICES.find((d) => d.id === e.service).label, color: SERVICE_COLORS[e.service] }, e.plateaux, e.pl, e.total]),
-    ent.filter((e) => e.total > 0).length >= 2 ? { type: 'pie', title: 'Entrées par service', col: 'D', labels: ent.map((e) => M.SERVICES.find((d) => d.id === e.service).label), values: ent.map((e) => e.total), colors: ent.map((e) => SERVICE_COLORS[e.service]) } : null);
+    ent.map((e) => [{ value: services.find((d) => d.id === e.service).label, color: SERVICE_COLORS[e.service] }, e.plateaux, e.pl, e.total]),
+    ent.filter((e) => e.total > 0).length >= 2 ? { type: 'pie', title: 'Entrées par service', col: 'D', labels: ent.map((e) => services.find((d) => d.id === e.service).label), values: ent.map((e) => e.total), colors: ent.map((e) => SERVICE_COLORS[e.service]) } : null);
 
   // 3. Tonnage par jour (histogramme), à partir de 2 jours.
   if (st.parJour.length >= 2) {
