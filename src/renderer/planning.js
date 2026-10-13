@@ -212,8 +212,8 @@ function vueSemaine(head) {
   const legende = h('div', { class: 'plan-legende' }, PLAN_CODES.map((c) => h('span', { class: 'leg' }, h('i', { style: { background: c.couleur } }, c.code), c.label)),
     h('span', { class: 'leg muted' }, 'Case vide = travaille normalement'),
     h('span', { class: 'leg muted' }, legendeNuit()),
-    h('span', { class: 'leg' }, HS_TYPES.map((t) => h('i', { style: { background: t.couleur }, title: t.detail }, `HS ${t.label.toLowerCase()}`))),
-    M.SERVICES.some((x) => x.id === 'apresmidi') ? h('span', { class: 'leg muted' }, `HS régulières : matin et nuit +1h verte par jour travaillé (lun-ven) · après-midi samedi = ${fmtHs(HS_SAMEDI_APM)} bleues · férié travaillé = ${fmtHs(HS_FERIE)} rouges`) : null);
+    reglesHs() ? h('span', { class: 'leg muted', title: `HS régulières (calculées) : matin et nuit +1h verte par jour travaillé du lundi au vendredi · après-midi : samedi = ${fmtHs(HS_SAMEDI_APM)} bleues · férié travaillé = ${fmtHs(HS_FERIE)} rouges pour tout le monde` },
+      'HS ', HS_TYPES.map((t) => h('span', { class: 'hs-point leg-point', style: { '--c': t.couleur }, title: t.detail })), ' bleues · rouges · vertes — point = automatique (détail au survol)') : null);
   const notes = h('textarea', { class: 'plan-notes-txt', rows: 4, placeholder: 'Notes de la semaine (formations, travaux, remplacements…)' });
   notes.value = sem.notes || '';
   notes.addEventListener('change', async () => {
@@ -319,11 +319,16 @@ function caseAgent(agent, date, val, { we, auj, nuit = false }) {
   const td = h('td', {
     class: `plan-case${we ? ' we' : ''}${auj ? ' auj' : ''}${c ? ' rempli' : ''}${val && val.couleur ? ' colore' : ''}${val && val.auto ? ' auto' : ''}`,
     style: val && val.couleur ? { '--fond': val.couleur } : null,
-    tabIndex: 0, title: `${agent.nom} — ${libelleJour(date, nuit)}${c ? ` : ${c.label}` : ''}${val && val.texte ? ` (${val.texte})` : ''}${val && val.hs ? ` · ${fmtHs(val.hs)} supp` : ''}${val && val.auto ? ' (automatique)' : ''}`,
+    tabIndex: 0, title: `${agent.nom} — ${libelleJour(date, nuit)}${c ? ` : ${c.label}` : ''}${val && val.texte ? ` (${val.texte})` : ''}${val && val.hs ? ` · ${fmtHs(val.hs)} supp` : ''}${val && val.auto ? ` ${hsType(val.hsType).label.toLowerCase()} (automatique)` : ''}`,
     onclick: (e) => ouvrirPalette(e.currentTarget, agent, date, val, nuit),
     onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrirPalette(e.currentTarget, agent, date, val, nuit); } },
   });
-  const couleurHs = val && val.hs ? hsType(val.hsType || typeHsDefaut(date)).couleur : null;
+  const couleurHs = val && val.hs ? (reglesHs() ? hsType(val.hsType || typeHsDefaut(date)).couleur : '#0b7285') : null;
+  // Heures supp automatiques : un simple point de couleur (détail au survol).
+  if (val && val.auto) {
+    td.append(h('span', { class: 'hs-point', style: { '--c': couleurHs } }));
+    return td;
+  }
   if (c) td.append(h('span', { class: 'plan-code', style: { '--c': val.code === 'HS' && couleurHs ? couleurHs : c.couleur } }, val.code === 'H' && val.texte ? val.texte : val.code === 'HS' && val.hs ? fmtHs(val.hs) : c.code));
   else if (val && val.texte) td.append(h('span', { class: 'plan-texte' }, val.texte));
   if (c && val.texte && val.code !== 'H') td.append(h('small', { class: 'plan-texte' }, val.texte));
@@ -404,7 +409,7 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
       class: `pop-code${val && val.code === c.code ? ' on' : ''}`, style: { '--c': c.couleur }, title: c.label, 'data-code': c.code, onclick: () => choisir(c.code),
     }, h('b', {}, c.code), h('span', {}, c.label)))),
     paletteCouleurs(),
-    h('div', { class: 'pop-hs-types' }, h('span', { class: 'muted' }, 'Type d\'h supp'), HS_TYPES.map((t) => h('button', {
+    !reglesHs() ? null : h('div', { class: 'pop-hs-types' }, h('span', { class: 'muted' }, 'Type d\'h supp'), HS_TYPES.map((t) => h('button', {
       class: `pop-hs-type${t.id === typeHs ? ' on' : ''}`, style: { '--c': t.couleur }, title: t.detail,
       onclick: (e) => { typeHs = t.id; e.currentTarget.parentNode.querySelectorAll('.pop-hs-type').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); },
     }, t.label))),
@@ -444,6 +449,15 @@ function syntheseAgent(cases, debut, fin, agent = null) {
   return r;
 }
 
+// Cellule « H. supp » : total + mini barre des trois types, détail au survol.
+function celluleHs(s) {
+  if (!s.hs) return h('td', { class: 'num syn-hs' }, h('span', { class: 'muted' }, '·'));
+  const detail = HS_TYPES.filter((t) => s.parType[t.id]).map((t) => `${t.label} (${t.detail}) : ${fmtHs(s.parType[t.id])}  —  régulières ${fmtHs(s.reg[t.id])}, ponctuelles ${fmtHs(s.ponct[t.id])}`).join('\n');
+  return h('td', { class: 'num syn-hs', title: detail },
+    h('b', {}, fmtHs(s.hs)),
+    reglesHs() ? h('span', { class: 'hs-barre' }, HS_TYPES.filter((t) => s.parType[t.id]).map((t) => h('i', { style: { flex: s.parType[t.id], background: t.couleur } }))) : null);
+}
+
 async function vueSynthese(head) {
   const { y, m } = planState.mois;
   const debut = `${y}-${String(m).padStart(2, '0')}-01`;
@@ -461,11 +475,11 @@ async function vueSynthese(head) {
   const nbJours = Number(fin.slice(8));
   const codesUtiles = PLAN_CODES.filter((c) => planState.agents.some((a) => Object.values(cases[a.id] || {}).some((v) => v.code === c.code)));
   const lignes = [];
-  const totaux = { travailles: 0, codes: {}, hs: 0, parType: hsVide() };
+  const totaux = { travailles: 0, codes: {}, hs: 0, parType: hsVide(), reg: hsVide(), ponct: hsVide() };
   for (const eq of PLAN_EQUIPES) {
     const agents = planState.agents.filter((a) => a.equipe === eq.id && presentEntre(a, debut, fin));
     if (!agents.length) continue;
-    lignes.push(h('tr', { class: 'syn-equipe', style: { '--eq': eq.couleur() } }, h('td', { colSpan: 3 + HS_TYPES.length + 1 + codesUtiles.length }, h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, ` ${eq.heures}`) : null)));
+    lignes.push(h('tr', { class: 'syn-equipe', style: { '--eq': eq.couleur() } }, h('td', { colSpan: 4 + codesUtiles.length }, h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, ` ${eq.heures}`) : null)));
     for (const a of agents) {
       // Seulement sa période de présence dans le mois.
       const deb = a.arrivee && a.arrivee > debut ? a.arrivee : debut;
@@ -474,7 +488,11 @@ async function vueSynthese(head) {
       const nbJoursAgent = Math.round((M.parseISODate(fn) - M.parseISODate(deb)) / 864e5) + 1;
       totaux.travailles += s.travailles;
       totaux.hs += s.hs;
-      for (const t of HS_TYPES) totaux.parType[t.id] += s.parType[t.id];
+      for (const t of HS_TYPES) {
+        totaux.parType[t.id] += s.parType[t.id];
+        totaux.reg[t.id] += s.reg[t.id];
+        totaux.ponct[t.id] += s.ponct[t.id];
+      }
       for (const [c, n] of Object.entries(s.codes)) totaux.codes[c] = (totaux.codes[c] || 0) + n;
       // Barre : composition du mois (travaillé + chaque code).
       const barre = h('div', { class: 'syn-barre', title: `${s.travailles} jour(s) travaillé(s)` },
@@ -484,9 +502,7 @@ async function vueSynthese(head) {
       lignes.push(h('tr', { class: 'syn-agent', onclick: () => detailAgent(a, cases[a.id] || {}, debut, fin) },
         h('th', { title: datesAgent(a) }, a.nom, datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
         h('td', { class: 'num' }, h('b', {}, s.travailles)),
-        HS_TYPES.map((t) => h('td', { class: 'num', title: s.parType[t.id] ? `${t.label} : régulières ${fmtHs(s.reg[t.id])}, ponctuelles ${fmtHs(s.ponct[t.id])}` : '' },
-          s.parType[t.id] ? h('span', { class: 'syn-badge', style: { '--c': t.couleur } }, fmtHs(s.parType[t.id])) : h('span', { class: 'muted' }, '·'))),
-        h('td', { class: 'num' }, s.hs ? h('b', {}, fmtHs(s.hs)) : h('span', { class: 'muted' }, '·')),
+        celluleHs(s),
         codesUtiles.map((c) => h('td', { class: 'num' }, s.codes[c.code] ? h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, s.codes[c.code]) : h('span', { class: 'muted' }, '·'))),
         h('td', {}, barre)));
     }
@@ -496,11 +512,10 @@ async function vueSynthese(head) {
       h('span', { class: 'hint' }, 'Cliquer sur un agent pour le détail du mois')),
     h('div', { class: 'card-body plan-scroll' }, h('table', { class: 'grid syn-table' },
       h('thead', {}, h('tr', {}, h('th', {}, 'Agent'), h('th', { class: 'num', title: 'Du lundi au vendredi sans absence, plus les jours codés T, H ou VM' }, 'Travaillés'),
-        HS_TYPES.map((t) => h('th', { class: 'num', title: `Heures supp ${t.label.toLowerCase()} (${t.detail}) : régulières + ponctuelles` }, h('span', { class: 'syn-badge', style: { '--c': t.couleur } }, `HS ${t.label.toLowerCase()}`))),
-        h('th', { class: 'num', title: 'Total des heures supp du mois' }, 'Total HS'),
+        h('th', { class: 'num syn-hs', title: reglesHs() ? 'Heures supp du mois (bleues, rouges, vertes) : détail au survol' : 'Heures supp du mois' }, 'H. supp'),
         codesUtiles.map((c) => h('th', { class: 'num', title: c.label }, h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, c.code))), h('th', {}, 'Répartition du mois'))),
       h('tbody', {}, lignes),
-      h('tfoot', {}, h('tr', {}, h('th', {}, 'Total'), h('td', { class: 'num' }, h('b', {}, totaux.travailles)), HS_TYPES.map((t) => h('td', { class: 'num' }, h('b', {}, totaux.parType[t.id] ? fmtHs(totaux.parType[t.id]) : 0))), h('td', { class: 'num' }, h('b', {}, totaux.hs ? fmtHs(totaux.hs) : 0)),
+      h('tfoot', {}, h('tr', {}, h('th', {}, 'Total'), h('td', { class: 'num' }, h('b', {}, totaux.travailles)), celluleHs(totaux),
         codesUtiles.map((c) => h('td', { class: 'num' }, h('b', {}, totaux.codes[c.code] || 0))), h('td', {})))),
     codesUtiles.length ? null : h('p', { class: 'muted syn-vide' }, 'Aucun code saisi ce mois-ci : tout le monde travaille normalement.')));
 }

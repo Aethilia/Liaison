@@ -177,3 +177,10 @@ dialog.plan-fusion select { width: 100%; }
 .pop-hs-type.on { background: var(--c); color: #fff; }
 .plan-grille thead th.ferie { background: #b42318; }
 .plan-case.auto .plan-code { color: var(--c); box-shadow: inset 0 0 0 1.5px var(--c); }
+/* HS condensées : point pour les automatiques, total + mini barre en synthèse */
+.hs-point { position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px #fff; }
+.hs-point.leg-point { position: static; display: inline-block; margin: 0 2px; vertical-align: -1px; box-shadow: none; }
+.syn-hs { min-width: 70px; }
+.hs-barre { display: flex; height: 4px; border-radius: 999px; overflow: hidden; margin: 3px auto 0; width: 46px; background: #eef1f5; }
+.hs-barre i { display: block; }
+td.syn-hs[title] { cursor: help; }
