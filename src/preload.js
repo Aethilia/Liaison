@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('api', {
   planSetReperes: call('plan:setReperes'),
   planEntre: call('plan:entre'),
   planCodes: call('plan:codes'),
+  planFusionner: call('plan:fusionner'),
+  planVider: call('plan:vider'),
   planSaveCodes: call('plan:saveCodes'),
   planImportChoisir: call('plan:importChoisir'),
   planImportAppliquer: call('plan:importAppliquer'),

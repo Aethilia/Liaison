@@ -206,6 +206,40 @@ class Planning {
     return { agents: tous, ajoutes, nbSemaines, codes: this.loadCodes() };
   }
 
+  // Fusion de deux agents (même personne, deux orthographes) : les cases de
+  // `sourceId` rejoignent `cibleId` (celles de la cible priment), puis la
+  // source est retirée de la liste.
+  fusionner(sourceId, cibleId, by) {
+    const agents = this.loadAgents();
+    if (sourceId === cibleId || !agents.some((a) => a.id === sourceId) || !agents.some((a) => a.id === cibleId)) throw new Error('Agents à fusionner introuvables.');
+    let dir = [];
+    try {
+      dir = fs.readdirSync(path.join(this.dir, 'semaines')).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f));
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+    let semaines = 0;
+    for (const f of dir) {
+      const sem = this.loadSemaine(f.slice(0, 10));
+      const src = sem.cases[sourceId];
+      if (!src) continue;
+      sem.cases[cibleId] = { ...src, ...(sem.cases[cibleId] || {}) };
+      delete sem.cases[sourceId];
+      this.enregistrer(sem, by);
+      semaines += 1;
+    }
+    const restants = this.saveAgents(agents.filter((a) => a.id !== sourceId));
+    return { agents: restants, semaines };
+  }
+
+  // Vide le planning (agents et semaines) pour repartir d'un classeur propre.
+  // Les codes du site (abréviations détaillées) sont gardés.
+  vider() {
+    fs.rmSync(path.join(this.dir, 'semaines'), { recursive: true, force: true });
+    this.writeJson(path.join(this.dir, 'agents.json'), { agents: [] });
+    return [];
+  }
+
   // Toutes les cases entre deux dates (incluses) : { agentId: { date: {code, texte} } }.
   casesEntre(debut, fin) {
     const out = {};

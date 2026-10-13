@@ -498,6 +498,7 @@ function vueAgents() {
               const n = ((await promptText('Renommer l’agent', a.nom)) || '').trim();
               if (n && n !== a.nom) { a.nom = n; enregistrer(); }
             } }, icon('edit', 14)),
+            h('button', { class: 'o-btn ag-discret', title: 'Fusionner avec un autre agent (même personne, autre orthographe)', onclick: () => fusionnerAgent(a) }, icon('users', 14)),
             h('button', { class: 'o-btn rm', title: 'Retirer du planning', onclick: async () => {
               if (await ask('Retirer cet agent ?', `« ${a.nom} » ne sera plus dans le planning ni proposé dans « Agents absents ». Ses anciennes cases restent enregistrées.`,
                 [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
@@ -509,7 +510,60 @@ function vueAgents() {
   });
   return h('div', { class: 'plan-agents' },
     h('div', { class: 'row plan-info-ligne' }, h('p', { class: 'muted plan-info' }, icon('users', 14), ' Ces agents sont aussi ceux proposés dans « Agents absents » de la main courante.'), h('span', { class: 'spacer' }), boutonImport('btn small')),
-    h('div', { class: 'ag-grille' }, groupes));
+    h('div', { class: 'ag-grille' }, groupes),
+    liste.length ? h('div', { class: 'plan-vider' }, h('button', { class: 'lien-discret', onclick: viderPlanning }, 'Vider le planning…')) : null);
+}
+
+// Fusion discrète : l'agent choisi récupère les cases de `a`, qui disparaît.
+function fusionnerAgent(a) {
+  const autres = planState.agents.filter((x) => x.id !== a.id).sort((x, y) => x.nom.localeCompare(y.nom, 'fr'));
+  if (!autres.length) return;
+  const choix = h('select', {}, autres.map((x) => h('option', { value: x.id }, `${x.nom} · ${(PLAN_EQUIPES.find((e) => e.id === x.equipe) || { label: x.equipe }).label}`)));
+  const dlg = h('dialog', { class: 'plan-fusion' }, h('div', { class: 'dialog-body' },
+    h('h2', {}, 'Fusionner deux agents'),
+    h('p', {}, `Même personne écrite autrement ? Les cases de « ${a.nom} » rejoignent l'agent choisi (ses propres cases priment), puis « ${a.nom} » est retiré.`),
+    h('label', { class: 'field' }, h('span', {}, 'Garder'), choix),
+    h('div', { class: 'dialog-actions' }, h('span', { class: 'spacer' }),
+      h('button', { class: 'btn ghost', onclick: () => dlg.close() }, 'Annuler'),
+      h('button', { class: 'btn primary', onclick: async () => {
+        dlg.close();
+        try {
+          const r = await call(api.planFusionner(a.id, choix.value, S.user));
+          planState.agents = r.agents;
+          planSemCache.clear();
+          await rafraichirAgentsAbsents();
+          toast(`« ${a.nom} » fusionné avec « ${autres.find((x) => x.id === choix.value).nom} ».`);
+        } catch (err) {
+          toast(`Fusion impossible : ${err.message}`);
+        }
+        renderPlanning();
+      } }, 'Fusionner'))));
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+}
+
+// Vider le planning (agents et semaines) avant de réimporter un classeur propre.
+async function viderPlanning() {
+  if (await ask('Vider le planning ?', 'Tous les agents et toutes les semaines (cases, notes, repères) du planning de ce site seront supprimés, pour tous les postes. Les codes de l\'onglet « Codes » sont gardés.\n\nVous pourrez ensuite réimporter le classeur Excel.',
+    [{ label: 'Annuler', value: 'no' }, { label: 'Continuer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+  const mot = await promptText('Confirmer', 'Tapez VIDER', { text: 'Pour confirmer, tapez VIDER en majuscules.' });
+  if (mot !== 'VIDER') {
+    if (mot != null) toast('Planning conservé (confirmation incorrecte).');
+    return;
+  }
+  try {
+    await call(api.planVider());
+    planState.agents = [];
+    planState.semaine = null;
+    planSemCache.clear();
+    S.agentsPlanning = false;
+    S.agents = await call(api.loadAgents()).catch(() => []);
+    toast('Planning vidé.');
+  } catch (err) {
+    toast(`Non vidé : ${err.message}`);
+  }
+  renderPlanning();
 }
 
 /* ---------- Codes (abréviations) ---------- */

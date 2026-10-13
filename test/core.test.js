@@ -474,3 +474,27 @@ test('planning : import d\'un classeur (format CTVO), heures supp et repères co
   assert.equal(p.loadSemaine('2026-10-12').reperes.length, 1);
   assert.equal(p.loadSemaine('2026-10-12').notes, 'Réunion sécurité jeudi');
 });
+
+test('planning : fusion de deux agents et vidage', () => {
+  const { Planning } = require('../src/core/planning');
+  const p = new Planning(tmp());
+  const [a, b] = p.saveAgents([{ nom: 'Agent Un', equipe: 'matin' }, { nom: 'Agent 1', equipe: 'matin' }]);
+  p.setCase(a.id, '2026-10-12', { code: 'CP' }, 'PC');
+  p.setCase(b.id, '2026-10-12', { code: 'MAL' }, 'PC');
+  p.setCase(b.id, '2026-10-13', { code: 'R' }, 'PC');
+  p.setCase(b.id, '2026-10-20', { code: 'ABS' }, 'PC');
+  p.saveCodes([{ code: 'PAT', label: 'Paternité', absence: true }]);
+  const r = p.fusionner(b.id, a.id, 'PC');
+  assert.deepEqual(r.agents.map((x) => x.nom), ['Agent Un']);
+  assert.equal(r.semaines, 2);
+  const c = p.casesEntre('2026-10-12', '2026-10-25');
+  assert.deepEqual(Object.keys(c), [a.id]);
+  assert.equal(c[a.id]['2026-10-12'].code, 'CP'); // la case de l'agent gardé prime
+  assert.equal(c[a.id]['2026-10-13'].code, 'R');
+  assert.equal(c[a.id]['2026-10-20'].code, 'ABS');
+  assert.throws(() => p.fusionner(a.id, a.id));
+  p.vider();
+  assert.deepEqual(p.loadAgents(), []);
+  assert.deepEqual(p.casesEntre('2026-10-12', '2026-10-25'), {});
+  assert.equal(p.loadCodes().length, 1);
+});

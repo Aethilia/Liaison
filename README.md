@@ -114,6 +114,12 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   heures supp « (+1) », les notes et les repères colorés. Un aperçu s'affiche
   avant l'import ; sur les semaines importées, les cases de ces agents sont
   remplacées par celles du classeur.
+- **Fusionner** (petite icône au survol d'un agent, onglet *Agents*) : réunit
+  deux agents qui sont la même personne écrite autrement ; les cases de
+  l'agent gardé priment.
+- **Vider le planning** (petit lien en bas de l'onglet *Agents*, confirmation
+  en tapant VIDER) : supprime agents et semaines pour réimporter un classeur
+  propre ; les codes de l'onglet *Codes* sont gardés.
 - **Retard** (RET) : la palette demande la durée (« 30 » devient « 30 min »).
   L'agent reste compté présent, mais apparaît dans « Agents absents » avec la
   durée (ex. *Retard · 30 min*).

@@ -184,6 +184,8 @@ handle('plan:setNotes', (date, notes, par) => plan().setNotes(date, notes, par |
 handle('plan:setReperes', (date, reperes, par) => plan().setReperes(date, reperes, par || config.poste));
 handle('plan:entre', (debut, fin) => plan().casesEntre(debut, fin));
 handle('plan:codes', () => plan().loadCodes());
+handle('plan:fusionner', (source, cible, par) => plan().fusionner(source, cible, par || config.poste));
+handle('plan:vider', () => plan().vider());
 handle('plan:saveCodes', (codes) => plan().saveCodes(codes));
 // Import d'un planning Excel : le fichier choisi est gardé ici, l'interface
 // ne fait que confirmer (aperçu puis import).

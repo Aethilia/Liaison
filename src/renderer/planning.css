@@ -146,3 +146,13 @@ dialog.plan-detail { width: min(560px, 94vw); }
 .code-vide { width: 26px; }
 .code-ajout { gap: 6px; align-items: center; flex-wrap: wrap; }
 .code-ajout input[type="text"]:nth-child(2) { flex: 1; min-width: 140px; }
+
+/* Options discrètes : fusion (au survol de la ligne) et « Vider le planning » */
+.ag-ligne .ag-discret { opacity: 0; transition: opacity .15s; }
+.ag-ligne:hover .ag-discret, .ag-ligne .ag-discret:focus { opacity: .55; }
+.ag-ligne .ag-discret:hover { opacity: 1; }
+.plan-vider { display: flex; justify-content: flex-end; margin-top: 18px; }
+.lien-discret { background: none; border: 0; padding: 2px 4px; font: inherit; font-size: 11.5px; color: #94a3b8; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; }
+.lien-discret:hover { color: #b42318; text-decoration-color: currentColor; }
+dialog.plan-fusion { width: min(460px, 94vw); }
+dialog.plan-fusion select { width: 100%; }
