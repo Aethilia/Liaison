@@ -63,6 +63,11 @@ majPlanCodes();
 
 const isoAjout = (iso, n) => M.addDays(iso, n);
 // Arrivée / départ d'un agent (facultatifs) : il ne compte qu'entre ces dates.
+// Samedi vide de l'équipe d'après-midi (13H-20H) = heures supp : calculé à
+// l'affichage, rien n'est écrit dans le planning (une case saisie prime).
+const HS_SAMEDI_APM = 7;
+const samediHs = (a, d) => a && a.equipe === 'apresmidi' && M.SERVICES.some((x) => x.id === 'apresmidi') && M.parseISODate(d).getDay() === 6;
+const valeurCase = (a, d, val) => (val && (val.code || val.texte || val.hs) ? val : samediHs(a, d) ? { code: 'HS', texte: '', hs: HS_SAMEDI_APM, auto: true } : val);
 const presentLe = (a, d) => (!a.arrivee || d >= a.arrivee) && (!a.depart || d <= a.depart);
 const presentEntre = (a, debut, fin) => (!a.arrivee || a.arrivee <= fin) && (!a.depart || a.depart >= debut);
 const estParti = (a) => !!a.depart && a.depart < aujourdhui();
@@ -157,13 +162,14 @@ function vueSemaine(head) {
       lignes.push(h('tr', { class: 'plan-agent', style: { '--eq': eq.couleur() } },
         h('th', { class: 'c-agent' }, a.nom),
         jours.map((d) => (presentLe(a, d)
-          ? caseAgent(a, d, (sem.cases[a.id] || {})[d], { we: estWeekEnd(d), auj: d === auj, nuit: eq.id === 'nuit' })
+          ? caseAgent(a, d, valeurCase(a, d, (sem.cases[a.id] || {})[d]), { we: estWeekEnd(d), auj: d === auj, nuit: eq.id === 'nuit' })
           : h('td', { class: 'plan-case hors', title: a.arrivee && d < a.arrivee ? `${a.nom} arrive le ${fmtCourt(a.arrivee)}` : `${a.nom} est parti le ${fmtCourt(a.depart)}` })))));
     }
   }
   const legende = h('div', { class: 'plan-legende' }, PLAN_CODES.map((c) => h('span', { class: 'leg' }, h('i', { style: { background: c.couleur } }, c.code), c.label)),
     h('span', { class: 'leg muted' }, 'Case vide = travaille normalement'),
-    h('span', { class: 'leg muted' }, legendeNuit()));
+    h('span', { class: 'leg muted' }, legendeNuit()),
+    M.SERVICES.some((x) => x.id === 'apresmidi') ? h('span', { class: 'leg muted' }, `Après-midi : samedi vide = ${fmtHs(HS_SAMEDI_APM)} supp`) : null);
   const notes = h('textarea', { class: 'plan-notes-txt', rows: 4, placeholder: 'Notes de la semaine (formations, travaux, remplacements…)' });
   notes.value = sem.notes || '';
   notes.addEventListener('change', async () => {
@@ -267,9 +273,9 @@ const fmtJourCourt = (iso) => new Intl.DateTimeFormat('fr-FR', { weekday: 'short
 function caseAgent(agent, date, val, { we, auj, nuit = false }) {
   const c = val && planCode(val.code);
   const td = h('td', {
-    class: `plan-case${we ? ' we' : ''}${auj ? ' auj' : ''}${c ? ' rempli' : ''}${val && val.couleur ? ' colore' : ''}`,
+    class: `plan-case${we ? ' we' : ''}${auj ? ' auj' : ''}${c ? ' rempli' : ''}${val && val.couleur ? ' colore' : ''}${val && val.auto ? ' auto' : ''}`,
     style: val && val.couleur ? { '--fond': val.couleur } : null,
-    tabIndex: 0, title: `${agent.nom} — ${libelleJour(date, nuit)}${c ? ` : ${c.label}` : ''}${val && val.texte ? ` (${val.texte})` : ''}${val && val.hs ? ` · ${fmtHs(val.hs)} supp` : ''}`,
+    tabIndex: 0, title: `${agent.nom} — ${libelleJour(date, nuit)}${c ? ` : ${c.label}` : ''}${val && val.texte ? ` (${val.texte})` : ''}${val && val.hs ? ` · ${fmtHs(val.hs)} supp` : ''}${val && val.auto ? ' (samedi après-midi, automatique)' : ''}`,
     onclick: (e) => ouvrirPalette(e.currentTarget, agent, date, val, nuit),
     onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrirPalette(e.currentTarget, agent, date, val, nuit); } },
   });
@@ -289,6 +295,7 @@ function fermerPalette() {
 // Petite palette posée sous la case : un clic sur un code l'enregistre.
 function ouvrirPalette(td, agent, date, val, nuit = false) {
   fermerPalette();
+  if (val && val.auto) val = undefined; // samedi après-midi automatique : case vide en réalité
   const texte = h('input', { type: 'text', placeholder: val && val.code === 'RET' ? 'Durée du retard (ex. 30 min)' : 'Horaire ou note (ex. 13H-18H, +3h30)', value: (val && val.texte) || '', maxLength: 40 });
   const heures = h('input', { type: 'text', class: 'pop-hs-input', placeholder: 'ex. 1, 3h30', value: val && val.hs ? fmtHs(val.hs).slice(1) : '', maxLength: 6, inputMode: 'decimal' });
   let couleurChoisie = (val && val.couleur) || '';
@@ -369,10 +376,10 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
 /* ---------- Synthèse mensuelle par agent ---------- */
 
 // Jours travaillés : lundi-vendredi sans code d'absence, plus T/H et VM.
-function syntheseAgent(cases, debut, fin) {
+function syntheseAgent(cases, debut, fin, agent = null) {
   const r = { travailles: 0, codes: {}, hs: 0 };
   for (let d = debut; d <= fin; d = isoAjout(d, 1)) {
-    const v = cases[d];
+    const v = valeurCase(agent, d, cases[d]);
     const c = v && planCode(v.code);
     if (v && v.hs) r.hs += v.hs;
     if (c) r.codes[c.code] = (r.codes[c.code] || 0) + 1;
@@ -407,7 +414,7 @@ async function vueSynthese(head) {
       // Seulement sa période de présence dans le mois.
       const deb = a.arrivee && a.arrivee > debut ? a.arrivee : debut;
       const fn = a.depart && a.depart < fin ? a.depart : fin;
-      const s = syntheseAgent(cases[a.id] || {}, deb, fn);
+      const s = syntheseAgent(cases[a.id] || {}, deb, fn, a);
       const nbJoursAgent = Math.round((M.parseISODate(fn) - M.parseISODate(deb)) / 864e5) + 1;
       totaux.travailles += s.travailles;
       totaux.hs += s.hs;
@@ -445,7 +452,7 @@ function detailAgent(agent, cases, debut, fin) {
   const decal = (premier.getDay() + 6) % 7;
   const cellules = [...Array(decal).fill(null)];
   for (let d = debut; d <= fin; d = isoAjout(d, 1)) cellules.push(d);
-  const s = syntheseAgent(cases, debut, fin);
+  const s = syntheseAgent(cases, debut, fin, agent);
   const dlg = h('dialog', { class: 'plan-detail' }, h('div', { class: 'dialog-body' },
     h('h2', {}, agent.nom, h('small', { class: 'muted' }, ` · ${eq.label}${eq.heures ? ` ${eq.heures}` : ''}`)),
     h('div', { class: 'det-resume' }, h('span', { class: 'syn-badge', style: { '--c': eq.couleur() } }, `${s.travailles} travaillés`),
@@ -453,7 +460,7 @@ function detailAgent(agent, cases, debut, fin) {
       PLAN_CODES.filter((c) => s.codes[c.code]).map((c) => h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, `${s.codes[c.code]} ${c.label.toLowerCase()}`))),
     h('div', { class: 'det-cal' }, JOURS_COURTS.map((j) => h('div', { class: 'det-j' }, j)), cellules.map((d) => {
       if (!d) return h('div', { class: 'det-vide' });
-      const v = cases[d];
+      const v = valeurCase(agent, d, cases[d]);
       const c = v && planCode(v.code);
       return h('div', { class: `det-case${estWeekEnd(d) ? ' we' : ''}`, style: c ? { '--c': c.couleur } : null, title: c ? `${c.label}${v.texte ? ` (${v.texte})` : ''}` : '' },
         h('span', { class: 'det-num' }, Number(d.slice(8))), c ? h('b', {}, v.code === 'H' && v.texte ? v.texte : v.code === 'HS' && v.hs ? fmtHs(v.hs) : c.code) : null,

@@ -168,3 +168,5 @@ dialog.plan-fusion select { width: 100%; }
 .ag-anciens > summary::-webkit-details-marker { display: none; }
 .ag-anciens .ag-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 14px; }
 .btn.danger-text { color: #b42318; }
+/* Samedi après-midi vide = heures supp (automatique, non enregistré) */
+.plan-case.auto .plan-code { background: transparent; color: #0b7285; box-shadow: inset 0 0 0 1.5px #0b7285; border: 0; }

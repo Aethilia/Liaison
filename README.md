@@ -99,6 +99,9 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
 - **Heures supp** : petite case « + … h supp » dans la palette (1, 2,5 ou
   3h30), seule (code HS) ou avec un autre code. Badge « +1h » dans la case,
   total du mois par agent dans la synthèse (colonne *H. supp*).
+- **Samedi après-midi** (équipe 13H-20H) : un samedi laissé vide compte
+  automatiquement +7h supp (affiché en contour, calculé à l'affichage, rien
+  n'est enregistré). Une case saisie (R, CP…) prime.
 - **Couleurs et repères** : chaque semaine a ses **repères** (textes colorés,
   à droite de la grille, ex. « Congé de naissance du 14/10 au 14/11 » en
   violet) ; la palette d'une case permet de lui donner la couleur d'un repère,
