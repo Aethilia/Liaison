@@ -6,6 +6,7 @@
   <title>Liaison — Main courante</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="fun.css">
+  <link rel="stylesheet" href="planning.css">
 </head>
 <body>
   <!-- Étape 1 : choix du responsable -->
@@ -86,6 +87,7 @@
         <button class="view-btn active" data-view="saisie" role="tab" data-icon="edit">Saisie <span id="tasks-badge" class="nav-badge" title="Tâches de relève en attente" hidden></span></button>
         <button class="view-btn" data-view="journal" role="tab" data-icon="list">Observations</button>
         <button class="view-btn" data-view="recap" role="tab" data-icon="chart">Récap du mois</button>
+        <button class="view-btn" data-view="planning" role="tab" data-icon="users">Planning</button>
         <button class="view-btn" data-view="inventaire" role="tab" data-icon="box">Inventaire <span id="inv-badge" class="nav-badge" hidden></span></button>
         <button class="view-btn" data-view="dashboard" role="tab" data-icon="eye" hidden>Tableau de bord</button>
       </nav>
@@ -133,6 +135,10 @@
 
     <main id="view-recap" class="view" hidden>
       <div id="recap"></div>
+    </main>
+
+    <main id="view-planning" class="view" hidden>
+      <div id="planning"></div>
     </main>
 
     <main id="view-inventaire" class="view" hidden>
@@ -386,6 +392,7 @@
   <script src="photos.js"></script>
   <script src="taches.js"></script>
   <script src="inventaire.js"></script>
+  <script src="planning.js"></script>
   <script src="fun.js"></script>
   <script src="app.js"></script>
 </body>

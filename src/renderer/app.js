@@ -861,6 +861,7 @@ function renderForm() {
   $('#form').querySelectorAll('[data-agent]').forEach((input) => Suggest.attach(input, {
     items: () => S.agents.map((a) => ({ label: a })),
     onDelete: forgetAgent,
+    canDelete: () => !S.agentsPlanning, // liste du planning : on la gère dans l'onglet Planning
   }));
   $('#form').querySelectorAll('[data-nc-type]').forEach((input) => Suggest.attach(input, {
     items: () => S.ncTypes.map((t) => ({ label: t.nom, meta: t.unite, data: t })),
@@ -1309,6 +1310,7 @@ function takeOverAbsents() {
 }
 
 function rememberAgents(s) {
+  if (S.agentsPlanning) return; // liste fixée par l'onglet Planning
   const lower = new Set(S.agents.map((a) => a.toLowerCase()));
   const fresh = s.absents.map((a) => a.nom.trim()).filter((n) => n && !lower.has(n.toLowerCase()));
   if (!fresh.length) return;
@@ -1715,9 +1717,11 @@ function setView(view, { silent = false } = {}) {
   $('#view-recap').hidden = view !== 'recap';
   $('#view-dashboard').hidden = view !== 'dashboard';
   $('#view-inventaire').hidden = view !== 'inventaire';
-  document.querySelector('.toolbar').hidden = view === 'inventaire'; // dates et exports sans objet
+  $('#view-planning').hidden = view !== 'planning';
+  document.querySelector('.toolbar').hidden = view === 'inventaire' || view === 'planning'; // dates et exports sans objet
   if (silent) return;
   if (view === 'inventaire') renderInventaire();
+  if (view === 'planning') { fermerPalette(); renderPlanning(); }
   if (view === 'dashboard') renderDashboard();
   if (view === 'recap') {
     const d = M.parseISODate(S.date);
@@ -1741,6 +1745,13 @@ async function poll() {
   // Inventaire : rafraîchi en continu quand il est affiché, sinon le badge toutes les minutes.
   if (S.view === 'inventaire') {
     if (!document.querySelector('dialog[open]')) renderInventaire();
+    return;
+  }
+  // Planning : rafraîchi (autres postes) sauf pendant une saisie.
+  if (S.view === 'planning') {
+    const actif = document.activeElement;
+    const saisie = actif && actif.closest && actif.closest('#planning') && /INPUT|TEXTAREA|SELECT/.test(actif.tagName);
+    if (!planPop && !saisie && !document.querySelector('dialog[open]') && Date.now() - planState.loadedAt > 8000) renderPlanning();
     return;
   }
   if (Date.now() - invState.loadedAt > 60000) loadInventaire();
@@ -2776,6 +2787,10 @@ async function loadSiteData() {
     }
   };
   S.agents = await safe(api.loadAgents(), []);
+  // Agents du planning : ils remplacent la liste mémorisée des agents absents.
+  S.agentsPlanning = false;
+  planState.agents = await safe(api.planAgents(), []);
+  await rafraichirAgentsAbsents();
   S.ncTypes = await safe(api.loadNcTypes(), []);
   S.site = await safe(api.loadSite(), { couleurs: {} });
   await loadTasks();

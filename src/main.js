@@ -10,6 +10,7 @@ const M = require('./core/model');
 const { spawn } = require('child_process');
 const { summarizeSite } = require('./core/dashboard');
 const { Inventaire } = require('./core/inventaire');
+const { Planning } = require('./core/planning');
 const { UPDATE_DIR, findUpdate } = require('./core/update');
 
 // Interface en français (heures sur 24 h dans les champs horaires).
@@ -171,6 +172,15 @@ handle('inv:deleteArticle', (id) => inv().deleteArticle(id));
 handle('inv:addMovement', (m) => inv().addMovement(m, m.par || config.poste));
 handle('inv:deleteMovement', (id) => inv().deleteMovement(id));
 handle('inv:history', (id) => inv().history(id));
+
+// Planning des agents du site actif.
+const plan = () => new Planning(config.dataDir);
+handle('plan:agents', () => plan().loadAgents());
+handle('plan:saveAgents', (agents) => plan().saveAgents(agents));
+handle('plan:semaine', (date) => plan().loadSemaine(date));
+handle('plan:setCase', (agentId, date, valeur, par) => plan().setCase(agentId, date, valeur, par || config.poste));
+handle('plan:setNotes', (date, notes, par) => plan().setNotes(date, notes, par || config.poste));
+handle('plan:entre', (debut, fin) => plan().casesEntre(debut, fin));
 handle('sup:list', () => store.loadSupervisors());
 handle('sup:save', (nom, pin) => store.saveSupervisor(nom, pin));
 handle('sup:remove', (nom) => store.removeSupervisor(nom));

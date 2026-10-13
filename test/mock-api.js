@@ -12,6 +12,9 @@
   let ncTypes = window.__ncTypes || [];
   const tasks = window.__tasks || {};
   const photos = {};
+  const plan = window.__plan || { agents: [], sem: {} };
+  window.__plan = plan;
+  const lundi = (iso) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
   const inv = window.__inv || { categories: [], articles: {}, mouvements: [], seq: 0 };
   window.__inv = inv;
   const SAMPLE_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect width="240" height="160" fill="#8aa"/><circle cx="80" cy="70" r="30" fill="#dde"/><rect x="120" y="60" width="90" height="70" fill="#567"/></svg>');
@@ -95,6 +98,12 @@
     checkUpdate: () => ok({ current: '1.0.0', kind: 'installation', dir: 'C:\\Partage\\Liaison\\mises-a-jour', update: window.__update || null }),
     installUpdate: () => ok('1.1.0'),
     openUpdateDir: () => ok(true),
+    planAgents: () => ok(plan.agents),
+    planSaveAgents: (list) => { plan.agents = list.filter((a) => a.nom).map((a, i) => ({ id: a.id || `ag${Date.now().toString(36)}${i}`, nom: a.nom.trim(), equipe: a.equipe || 'autres' })); return ok(plan.agents); },
+    planSemaine: (d) => { const l = lundi(d); const s = plan.sem[l] || { cases: {}, notes: '' }; return ok({ lundi: l, cases: s.cases, notes: s.notes }); },
+    planSetCase: (id, d, v) => { const l = lundi(d); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.cases[id] = s.cases[id] || {}; if (v && (v.code || v.texte)) s.cases[id][d] = { code: v.code || '', texte: v.texte || '' }; else delete s.cases[id][d]; return ok({ lundi: l, ...s }); },
+    planSetNotes: (d, n) => { const l = lundi(d); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.notes = n; return ok({ lundi: l, ...s }); },
+    planEntre: (a, b) => { const out = {}; for (const s of Object.values(plan.sem)) for (const [id, j] of Object.entries(s.cases)) for (const [d, v] of Object.entries(j)) if (d >= a && d <= b) (out[id] = out[id] || {})[d] = v; return ok(out); },
     invList: () => ok(invView()),
     invSaveCategories: (cats) => {
       inv.categories = cats.filter((c) => c.nom).map((c) => ({ id: c.id || `c${++inv.seq}`, nom: c.nom.trim() }));

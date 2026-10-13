@@ -348,3 +348,25 @@ test('tonnage des entrées : réglage du site (CPTP par défaut)', async () => {
   const back = await X.importWorkbookFull(file, { year: 2026 });
   assert.equal(back.days[0].services.matin.entrees.tonnage, 12.54);
 });
+
+test('planning : agents, cases par semaine, notes et période', () => {
+  const { Planning, lundiDe } = require('../src/core/planning');
+  assert.equal(lundiDe('2026-10-18'), '2026-10-12'); // dimanche → lundi
+  assert.equal(lundiDe('2026-10-12'), '2026-10-12');
+  const p = new Planning(tmp());
+  const [a, b] = p.saveAgents([{ nom: 'Dupont', equipe: 'matin' }, { nom: 'Martin', equipe: 'nuit' }, { nom: 'dupont', equipe: 'nuit' }]);
+  assert.equal(p.loadAgents().length, 2);
+  p.setCase(a.id, '2026-10-13', { code: 'CP' }, 'PC');
+  p.setCase(a.id, '2026-10-14', { code: 'H', texte: '13H-18H' }, 'PC');
+  p.setCase(b.id, '2026-10-19', { code: 'MAL' }, 'PC'); // semaine suivante
+  p.setNotes('2026-10-15', 'Formation incendie jeudi', 'PC');
+  const s = p.loadSemaine('2026-10-16');
+  assert.equal(s.lundi, '2026-10-12');
+  assert.equal(s.cases[a.id]['2026-10-13'].code, 'CP');
+  assert.equal(s.notes, 'Formation incendie jeudi');
+  p.setCase(a.id, '2026-10-13', { code: '' }, 'PC'); // effacée
+  assert.equal(p.loadSemaine('2026-10-13').cases[a.id]['2026-10-13'], undefined);
+  const per = p.casesEntre('2026-10-01', '2026-10-31');
+  assert.equal(per[a.id]['2026-10-14'].texte, '13H-18H');
+  assert.equal(per[b.id]['2026-10-19'].code, 'MAL');
+});

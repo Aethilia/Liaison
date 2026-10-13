@@ -83,6 +83,20 @@ la relève, la fiche et le journal, et est précédée de « ⚠ » dans l'expor
   Le code PIN est une protection légère : la vraie confidentialité dépend des
   droits Windows sur le dossier partagé.
 
+## Planning
+
+Onglet **Planning**, un par site (dossier `planning/`), partagé entre les postes.
+
+- **Agents** : ajoutés par équipe (Matin 5H-13H, Après-midi 13H-20H, Nuit
+  20H-4H, Responsables, Autres), ordre réglable. Ce sont **les seuls agents
+  proposés** dans « Agents absents » de la main courante.
+- **Semaine** (lundi → dimanche) : un clic sur une case ouvre la palette des
+  codes (R repos, CP, MAL, ABS, naissance, FOR, VM, INT, T travaille le
+  week-end, H horaire/note libre). Case vide = travaille normalement. Chaque
+  équipe affiche le nombre de présents par jour ; notes de la semaine à droite.
+- **Synthèse** du mois par agent : jours travaillés, nombre de chaque code,
+  barre de répartition ; un clic sur un agent ouvre son mois en calendrier.
+
 ## Inventaire
 
 Onglet **Inventaire**, indépendant de la main courante, **un par site** (rangé

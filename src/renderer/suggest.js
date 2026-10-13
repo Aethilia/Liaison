@@ -52,7 +52,7 @@
         meta.textContent = it.meta;
         row.append(meta);
       }
-      if (opts.onDelete) {
+      if (opts.onDelete && (!opts.canDelete || opts.canDelete())) {
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'sg-del';
