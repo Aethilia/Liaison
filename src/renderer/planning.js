@@ -62,6 +62,12 @@ const planState = { vue: 'semaine', date: null, agents: [], codes: [], semaine: 
 majPlanCodes();
 
 const isoAjout = (iso, n) => M.addDays(iso, n);
+// Arrivée / départ d'un agent (facultatifs) : il ne compte qu'entre ces dates.
+const presentLe = (a, d) => (!a.arrivee || d >= a.arrivee) && (!a.depart || d <= a.depart);
+const presentEntre = (a, debut, fin) => (!a.arrivee || a.arrivee <= fin) && (!a.depart || a.depart >= debut);
+const estParti = (a) => !!a.depart && a.depart < aujourdhui();
+const fmtCourt = (iso) => new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }).format(M.parseISODate(iso));
+const datesAgent = (a) => [a.arrivee ? `arrivé le ${fmtCourt(a.arrivee)}` : '', a.depart ? `parti le ${fmtCourt(a.depart)}` : ''].filter(Boolean).join(' · ');
 const lundiDe = (iso) => {
   const d = M.parseISODate(iso);
   return isoAjout(iso, -((d.getDay() + 6) % 7));
@@ -135,21 +141,24 @@ function vueSemaine(head) {
       h('div', { class: 'j-nom' }, JOURS_COURTS[i]), h('div', { class: 'j-date' }, fmtJour(d))))));
   const lignes = [];
   for (const eq of PLAN_EQUIPES) {
-    const agents = planState.agents.filter((a) => a.equipe === eq.id);
+    const agents = planState.agents.filter((a) => a.equipe === eq.id && presentEntre(a, lundi, jours[6]));
     if (!agents.length) continue;
-    // Bandeau d'équipe : présents / effectif pour chaque jour.
+    // Bandeau d'équipe : présents / effectif pour chaque jour (hors arrivées / départs).
     lignes.push(h('tr', { class: 'plan-equipe', style: { '--eq': eq.couleur() } },
       h('th', { class: 'c-agent' }, h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, ` ${eq.heures}`) : null),
       jours.map((d) => {
-        const absents = agents.filter((a) => { const c = (sem.cases[a.id] || {})[d]; return c && planCode(c.code) && planCode(c.code).absence; }).length;
-        const presents = agents.length - absents;
-        return h('td', { class: `${estWeekEnd(d) ? 'we' : ''}${d === auj ? ' auj' : ''}`, title: `${presents} présent(s) sur ${agents.length}` },
-          h('span', { class: `eq-compte${absents ? ' manque' : ''}` }, `${presents}/${agents.length}`));
+        const effectif = agents.filter((a) => presentLe(a, d));
+        const absents = effectif.filter((a) => { const c = (sem.cases[a.id] || {})[d]; return c && planCode(c.code) && planCode(c.code).absence; }).length;
+        const presents = effectif.length - absents;
+        return h('td', { class: `${estWeekEnd(d) ? 'we' : ''}${d === auj ? ' auj' : ''}`, title: `${presents} présent(s) sur ${effectif.length}` },
+          h('span', { class: `eq-compte${absents ? ' manque' : ''}` }, `${presents}/${effectif.length}`));
       })));
     for (const a of agents) {
       lignes.push(h('tr', { class: 'plan-agent', style: { '--eq': eq.couleur() } },
         h('th', { class: 'c-agent' }, a.nom),
-        jours.map((d) => caseAgent(a, d, (sem.cases[a.id] || {})[d], { we: estWeekEnd(d), auj: d === auj, nuit: eq.id === 'nuit' }))));
+        jours.map((d) => (presentLe(a, d)
+          ? caseAgent(a, d, (sem.cases[a.id] || {})[d], { we: estWeekEnd(d), auj: d === auj, nuit: eq.id === 'nuit' })
+          : h('td', { class: 'plan-case hors', title: a.arrivee && d < a.arrivee ? `${a.nom} arrive le ${fmtCourt(a.arrivee)}` : `${a.nom} est parti le ${fmtCourt(a.depart)}` })))));
     }
   }
   const legende = h('div', { class: 'plan-legende' }, PLAN_CODES.map((c) => h('span', { class: 'leg' }, h('i', { style: { background: c.couleur } }, c.code), c.label)),
@@ -224,7 +233,8 @@ async function importerPlanningExcel() {
     `${ap.nbSemaines} semaines, du ${date(ap.debut)} au ${date(isoAjout(ap.fin, 6))} · ${ap.nbCases} cases`,
     '',
     'Les agents déjà dans le planning sont retrouvés par leur nom. Sur ces semaines, leurs cases sont remplacées par celles du classeur ; notes et repères s\'ajoutent.',
-    ap.anciens.length ? `\nNoms absents des semaines récentes, non repris : ${ap.anciens.join(', ')}` : '',
+    ap.partis || ap.arrives ? `\nArrivées / départs repérés : ${plural(ap.arrives || 0, 'arrivée')}, ${plural(ap.partis || 0, 'départ')} (modifiables ensuite).` : '',
+    ap.ecartes && ap.ecartes.length ? `Noms écartés (mise en page) : ${ap.ecartes.join(', ')}` : '',
   ].join('\n');
   if (await ask('Importer ce planning ?', texte, [{ label: 'Annuler', value: 'no' }, { label: 'Importer', value: 'yes', cls: 'primary' }]) !== 'yes') return;
   try {
@@ -390,11 +400,15 @@ async function vueSynthese(head) {
   const lignes = [];
   const totaux = { travailles: 0, codes: {}, hs: 0 };
   for (const eq of PLAN_EQUIPES) {
-    const agents = planState.agents.filter((a) => a.equipe === eq.id);
+    const agents = planState.agents.filter((a) => a.equipe === eq.id && presentEntre(a, debut, fin));
     if (!agents.length) continue;
     lignes.push(h('tr', { class: 'syn-equipe', style: { '--eq': eq.couleur() } }, h('td', { colSpan: 4 + codesUtiles.length }, h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, ` ${eq.heures}`) : null)));
     for (const a of agents) {
-      const s = syntheseAgent(cases[a.id] || {}, debut, fin);
+      // Seulement sa période de présence dans le mois.
+      const deb = a.arrivee && a.arrivee > debut ? a.arrivee : debut;
+      const fn = a.depart && a.depart < fin ? a.depart : fin;
+      const s = syntheseAgent(cases[a.id] || {}, deb, fn);
+      const nbJoursAgent = Math.round((M.parseISODate(fn) - M.parseISODate(deb)) / 864e5) + 1;
       totaux.travailles += s.travailles;
       totaux.hs += s.hs;
       for (const [c, n] of Object.entries(s.codes)) totaux.codes[c] = (totaux.codes[c] || 0) + n;
@@ -402,9 +416,9 @@ async function vueSynthese(head) {
       const barre = h('div', { class: 'syn-barre', title: `${s.travailles} jour(s) travaillé(s)` },
         h('i', { style: { flex: s.travailles, background: eq.couleur() } }),
         PLAN_CODES.filter((c) => s.codes[c.code]).map((c) => h('i', { style: { flex: s.codes[c.code], background: c.couleur }, title: `${c.label} : ${s.codes[c.code]}` })),
-        h('i', { class: 'vide', style: { flex: Math.max(0, nbJours - s.travailles - Object.values(s.codes).reduce((x, n) => x + n, 0)) } }));
+        h('i', { class: 'vide', style: { flex: Math.max(0, nbJoursAgent - s.travailles - Object.values(s.codes).reduce((x, n) => x + n, 0)) } }));
       lignes.push(h('tr', { class: 'syn-agent', onclick: () => detailAgent(a, cases[a.id] || {}, debut, fin) },
-        h('th', {}, a.nom),
+        h('th', { title: datesAgent(a) }, a.nom, datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
         h('td', { class: 'num' }, h('b', {}, s.travailles)),
         h('td', { class: 'num' }, s.hs ? h('span', { class: 'syn-badge', style: { '--c': planCode('HS').couleur } }, fmtHs(s.hs)) : h('span', { class: 'muted' }, '·')),
         codesUtiles.map((c) => h('td', { class: 'num' }, s.codes[c.code] ? h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, s.codes[c.code]) : h('span', { class: 'muted' }, '·'))),
@@ -465,7 +479,7 @@ function vueAgents() {
     }
   };
   const groupes = PLAN_EQUIPES.map((eq) => {
-    const agents = liste.filter((a) => a.equipe === eq.id);
+    const agents = liste.filter((a) => a.equipe === eq.id && !estParti(a));
     const nom = h('input', { type: 'text', placeholder: `Ajouter un agent ${eq.id === 'autres' ? '' : `(${eq.label.toLowerCase()})`}`, maxLength: 40 });
     const ajouter = () => {
       const n = nom.value.trim();
@@ -480,7 +494,7 @@ function vueAgents() {
       h('div', { class: 'card-body' },
         agents.length ? h('div', { class: 'ag-liste' }, agents.map((a) => {
           const i = liste.indexOf(a);
-          const memes = liste.filter((x) => x.equipe === a.equipe);
+          const memes = liste.filter((x) => x.equipe === a.equipe && !estParti(x));
           const pos = memes.indexOf(a);
           const deplacer = (sens) => {
             const autre = memes[pos + sens];
@@ -490,7 +504,7 @@ function vueAgents() {
             enregistrer();
           };
           return h('div', { class: 'ag-ligne' },
-            h('span', { class: 'ag-nom' }, a.nom),
+            h('span', { class: 'ag-nom', title: datesAgent(a) }, a.nom, datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
             h('select', { title: 'Équipe', onchange: (e) => { a.equipe = e.target.value; enregistrer(); } }, PLAN_EQUIPES.map((x) => h('option', { value: x.id, selected: x.id === a.equipe }, x.label))),
             h('button', { class: 'o-btn haut', title: 'Monter', disabled: pos === 0, onclick: () => deplacer(-1) }, icon('chevronLeft', 14)),
             h('button', { class: 'o-btn bas', title: 'Descendre', disabled: pos === memes.length - 1, onclick: () => deplacer(1) }, icon('chevronRight', 14)),
@@ -498,6 +512,7 @@ function vueAgents() {
               const n = ((await promptText('Renommer l’agent', a.nom)) || '').trim();
               if (n && n !== a.nom) { a.nom = n; enregistrer(); }
             } }, icon('edit', 14)),
+            h('button', { class: 'o-btn', title: 'Arrivée / départ', onclick: () => datesAgentDialog(a, enregistrer) }, icon('clock', 14)),
             h('button', { class: 'o-btn ag-discret', title: 'Fusionner avec un autre agent (même personne, autre orthographe)', onclick: () => fusionnerAgent(a) }, icon('users', 14)),
             h('button', { class: 'o-btn rm', title: 'Retirer du planning', onclick: async () => {
               if (await ask('Retirer cet agent ?', `« ${a.nom} » ne sera plus dans le planning ni proposé dans « Agents absents ». Ses anciennes cases restent enregistrées.`,
@@ -511,7 +526,50 @@ function vueAgents() {
   return h('div', { class: 'plan-agents' },
     h('div', { class: 'row plan-info-ligne' }, h('p', { class: 'muted plan-info' }, icon('users', 14), ' Ces agents sont aussi ceux proposés dans « Agents absents » de la main courante.'), h('span', { class: 'spacer' }), boutonImport('btn small')),
     h('div', { class: 'ag-grille' }, groupes),
+    anciensAgents(liste, enregistrer),
     liste.length ? h('div', { class: 'plan-vider' }, h('button', { class: 'lien-discret', onclick: viderPlanning }, 'Vider le planning…')) : null);
+}
+
+// Agents partis : repliés en bas de l'onglet, leurs anciennes cases restent visibles.
+function anciensAgents(liste, enregistrer) {
+  const partis = liste.filter(estParti).sort((a, b) => b.depart.localeCompare(a.depart));
+  if (!partis.length) return null;
+  return h('details', { class: 'card ag-anciens' },
+    h('summary', { class: 'card-head' }, icon('users', 15), `Anciens agents (${partis.length})`, h('span', { class: 'hint' }, 'Partis : visibles seulement sur les semaines où ils étaient là')),
+    h('div', { class: 'card-body ag-liste' }, partis.map((a) => h('div', { class: 'ag-ligne' },
+      h('span', { class: 'ag-nom' }, a.nom, h('small', { class: 'ag-dates' }, `${(PLAN_EQUIPES.find((e) => e.id === a.equipe) || { label: a.equipe }).label} · ${datesAgent(a)}`)),
+      h('button', { class: 'o-btn', title: 'Arrivée / départ', onclick: () => datesAgentDialog(a, enregistrer) }, icon('clock', 14)),
+      h('button', { class: 'o-btn ag-discret', title: 'Fusionner avec un autre agent', onclick: () => fusionnerAgent(a) }, icon('users', 14)),
+      h('button', { class: 'o-btn rm', title: 'Retirer du planning', onclick: async () => {
+        if (await ask('Retirer cet agent ?', `« ${a.nom} » ne sera plus dans le planning. Ses anciennes cases restent enregistrées.`,
+          [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+        liste.splice(liste.indexOf(a), 1);
+        enregistrer();
+      } }, icon('x', 14))))));
+}
+
+// Dates d'arrivée et de départ d'un agent.
+function datesAgentDialog(a, enregistrer) {
+  const arrivee = h('input', { type: 'date', value: a.arrivee || '' });
+  const depart = h('input', { type: 'date', value: a.depart || '' });
+  const dlg = h('dialog', { class: 'plan-fusion' }, h('div', { class: 'dialog-body' },
+    h('h2', {}, a.nom),
+    h('p', { class: 'muted' }, 'Laisser vide si l\'agent est là depuis le début ou toujours présent. En dehors de ces dates, il n\'apparaît pas et ne compte pas dans l\'effectif.'),
+    h('div', { class: 'row', style: { gap: '12px' } },
+      h('label', { class: 'field' }, h('span', {}, 'Arrivé le'), arrivee),
+      h('label', { class: 'field' }, h('span', {}, 'Parti le (dernier jour)'), depart)),
+    h('div', { class: 'dialog-actions' }, h('span', { class: 'spacer' }),
+      h('button', { class: 'btn ghost', onclick: () => dlg.close() }, 'Annuler'),
+      h('button', { class: 'btn primary', onclick: () => {
+        if (arrivee.value && depart.value && depart.value < arrivee.value) { toast('Le départ doit être après l\'arrivée.'); return; }
+        a.arrivee = arrivee.value || undefined;
+        a.depart = depart.value || undefined;
+        dlg.close();
+        enregistrer();
+      } }, 'Enregistrer'))));
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
 }
 
 // Fusion discrète : l'agent choisi récupère les cases de `a`, qui disparaît.
@@ -633,7 +691,7 @@ function vueCodes() {
 // La liste « Agents absents » de la saisie suit le planning quand il a des agents.
 async function rafraichirAgentsAbsents() {
   if (!planState.agents.length) return;
-  S.agents = planState.agents.map((a) => a.nom).sort((a, b) => a.localeCompare(b, 'fr'));
+  S.agents = planState.agents.filter((a) => !estParti(a)).map((a) => a.nom).sort((a, b) => a.localeCompare(b, 'fr'));
   S.agentsPlanning = true;
 }
 
@@ -650,7 +708,7 @@ async function absentsPlanning(date, service) {
     planSemCache.set(lundi, entree);
   }
   const out = [];
-  for (const a of planState.agents.filter((x) => x.equipe === service)) {
+  for (const a of planState.agents.filter((x) => x.equipe === service && presentLe(x, date))) {
     const v = (entree.sem.cases[a.id] || {})[date];
     const c = v && planCode(v.code);
     if (c && (c.absence || c.signale)) out.push({ nom: a.nom, motif: v.texte ? `${c.label} · ${v.texte}` : c.label, code: c.code });

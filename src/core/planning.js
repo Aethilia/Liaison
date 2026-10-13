@@ -96,7 +96,11 @@ class Planning {
       const nom = String(a.nom || '').trim();
       if (!nom || seen.has(nom.toLowerCase())) continue;
       seen.add(nom.toLowerCase());
-      clean.push({ id: a.id && /^[a-z0-9-]+$/i.test(a.id) ? a.id : newId(), nom, equipe: EQUIPES.includes(a.equipe) ? a.equipe : 'autres' });
+      const ag = { id: a.id && /^[a-z0-9-]+$/i.test(a.id) ? a.id : newId(), nom, equipe: EQUIPES.includes(a.equipe) ? a.equipe : 'autres' };
+      // Arrivée / départ (facultatifs) : l'agent ne compte qu'entre ces dates.
+      if (ISO.test(a.arrivee || '')) ag.arrivee = a.arrivee;
+      if (ISO.test(a.depart || '') && !(ag.arrivee && a.depart < ag.arrivee)) ag.depart = a.depart;
+      clean.push(ag);
     }
     this.writeJson(path.join(this.dir, 'agents.json'), { agents: clean });
     return clean;
@@ -169,9 +173,12 @@ class Planning {
     let ajoutes = 0;
     for (const a of agents) {
       const ex = parNom.get(a.nom.toLowerCase());
-      if (ex) ex.equipe = a.equipe;
-      else {
-        const nv = { id: newId(), nom: a.nom, equipe: a.equipe };
+      if (ex) {
+        ex.equipe = a.equipe;
+        if (a.arrivee) ex.arrivee = a.arrivee;
+        if (a.depart) ex.depart = a.depart;
+      } else {
+        const nv = { id: newId(), nom: a.nom, equipe: a.equipe, arrivee: a.arrivee, depart: a.depart };
         liste.push(nv);
         parNom.set(a.nom.toLowerCase(), nv);
         ajoutes += 1;
@@ -228,6 +235,11 @@ class Planning {
       this.enregistrer(sem, by);
       semaines += 1;
     }
+    // Période de présence : la plus large des deux.
+    const src = agents.find((a) => a.id === sourceId);
+    const cible = agents.find((a) => a.id === cibleId);
+    cible.arrivee = src.arrivee && cible.arrivee ? (src.arrivee < cible.arrivee ? src.arrivee : cible.arrivee) : undefined;
+    cible.depart = src.depart && cible.depart ? (src.depart > cible.depart ? src.depart : cible.depart) : undefined;
     const restants = this.saveAgents(agents.filter((a) => a.id !== sourceId));
     return { agents: restants, semaines };
   }

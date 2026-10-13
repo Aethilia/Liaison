@@ -498,3 +498,20 @@ test('planning : fusion de deux agents et vidage', () => {
   assert.deepEqual(p.casesEntre('2026-10-12', '2026-10-25'), {});
   assert.equal(p.loadCodes().length, 1);
 });
+
+test('planning : arrivée et départ des agents (enregistrement, fusion)', () => {
+  const { Planning } = require('../src/core/planning');
+  const p = new Planning(tmp());
+  const [a, b] = p.saveAgents([
+    { nom: 'Agent Un', equipe: 'matin', arrivee: '2026-02-09' },
+    { nom: 'Agent 1', equipe: 'matin', arrivee: '2025-11-03', depart: '2026-02-08' },
+    { nom: 'Agent Faux', equipe: 'nuit', arrivee: '2026-05-01', depart: '2026-04-01' },
+  ]);
+  assert.equal(a.arrivee, '2026-02-09');
+  assert.equal(b.depart, '2026-02-08');
+  assert.equal(p.loadAgents()[2].depart, undefined); // départ avant l'arrivée : ignoré
+  const r = p.fusionner(b.id, a.id, 'PC');
+  const gardé = r.agents.find((x) => x.id === a.id);
+  assert.equal(gardé.arrivee, '2025-11-03'); // période la plus large
+  assert.equal(gardé.depart, undefined); // toujours présent
+});

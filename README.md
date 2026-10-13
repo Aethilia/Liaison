@@ -114,6 +114,12 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   heures supp « (+1) », les notes et les repères colorés. Un aperçu s'affiche
   avant l'import ; sur les semaines importées, les cases de ces agents sont
   remplacées par celles du classeur.
+- **Arrivée / départ** (icône horloge d'un agent, onglet *Agents*) : en dehors
+  de ces dates l'agent n'apparaît pas (cases hachurées), ne compte pas dans
+  l'effectif de l'équipe ni dans la synthèse. Après son départ il n'est plus
+  proposé dans « Agents absents » et passe dans *Anciens agents* (repliés en
+  bas de l'onglet). L'import Excel les pré-remplit d'après les semaines où
+  chaque nom apparaît.
 - **Fusionner** (petite icône au survol d'un agent, onglet *Agents*) : réunit
   deux agents qui sont la même personne écrite autrement ; les cases de
   l'agent gardé priment.

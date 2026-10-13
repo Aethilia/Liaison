@@ -90,11 +90,11 @@ dialog.plan-detail { width: min(560px, 94vw); }
 .ag-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
 .ag-groupe { border-top: 4px solid var(--eq); }
 .ag-liste { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
-.ag-ligne { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 8px; }
+.ag-ligne { display: flex; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 8px; }
 .ag-ligne:hover { background: #f6f8fb; }
-.ag-nom { flex: 1; min-width: 110px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ag-ligne select { width: 112px; flex: 0 0 112px; font-size: 12.5px; padding: 3px 6px; }
-.ag-ligne .o-btn { padding: 4px; }
+.ag-nom { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-ligne select { width: 88px; flex: 0 0 88px; font-size: 12px; padding: 3px 4px; }
+.ag-ligne .o-btn { padding: 3px; }
 .ag-ligne .o-btn:disabled { opacity: .25; }
 .ag-vide { padding: 4px 6px 10px; }
 .ag-ajout input { flex: 1; min-width: 0; }
@@ -148,11 +148,22 @@ dialog.plan-detail { width: min(560px, 94vw); }
 .code-ajout input[type="text"]:nth-child(2) { flex: 1; min-width: 140px; }
 
 /* Options discrètes : fusion (au survol de la ligne) et « Vider le planning » */
-.ag-ligne .ag-discret { opacity: 0; transition: opacity .15s; }
-.ag-ligne:hover .ag-discret, .ag-ligne .ag-discret:focus { opacity: .55; }
+.ag-ligne .ag-discret { display: none; }
+.ag-ligne:hover .ag-discret, .ag-ligne .ag-discret:focus { display: inline-flex; opacity: .55; }
 .ag-ligne .ag-discret:hover { opacity: 1; }
 .plan-vider { display: flex; justify-content: flex-end; margin-top: 18px; }
 .lien-discret { background: none; border: 0; padding: 2px 4px; font: inherit; font-size: 11.5px; color: #94a3b8; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; }
 .lien-discret:hover { color: #b42318; text-decoration-color: currentColor; }
 dialog.plan-fusion { width: min(460px, 94vw); }
 dialog.plan-fusion select { width: 100%; }
+
+/* Arrivées / départs */
+.plan-case.hors { cursor: default; background: repeating-linear-gradient(135deg, #f1f3f7 0 6px, #e7eaf0 6px 12px); }
+.plan-case.hors:hover { box-shadow: none; }
+.ag-nom { display: flex; flex-direction: column; line-height: 1.2; }
+.ag-dates { font-size: 10.5px; font-weight: 600; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.syn-table th .ag-dates { display: block; }
+.ag-anciens { margin-top: 14px; }
+.ag-anciens > summary { cursor: pointer; list-style: none; }
+.ag-anciens > summary::-webkit-details-marker { display: none; }
+.ag-anciens .ag-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 14px; }

@@ -7,7 +7,7 @@
 // textes libres autour sont repris dans les notes de la semaine.
 
 const ExcelJS = require('exceljs');
-const { lundiDe } = require('./planning');
+const { lundiDe, ajouterJours } = require('./planning');
 
 const HORAIRE = /^\s*\d{1,2}\s*h/i;
 const RESP = new Set(['MATIN', 'AM', 'NUIT']);
@@ -117,6 +117,13 @@ function convertirCase(brut) {
 const JOURS = /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|jours?)$/i;
 const estNote = (t) => t.length >= 8 && /\s/.test(t) && /[a-zà-ÿ]{2}/i.test(t) && !JOURS.test(t) && !HORAIRE.test(t);
 
+// Nom d'agent plausible (pas « CP », « REPOS », « (+1) » ni un horaire).
+function estNom(qui) {
+  if (!/[a-zà-ÿ]{3,}/i.test(qui) || HORAIRE.test(qui)) return false;
+  const v = convertirCase(qui);
+  return !!v && !v.hs && (v.code === 'H' || !DE_BASE.has(v.code));
+}
+
 function equipeDe(horaire) {
   const h = Number((/^\s*(\d{1,2})/.exec(horaire) || [])[1]);
   if (h >= 4 && h <= 9) return 'matin';
@@ -210,35 +217,55 @@ async function lirePlanningExcel(file, { aujourdhui = new Date().toISOString().s
   const lundis = [...semaines.keys()].sort();
   const lundiActuel = lundiDe(aujourdhui);
 
-  // Agents retenus : ceux de la semaine en cours (ou de la dernière connue
-  // avant) et des semaines à venir. Leur équipe est celle de cette semaine-là.
+  // Tous les agents du classeur, y compris ceux partis ou arrivés en cours de
+  // route : arrivée = première semaine où il apparaît (après la première du
+  // classeur), départ = fin de la dernière semaine où il apparaît (s'il n'est
+  // plus dans les semaines en cours ou à venir). Équipe : celle de la semaine
+  // en cours (ou de sa dernière semaine connue).
   const passees = lundis.filter((l) => l <= lundiActuel);
   const reference = passees.length ? passees[passees.length - 1] : lundis[0];
-  const retenus = new Map(); // cle → { nom, equipe }
-  for (const l of lundis.filter((x) => x >= reference)) {
+  const retenus = new Map(); // CLÉ en majuscules → { nom, equipe, premier, dernier }
+  const ecartes = new Set();
+  const cleDe = (cle) => cle.toUpperCase();
+  for (const l of lundis) {
     const sem = semaines.get(l);
-    for (const [qui, eq] of Object.entries(sem.equipes)) if (!retenus.has(`A|${qui}`)) retenus.set(`A|${qui}`, { nom: qui, equipe: eq });
-    for (const qui of sem.resp) if (!retenus.has(`R|${qui}`)) retenus.set(`R|${qui}`, { nom: qui, equipe: 'responsables' });
+    const vus = [...Object.entries(sem.equipes).map(([qui, eq]) => [`A|${qui}`, qui, eq]), ...[...sem.resp].map((qui) => [`R|${qui}`, qui, 'responsables'])];
+    for (const [cle, qui, eq] of vus) {
+      if (!estNom(qui)) { ecartes.add(qui); continue; }
+      const k = cleDe(cle);
+      const a = retenus.get(k) || { nom: qui, equipe: eq, premier: l, dernier: l };
+      a.dernier = l;
+      // Nom et équipe : ceux de la semaine de référence (ou la plus récente avant).
+      if (l <= reference || a.premier > reference) { a.nom = qui; a.equipe = eq; }
+      retenus.set(k, a);
+    }
+  }
+  // Les deux premières semaines du classeur servent de point de départ : un nom
+  // vu seulement la toute première semaine est un reste de mise en page.
+  const debutClasseur = ajouterJours(lundis[0], 7);
+  for (const [k, a] of retenus) {
+    if (a.dernier === lundis[0] && lundis.length > 1) { retenus.delete(k); ecartes.add(a.nom); continue; }
+    if (a.premier > debutClasseur) a.arrivee = a.premier;
+    if (a.dernier < reference) a.depart = ajouterJours(a.dernier, 6);
   }
   // Un responsable qui porte le nom d'un agent est distingué.
   const nomsAgents = new Set([...retenus.entries()].filter(([k]) => k.startsWith('A|')).map(([, a]) => a.nom.toLowerCase()));
   for (const [k, a] of retenus) if (k.startsWith('R|') && nomsAgents.has(a.nom.toLowerCase())) a.nom = `${a.nom} (resp.)`;
 
-  const anciens = new Set();
   const sortie = {};
   let nbCases = 0;
   for (const l of lundis) {
     const sem = semaines.get(l);
     const cases = {};
     for (const [cle, jours] of Object.entries(sem.cases)) {
-      const a = retenus.get(cle);
-      if (!a) { anciens.add(cle.slice(2)); continue; }
+      const a = retenus.get(cleDe(cle));
+      if (!a) continue;
       cases[a.nom] = { ...(cases[a.nom] || {}), ...jours };
       nbCases += Object.keys(jours).length;
     }
     sortie[l] = { cases, notes: sem.notes.join('\n'), reperes: sem.reperes };
   }
-  for (const a of retenus.values()) anciens.delete(a.nom);
+  const anciens = [];
   // Abréviations rencontrées qui ne sont pas des codes de l'application.
   const codes = new Map();
   for (const sem of Object.values(sortie)) {
@@ -249,15 +276,18 @@ async function lirePlanningExcel(file, { aujourdhui = new Date().toISOString().s
     }
   }
   return {
-    agents: [...retenus.values()],
+    agents: [...retenus.values()].map(({ nom, equipe, arrivee, depart }) => ({ nom, equipe, ...(arrivee ? { arrivee } : {}), ...(depart ? { depart } : {}) })),
+    partis: [...retenus.values()].filter((a) => a.depart).length,
+    arrives: [...retenus.values()].filter((a) => a.arrivee).length,
     codes: [...codes.values()],
     semaines: sortie,
     debut: lundis[0] || null,
     fin: lundis.length ? lundis[lundis.length - 1] : null,
     nbSemaines: lundis.length,
     nbCases,
-    anciens: [...anciens].sort((a, b) => a.localeCompare(b, 'fr')),
+    anciens,
+    ecartes: [...ecartes].sort((a, b) => a.localeCompare(b, 'fr')),
   };
 }
 
-module.exports = { lirePlanningExcel, convertirCase };
+module.exports = { lirePlanningExcel, convertirCase, lireFeuille };

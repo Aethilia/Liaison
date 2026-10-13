@@ -201,7 +201,7 @@ handle('plan:importChoisir', async () => {
   const d = await lirePlanningExcel(planningAImporter, { aujourdhui: M.toISODate(new Date()) });
   const equipes = {};
   for (const a of d.agents) equipes[a.equipe] = (equipes[a.equipe] || 0) + 1;
-  return { fichier: path.basename(planningAImporter), debut: d.debut, fin: d.fin, nbSemaines: d.nbSemaines, nbCases: d.nbCases, nbAgents: d.agents.length, equipes, anciens: d.anciens };
+  return { fichier: path.basename(planningAImporter), debut: d.debut, fin: d.fin, nbSemaines: d.nbSemaines, nbCases: d.nbCases, nbAgents: d.agents.length, equipes, partis: d.partis, arrives: d.arrives, ecartes: d.ecartes };
 });
 handle('plan:importAppliquer', async (par) => {
   if (!planningAImporter) throw new Error('Aucun planning choisi.');
