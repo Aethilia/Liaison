@@ -103,6 +103,10 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   à droite de la grille, ex. « Congé de naissance du 14/10 au 14/11 » en
   violet) ; la palette d'une case permet de lui donner la couleur d'un repère,
   comme dans le classeur Excel.
+- **Codes** (onglet du planning) : les abréviations du site (PAT, AT, ASA,
+  APM…, ajoutées à la main ou trouvées à l'import, gardées telles quelles) se
+  détaillent : libellé, couleur, et si elles comptent comme absence. Les codes
+  de base (R, CP, MAL…) peuvent aussi être précisés, puis rétablis.
 - **Importer un planning Excel** (onglet *Agents*, sauf au CPTP) : reprend un
   classeur au format du CTVO (blocs 5H-13H / 13H-20H / 20H-4H par semaine,
   responsables MATIN / AM / NUIT). Agents de la semaine en cours et des

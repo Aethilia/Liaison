@@ -135,3 +135,14 @@ dialog.plan-detail { width: min(560px, 94vw); }
 .rep-ajout .btn { align-self: flex-end; }
 .plan-info-ligne { align-items: center; margin-bottom: 12px; }
 .plan-info-ligne .plan-info { margin: 0; }
+
+/* Codes (abréviations) */
+.code-liste { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.code-ligne { display: flex; align-items: center; gap: 8px; }
+.code-ligne .plan-code { min-width: 46px; }
+.code-ligne input[type="text"] { flex: 1; min-width: 0; }
+.code-ligne input[type="color"] { width: 34px; height: 30px; padding: 2px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; cursor: pointer; }
+.code-abs { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; white-space: nowrap; }
+.code-vide { width: 26px; }
+.code-ajout { gap: 6px; align-items: center; flex-wrap: wrap; }
+.code-ajout input[type="text"]:nth-child(2) { flex: 1; min-width: 140px; }

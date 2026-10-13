@@ -2916,6 +2916,8 @@ async function loadSiteData() {
   // Agents du planning : ils remplacent la liste mémorisée des agents absents.
   S.agentsPlanning = false;
   planState.agents = await safe(api.planAgents(), []);
+  planState.codes = await safe(api.planCodes(), []);
+  majPlanCodes();
   await rafraichirAgentsAbsents();
   S.ncTypes = await safe(api.loadNcTypes(), []);
   S.site = await safe(api.loadSite(), { couleurs: {} });

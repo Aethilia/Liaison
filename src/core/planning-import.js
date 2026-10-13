@@ -14,13 +14,21 @@ const RESP = new Set(['MATIN', 'AM', 'NUIT']);
 const MAX_TEXTE = 40;
 
 // Valeur d'une case du classeur → { code, texte } du planning (H = texte libre).
+// Les abréviations du classeur sont gardées telles quelles (PAT, AT, ASA…) :
+// leur libellé, leur couleur et le fait de compter comme absence se règlent
+// dans l'onglet « Codes » du planning.
 const CODES = [
   [/^(RE)?REPOS\b/, 'R'],
   [/^(1\/2\s*)?CP\b|^CONG[ÉE]S? PAY/, 'CP'],
   [/^(ARR[ÊE]T\s+)?MAL(ADIE)?\b|^PROLONGATION/, 'MAL'],
-  [/^CN\b|^NAISS|^PAT(ERNIT[ÉE])?\b|^CONG[ÉE] DE NAISSANCE/, 'CN'],
-  [/^ABS(ENCE)?\b|^AT\b|^ASA\b|^CONG[ÉE]S? SP[ÉE]CIAUX|^CS\b|^ENFANTS? MALADES?/, 'ABS'],
-  [/^FOR(MATION)?\b|^FCO\b/, 'FOR'],
+  [/^CN\b|^NAISS|^CONG[ÉE] DE NAISSANCE/, 'CN'],
+  [/^PAT(ERNIT[ÉE])?(?![A-Z])/, 'PAT'],
+  [/^AT\b/, 'AT'],
+  [/^ASA\b/, 'ASA'],
+  [/^CS\b|^CONG[ÉE]S? SP[ÉE]CIAUX/, 'CS'],
+  [/^ABS(ENCE)?\b|^ENFANTS? MALADES?/, 'ABS'],
+  [/^FCO\b/, 'FCO'],
+  [/^FOR(MATION)?\b/, 'FOR'],
   [/^VM\b|^VISITE M[ÉE]DICALE/, 'VM'],
   [/^INT(EMP[ÉE]RIES?)?\b/, 'INT'],
   [/^RET(ARD)?\b/, 'RET'],
@@ -63,6 +71,18 @@ function dateCellule(v) {
 }
 
 // Heures supplémentaires notées « (+1) », « MATIN+2 », « (+3h30) »…
+// Détail proposé pour les abréviations trouvées (modifiable ensuite).
+const DETAILS = {
+  PAT: { label: 'Paternité', couleur: '#e87ba4', absence: true },
+  AT: { label: 'Accident du travail', couleur: '#b42318', absence: true },
+  ASA: { label: 'Autorisation spéciale d\'absence', couleur: '#f08c00', absence: true },
+  CS: { label: 'Congés spéciaux', couleur: '#12b886', absence: true },
+  FCO: { label: 'Formation continue', couleur: '#5f3dc4', absence: true },
+};
+const DE_BASE = new Set(['R', 'CP', 'MAL', 'CN', 'ABS', 'FOR', 'VM', 'INT', 'RET', 'T', 'H', 'HS']);
+// Mots qui ne sont pas des abréviations (gardés en texte).
+const PAS_CODE = new Set(['NUIT', 'CPTP', 'MIDI', 'SOIR']);
+
 const HEURES_SUP = /\(?\s*\+\s*(\d{1,2})(?:\s*h\s*(\d{1,2})?)?\s*\)?/i;
 
 function convertirCase(brut) {
@@ -82,10 +102,14 @@ function convertirCase(brut) {
     if (!m) continue;
     // Texte en plus du code (« CP (K) » → « (K) »), sauf si c'est juste le code.
     const reste = t.slice(m[0].length).replace(/^[\s:/-]+/, '').trim();
-    const garde = code === 'ABS' || code === 'FOR' || code === 'CN' ? (reste ? `${m[0].trim()} ${reste}` : m[0].trim()) : reste;
-    const texte = ['ABS', 'FOR', 'CN'].includes(code) && [code, 'ABS', 'FOR', 'CN', 'ABSENCE', 'FORMATION'].includes(garde.toUpperCase()) ? '' : garde;
-    return avecHs({ code, texte: couper(texte) });
+    // Mot complet (« ARRÊT MALADIE », « Congé de naissance ») : gardé en texte.
+    const mot = m[0].trim();
+    const garde = mot.length > code.length + 1 && !/^CP$|^REPOS$|^REREPOS$/.test(mot) ? `${mot} ${reste}`.trim() : reste;
+    return avecHs({ code, texte: couper(garde.toUpperCase() === code ? '' : garde) });
   }
+  // Autre abréviation (2 à 4 lettres seules, ex. MAP, APM, NA) : gardée comme code.
+  const ab = /^([A-Z]{2,4})(?:\s*(\(.*\)))?$/.exec(t);
+  if (ab && !PAS_CODE.has(ab[1])) return avecHs({ code: ab[1], texte: couper(ab[2] || '') });
   return avecHs({ code: 'H', texte: couper(t.replace(/(\d)h\b/g, '$1H').replace(/(\d)h(\d)/g, '$1H$2')) });
 }
 
@@ -215,8 +239,18 @@ async function lirePlanningExcel(file, { aujourdhui = new Date().toISOString().s
     sortie[l] = { cases, notes: sem.notes.join('\n'), reperes: sem.reperes };
   }
   for (const a of retenus.values()) anciens.delete(a.nom);
+  // Abréviations rencontrées qui ne sont pas des codes de l'application.
+  const codes = new Map();
+  for (const sem of Object.values(sortie)) {
+    for (const jours of Object.values(sem.cases)) {
+      for (const v of Object.values(jours)) {
+        if (!DE_BASE.has(v.code) && !codes.has(v.code)) codes.set(v.code, { code: v.code, ...(DETAILS[v.code] || { label: v.code, couleur: '#868e96', absence: false }) });
+      }
+    }
+  }
   return {
     agents: [...retenus.values()],
+    codes: [...codes.values()],
     semaines: sortie,
     debut: lundis[0] || null,
     fin: lundis.length ? lundis[lundis.length - 1] : null,

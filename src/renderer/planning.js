@@ -18,7 +18,7 @@ function majPlanEquipes() {
 }
 // Codes du planning. `absence` : l'agent n'est pas là (compte dans « Agents absents »).
 // `signale` : l'agent est là mais apparaît aussi dans « Agents absents » (retard).
-const PLAN_CODES = [
+const PLAN_CODES_BASE = [
   { code: 'R', label: 'Repos', couleur: '#94a3b8', absence: true },
   { code: 'CP', label: 'Congés payés', couleur: '#1baf7a', absence: true },
   { code: 'MAL', label: 'Maladie', couleur: '#e34948', absence: true },
@@ -32,7 +32,17 @@ const PLAN_CODES = [
   { code: 'T', label: 'Travaille (WE)', couleur: '#0f766e' },
   { code: 'H', label: 'Horaire / note', couleur: '#eda100' },
 ];
-const planCode = (c) => PLAN_CODES.find((x) => x.code === c);
+// Codes affichés : ceux de base, précisés ou complétés par ceux du site
+// (onglet « Codes » : abréviations du classeur comme PAT, AT, APM…).
+const PLAN_CODES = [];
+function majPlanCodes() {
+  const site = planState.codes || [];
+  const base = PLAN_CODES_BASE.map((c) => ({ ...c, ...(site.find((x) => x.code === c.code) || {}), base: true }));
+  const autres = site.filter((x) => !PLAN_CODES_BASE.some((c) => c.code === x.code));
+  PLAN_CODES.splice(0, PLAN_CODES.length, ...base.slice(0, -1), ...autres, base[base.length - 1]); // « H » en dernier
+}
+// Code inconnu (ajouté par un autre poste, retiré depuis) : affiché tel quel.
+const planCode = (c) => PLAN_CODES.find((x) => x.code === c) || (c ? { code: c, label: c, couleur: '#868e96' } : undefined);
 // Couleurs proposées pour les repères et les cases (celles du classeur Excel).
 const PLAN_COULEURS = ['#ffff00', '#ffff99', '#ffc000', '#ff0000', '#92d050', '#99ff33', '#00b0f0', '#b8cce4', '#cc00ff', '#f078df', '#21dfbf', '#f4b183'];
 // Heures supplémentaires : 1 → « +1h », 3.5 → « +3h30 ».
@@ -48,7 +58,8 @@ function lireHs(t) {
 }
 const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-const planState = { vue: 'semaine', date: null, agents: [], semaine: null, mois: null, loadedAt: 0 };
+const planState = { vue: 'semaine', date: null, agents: [], codes: [], semaine: null, mois: null, loadedAt: 0 };
+majPlanCodes();
 
 const isoAjout = (iso, n) => M.addDays(iso, n);
 const lundiDe = (iso) => {
@@ -67,11 +78,14 @@ async function loadPlanAgents() {
   } catch {
     planState.agents = [];
   }
+  planState.codes = await call(api.planCodes()).catch(() => planState.codes);
+  majPlanCodes();
   majPlanEquipes();
   return planState.agents;
 }
 
 async function renderPlanning({ reload = true } = {}) {
+  fermerPalette();
   if (!planState.date) planState.date = aujourdhui();
   if (!planState.mois) {
     const d = M.parseISODate(planState.date);
@@ -84,18 +98,19 @@ async function renderPlanning({ reload = true } = {}) {
     planState.loadedAt = Date.now();
   }
   const root = document.getElementById('planning');
-  const onglets = h('div', { class: 'seg plan-seg' }, [['semaine', 'Semaine', 'list'], ['synthese', 'Synthèse', 'chart'], ['agents', 'Agents', 'users']].map(([id, label, ic]) => h('button', {
+  const onglets = h('div', { class: 'seg plan-seg' }, [['semaine', 'Semaine', 'list'], ['synthese', 'Synthèse', 'chart'], ['agents', 'Agents', 'users'], ['codes', 'Codes', 'palette']].map(([id, label, ic]) => h('button', {
     class: planState.vue === id ? 'on' : '', onclick: () => { planState.vue = id; renderPlanning(); },
   }, icon(ic, 14), label)));
   const head = h('div', { class: 'recap-head plan-head' }, h('h2', {}, `Planning${S.siteName ? ` · ${S.siteName}` : ''}`), onglets, h('span', { class: 'spacer' }));
   let corps;
-  if (!planState.agents.length && planState.vue !== 'agents') {
+  if (!planState.agents.length && !['agents', 'codes'].includes(planState.vue)) {
     corps = h('div', { class: 'j-empty' }, icon('users', 32), h('p', {}, 'Aucun agent dans le planning.'),
       h('p', { class: 'muted' }, 'Commencez par ajouter vos agents et leur équipe.'),
       h('div', { class: 'row', style: { justifyContent: 'center', gap: '8px' } },
         h('button', { class: 'btn accent', onclick: () => { planState.vue = 'agents'; renderPlanning({ reload: false }); } }, icon('plus', 15), 'Ajouter les agents'), boutonImport()));
   } else if (planState.vue === 'semaine') corps = vueSemaine(head);
   else if (planState.vue === 'synthese') corps = await vueSynthese(head);
+  else if (planState.vue === 'codes') corps = vueCodes();
   else corps = vueAgents();
   root.replaceChildren(head, corps);
 }
@@ -215,6 +230,8 @@ async function importerPlanningExcel() {
   try {
     const r = await call(api.planImportAppliquer(S.user));
     planState.agents = r.agents;
+    planState.codes = r.codes || planState.codes;
+    majPlanCodes();
     planSemCache.clear();
     await rafraichirAgentsAbsents();
     toast(`Planning importé : ${plural(r.nbSemaines, 'semaine')}, ${plural(r.ajoutes, 'agent')} ajouté(s).`);
@@ -493,6 +510,70 @@ function vueAgents() {
   return h('div', { class: 'plan-agents' },
     h('div', { class: 'row plan-info-ligne' }, h('p', { class: 'muted plan-info' }, icon('users', 14), ' Ces agents sont aussi ceux proposés dans « Agents absents » de la main courante.'), h('span', { class: 'spacer' }), boutonImport('btn small')),
     h('div', { class: 'ag-grille' }, groupes));
+}
+
+/* ---------- Codes (abréviations) ---------- */
+
+// Chaque abréviation peut être détaillée : libellé, couleur, compte comme absence.
+function vueCodes() {
+  const site = (planState.codes || []).map((c) => ({ ...c }));
+  const enregistrer = async (list) => {
+    try {
+      planState.codes = await call(api.planSaveCodes(list));
+      majPlanCodes();
+      planSemCache.clear();
+    } catch (err) {
+      toast(`Non enregistré : ${err.message}`);
+    }
+    renderPlanning({ reload: false });
+  };
+  // Modifie (ou crée) l'entrée du site pour ce code.
+  const modifier = (c, champ, valeur) => {
+    const list = site.filter((x) => x.code !== c.code);
+    const actuel = site.find((x) => x.code === c.code) || { code: c.code, label: c.label, couleur: c.couleur, absence: !!c.absence };
+    enregistrer([...list, { ...actuel, [champ]: valeur }]);
+  };
+  const ligne = (c) => {
+    const perso = site.some((x) => x.code === c.code);
+    const fixe = ['H', 'HS', 'RET'].includes(c.code);
+    const label = h('input', { type: 'text', value: c.label, maxLength: 40, 'aria-label': `Libellé de ${c.code}` });
+    label.addEventListener('change', () => modifier(c, 'label', label.value.trim() || c.code));
+    const couleur = h('input', { type: 'color', value: c.couleur, title: 'Couleur', 'aria-label': `Couleur de ${c.code}` });
+    couleur.addEventListener('change', () => modifier(c, 'couleur', couleur.value));
+    return h('div', { class: 'code-ligne' },
+      h('span', { class: 'plan-code', style: { '--c': c.couleur } }, c.code),
+      label, couleur,
+      h('label', { class: 'code-abs', title: fixe ? '' : 'L\'agent apparaît dans « Agents absents » et n\'est pas compté présent' },
+        h('input', { type: 'checkbox', checked: !!c.absence, disabled: fixe, onchange: (e) => modifier(c, 'absence', e.target.checked) }), 'Absence'),
+      c.base
+        ? (perso ? h('button', { class: 'o-btn', title: 'Rétablir le réglage d\'origine', onclick: () => enregistrer(site.filter((x) => x.code !== c.code)) }, icon('arrowLeft', 14)) : h('span', { class: 'code-vide' }))
+        : h('button', { class: 'o-btn rm', title: 'Retirer ce code', onclick: async () => {
+          if (await ask('Retirer ce code ?', `« ${c.code} » ne sera plus proposé. Les cases qui le portent l'afficheront toujours, en gris.`,
+            [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+          enregistrer(site.filter((x) => x.code !== c.code));
+        } }, icon('x', 14)));
+  };
+  const code = h('input', { type: 'text', placeholder: 'Code (ex. PAT)', maxLength: 5, style: { width: '110px', textTransform: 'uppercase' } });
+  const label = h('input', { type: 'text', placeholder: 'Libellé (ex. Paternité)', maxLength: 40 });
+  const absence = h('input', { type: 'checkbox' });
+  const ajouter = () => {
+    const c = code.value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{1,5}$/.test(c)) return toast('Code : 1 à 5 lettres ou chiffres.');
+    if (PLAN_CODES.some((x) => x.code === c)) return toast(`« ${c} » existe déjà.`);
+    return enregistrer([...site, { code: c, label: label.value.trim() || c, couleur: PLAN_COULEURS[site.length % PLAN_COULEURS.length], absence: absence.checked }]);
+  };
+  label.addEventListener('keydown', (e) => { if (e.key === 'Enter') ajouter(); });
+  const base = PLAN_CODES.filter((c) => c.base);
+  const autres = PLAN_CODES.filter((c) => !c.base);
+  return h('div', { class: 'plan-codes' },
+    h('p', { class: 'muted plan-info' }, icon('palette', 14), ' Détaillez les abréviations : libellé, couleur, et si elles comptent comme absence (« Agents absents », présents par équipe).'),
+    h('div', { class: 'ag-grille' },
+      h('div', { class: 'card' }, h('div', { class: 'card-head' }, 'Abréviations du site', h('span', { class: 'hint' }, plural(autres.length, 'code'))),
+        h('div', { class: 'card-body' },
+          autres.length ? h('div', { class: 'code-liste' }, autres.map(ligne)) : h('p', { class: 'muted' }, 'Aucune. Elles s\'ajoutent ici ou à l\'import d\'un planning Excel.'),
+          h('div', { class: 'row code-ajout' }, code, label, h('label', { class: 'code-abs' }, absence, 'Absence'), h('button', { class: 'btn small', onclick: ajouter }, icon('plus', 13), 'Ajouter')))),
+      h('div', { class: 'card' }, h('div', { class: 'card-head' }, 'Codes de base'),
+        h('div', { class: 'card-body' }, h('div', { class: 'code-liste' }, base.map(ligne))))));
 }
 
 // La liste « Agents absents » de la saisie suit le planning quand il a des agents.

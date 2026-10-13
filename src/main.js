@@ -183,6 +183,8 @@ handle('plan:setCase', (agentId, date, valeur, par) => plan().setCase(agentId, d
 handle('plan:setNotes', (date, notes, par) => plan().setNotes(date, notes, par || config.poste));
 handle('plan:setReperes', (date, reperes, par) => plan().setReperes(date, reperes, par || config.poste));
 handle('plan:entre', (debut, fin) => plan().casesEntre(debut, fin));
+handle('plan:codes', () => plan().loadCodes());
+handle('plan:saveCodes', (codes) => plan().saveCodes(codes));
 // Import d'un planning Excel : le fichier choisi est gardé ici, l'interface
 // ne fait que confirmer (aperçu puis import).
 let planningAImporter = null;

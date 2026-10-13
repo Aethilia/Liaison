@@ -5,7 +5,7 @@
   const ok = (value) => Promise.resolve({ ok: true, value: JSON.parse(JSON.stringify(value)) });
   const M = () => window.LiaisonModel;
   const load = (d, s) => (db[key(d, s)] ? JSON.parse(JSON.stringify(db[key(d, s)])) : M().emptyService(d, s));
-  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.7.0' };
+  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.8.0' };
   let users = window.__users || [];
   let agents = window.__agents || [];
   let site = window.__site || { couleurs: {} };
@@ -102,9 +102,11 @@
     planSaveAgents: (list) => { plan.agents = list.filter((a) => a.nom).map((a, i) => ({ id: a.id || `ag${Date.now().toString(36)}${i}`, nom: a.nom.trim(), equipe: a.equipe || 'autres' })); return ok(plan.agents); },
     planSemaine: (d) => { const l = lundi(d); const s = plan.sem[l] || { cases: {}, notes: '' }; return ok({ lundi: l, cases: s.cases, notes: s.notes, reperes: s.reperes || [] }); },
     planSetCase: (id, d, v) => { const l = lundi(d); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.cases[id] = s.cases[id] || {}; if (v && (v.code || v.texte || v.hs)) s.cases[id][d] = { code: v.code || '', texte: v.texte || '', ...(v.hs ? { hs: v.hs } : {}), ...(v.couleur ? { couleur: v.couleur } : {}) }; else delete s.cases[id][d]; return ok({ lundi: l, ...s }); },
+    planCodes: () => ok(plan.codes || []),
+    planSaveCodes: (c) => { plan.codes = c; return ok(c); },
     planSetReperes: (d, rep) => { const l = lundi(d); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.reperes = rep; return ok({ lundi: l, ...s }); },
     planImportChoisir: () => ok(window.__planImport ? window.__planImport.apercu : null),
-    planImportAppliquer: () => { const imp = window.__planImport; for (const a of imp.agents) if (!plan.agents.some((x) => x.nom === a.nom)) plan.agents.push({ id: `ag${plan.agents.length}x`, ...a }); for (const [l, w] of Object.entries(imp.semaines)) { const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; for (const [nom, j] of Object.entries(w.cases)) s.cases[plan.agents.find((x) => x.nom === nom).id] = j; s.reperes = w.reperes || []; } return ok({ agents: plan.agents, ajoutes: imp.agents.length, nbSemaines: Object.keys(imp.semaines).length }); },
+    planImportAppliquer: () => { const imp = window.__planImport; for (const a of imp.agents) if (!plan.agents.some((x) => x.nom === a.nom)) plan.agents.push({ id: `ag${plan.agents.length}x`, ...a }); for (const [l, w] of Object.entries(imp.semaines)) { const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; for (const [nom, j] of Object.entries(w.cases)) s.cases[plan.agents.find((x) => x.nom === nom).id] = j; s.reperes = w.reperes || []; } plan.codes = [...(plan.codes || []), ...(imp.codes || [])]; return ok({ codes: plan.codes, agents: plan.agents, ajoutes: imp.agents.length, nbSemaines: Object.keys(imp.semaines).length }); },
     planSetNotes: (d, n) => { const l = lundi(d); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.notes = n; return ok({ lundi: l, ...s }); },
     planEntre: (a, b) => { const out = {}; for (const s of Object.values(plan.sem)) for (const [id, j] of Object.entries(s.cases)) for (const [d, v] of Object.entries(j)) if (d >= a && d <= b) (out[id] = out[id] || {})[d] = v; return ok(out); },
     invList: () => ok(invView()),

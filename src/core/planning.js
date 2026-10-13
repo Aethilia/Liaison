@@ -50,6 +50,16 @@ function nettoyerReperes(list) {
   return out;
 }
 
+function nettoyerCodes(list) {
+  const out = [];
+  for (const x of Array.isArray(list) ? list : []) {
+    const code = String((x && x.code) || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{1,5}$/.test(code) || out.some((y) => y.code === code)) continue;
+    out.push({ code, label: String(x.label || code).trim().slice(0, 40) || code, couleur: couleurValide(x.couleur) || '#868e96', absence: !!x.absence });
+  }
+  return out;
+}
+
 class Planning {
   constructor(dir) {
     this.dir = path.join(dir, 'planning');
@@ -90,6 +100,17 @@ class Planning {
     }
     this.writeJson(path.join(this.dir, 'agents.json'), { agents: clean });
     return clean;
+  }
+
+  // ---- Codes (abréviations) propres au site ----
+  // [{ code, label, couleur, absence }] : complètent ou précisent les codes
+  // de base de l'application (R, CP, MAL…).
+  loadCodes() {
+    return nettoyerCodes(this.readJson(path.join(this.dir, 'codes.json'), { codes: [] }).codes);
+  }
+
+  saveCodes(codes) {
+    return this.writeJson(path.join(this.dir, 'codes.json'), { codes: nettoyerCodes(codes) }).codes;
   }
 
   // ---- Semaines ----
@@ -138,7 +159,11 @@ class Planning {
   // Import d'un classeur (voir planning-import.js) : agents retrouvés par leur
   // nom (sinon ajoutés), et pour chaque semaine du classeur, les cases de ces
   // agents remplacées par celles du classeur. Les notes s'ajoutent.
-  importer({ agents, semaines }, by) {
+  importer({ agents, semaines, codes = [] }, by) {
+    // Abréviations nouvelles ajoutées, celles déjà détaillées gardées.
+    const connus = this.loadCodes();
+    const nouveaux = codes.filter((c) => !connus.some((x) => x.code === c.code));
+    if (nouveaux.length) this.saveCodes([...connus, ...nouveaux]);
     const liste = this.loadAgents();
     const parNom = new Map(liste.map((a) => [a.nom.toLowerCase(), a]));
     let ajoutes = 0;
@@ -178,7 +203,7 @@ class Planning {
       this.enregistrer(sem, by);
       nbSemaines += 1;
     }
-    return { agents: tous, ajoutes, nbSemaines };
+    return { agents: tous, ajoutes, nbSemaines, codes: this.loadCodes() };
   }
 
   // Toutes les cases entre deux dates (incluses) : { agentId: { date: {code, texte} } }.
