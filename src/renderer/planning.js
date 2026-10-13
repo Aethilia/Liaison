@@ -67,19 +67,21 @@ const isoAjout = (iso, n) => M.addDays(iso, n);
 // l'affichage, rien n'est écrit dans le planning (une case saisie prime).
 const HS_SAMEDI_APM = 7;
 // Équipe « effective » : un responsable compte dans le service auquel il est rattaché.
-const equipeEff = (a) => (a && a.equipe === 'responsables' && a.service ? a.service : a && a.equipe);
-const samediHs = (a, d) => a && equipeEff(a) === 'apresmidi' && M.SERVICES.some((x) => x.id === 'apresmidi') && M.parseISODate(d).getDay() === 6;
+// Un changement ponctuel (« service ce jour » dans la case) prime.
+const equipeEff = (a, val) => (a && a.equipe === 'responsables' ? (val && val.service) || a.service || a.equipe : a && a.equipe);
+const samediHs = (a, d, val) => a && equipeEff(a, val) === 'apresmidi' && M.SERVICES.some((x) => x.id === 'apresmidi') && M.parseISODate(d).getDay() === 6;
 // Jour férié travaillé (case vide) : 7h rouges pour tout le monde (CTVO).
 const HS_FERIE = 7;
 const reglesHs = () => M.SERVICES.some((x) => x.id === 'apresmidi');
 // Jour normalement travaillé : lundi-vendredi, plus le samedi pour l'après-midi.
-const jourNormal = (a, d) => { const j = M.parseISODate(d).getDay(); return (j >= 1 && j <= 5) || (j === 6 && equipeEff(a) === 'apresmidi'); };
-const equipeHs = (a) => !!a && reglesHs() && ['matin', 'apresmidi', 'nuit'].includes(equipeEff(a));
-const ferieHs = (a, d) => equipeHs(a) && !!M.ferie(d) && jourNormal(a, d);
+const jourNormal = (a, d, val) => { const j = M.parseISODate(d).getDay(); return (j >= 1 && j <= 5) || (j === 6 && equipeEff(a, val) === 'apresmidi'); };
+const equipeHs = (a, val) => !!a && reglesHs() && ['matin', 'apresmidi', 'nuit'].includes(equipeEff(a, val));
+const ferieHs = (a, d, val) => equipeHs(a, val) && !!M.ferie(d) && jourNormal(a, d, val);
 const valeurCase = (a, d, val) => {
   if (val && (val.code || val.texte || val.hs)) return val;
-  if (ferieHs(a, d)) return { code: 'HS', texte: '', hs: HS_FERIE, hsType: 'rouge', auto: true };
-  if (samediHs(a, d)) return { code: 'HS', texte: '', hs: HS_SAMEDI_APM, hsType: 'bleu', auto: true };
+  const svc = val && val.service ? { service: val.service } : {};
+  if (ferieHs(a, d, val)) return { code: 'HS', texte: '', hs: HS_FERIE, hsType: 'rouge', auto: true, ...svc };
+  if (samediHs(a, d, val)) return { code: 'HS', texte: '', hs: HS_SAMEDI_APM, hsType: 'bleu', auto: true, ...svc };
   return val;
 };
 // Heures supp : trois types (bleues = normales, rouges = dimanche / férié,
@@ -103,14 +105,14 @@ function hsDuJour(a, d, val) {
   if (c && c.absence) return out;
   // Férié : 7h rouges si c'est un jour normalement travaillé, ou si la case
   // dit qu'il a travaillé (code saisi autre qu'une absence).
-  if (equipeHs(a) && M.ferie(d)) {
-    if (jourNormal(a, d) || c) out.reg.rouge += HS_FERIE;
+  if (equipeHs(a, val) && M.ferie(d)) {
+    if (jourNormal(a, d, val) || c) out.reg.rouge += HS_FERIE;
     return out;
   }
   const j = M.parseISODate(d).getDay();
   const semaine = j >= 1 && j <= 5;
-  if ((equipeEff(a) === 'matin' || equipeEff(a) === 'nuit') && semaine) out.reg.vert += 1;
-  if (samediHs(a, d) && !(val && (val.code || val.texte || val.hs))) out.reg.bleu += HS_SAMEDI_APM;
+  if ((equipeEff(a, val) === 'matin' || equipeEff(a, val) === 'nuit') && semaine) out.reg.vert += 1;
+  if (samediHs(a, d, val) && !(val && (val.code || val.texte || val.hs))) out.reg.bleu += HS_SAMEDI_APM;
   return out;
 }
 const presentLe = (a, d) => (!a.arrivee || d >= a.arrivee) && (!a.depart || d <= a.depart);
@@ -327,6 +329,9 @@ function caseAgent(agent, date, val, { we, auj, nuit = false }) {
     onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrirPalette(e.currentTarget, agent, date, val, nuit); } },
   });
   const couleurHs = val && val.hs ? (reglesHs() ? hsType(val.hsType || typeHsDefaut(date)).couleur : '#0b7285') : null;
+  // Responsable qui change ponctuellement de service : petite étiquette.
+  const autreSvc = agent.equipe === 'responsables' && val && val.service && val.service !== agent.service && PLAN_EQUIPES.find((x) => x.id === val.service);
+  if (autreSvc) td.append(h('span', { class: 'case-svc', style: { '--c': autreSvc.couleur() }, title: `Ce jour : ${autreSvc.label}` }, autreSvc.label));
   // Heures supp automatiques : un simple point de couleur (détail au survol).
   if (val && val.auto) {
     td.append(h('span', { class: 'hs-point', style: { '--c': couleurHs } }));
@@ -353,6 +358,7 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
   const heures = h('input', { type: 'text', class: 'pop-hs-input', placeholder: 'ex. 1, 3h30', value: val && val.hs ? fmtHs(val.hs).slice(1) : '', maxLength: 6, inputMode: 'decimal' });
   let couleurChoisie = (val && val.couleur) || '';
   let typeHs = (val && val.hsType) || typeHsDefaut(date);
+  let serviceJour = (val && val.service) || '';
   let enAttente = null; // code choisi qui attend sa précision (retard → durée, heures supp → nombre)
   const choisir = async (code) => {
     let t = texte.value.trim();
@@ -378,7 +384,7 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
     // Seules les heures supp saisies : case « HS ».
     const codeFinal = code === null ? '' : code || (t ? 'H' : hs ? 'HS' : '');
     try {
-      planState.semaine = await call(api.planSetCase(agent.id, date, { code: codeFinal, texte: code === null ? '' : t, hs: code === null ? null : hs, hsType: typeHs, couleur: code === null ? '' : couleurChoisie }, S.user));
+      planState.semaine = await call(api.planSetCase(agent.id, date, { code: codeFinal, texte: code === null ? '' : t, hs: code === null ? null : hs, hsType: typeHs, couleur: code === null ? '' : couleurChoisie, service: code === null ? '' : serviceJour }, S.user));
       planSemCache.delete(lundiDe(date));
     } catch (err) {
       toast(`Non enregistré : ${err.message}`);
@@ -412,6 +418,15 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
       class: `pop-code${val && val.code === c.code ? ' on' : ''}`, style: { '--c': c.couleur }, title: c.label, 'data-code': c.code, onclick: () => choisir(c.code),
     }, h('b', {}, c.code), h('span', {}, c.label)))),
     paletteCouleurs(),
+    agent.equipe !== 'responsables' ? null : h('div', { class: 'pop-hs-types' }, h('span', { class: 'muted' }, 'Service ce jour'),
+      PLAN_EQUIPES.filter((x) => ['matin', 'apresmidi', 'nuit'].includes(x.id)).map((x) => h('button', {
+        class: `pop-hs-type${x.id === (serviceJour || agent.service) ? ' on' : ''}`, style: { '--c': x.couleur() },
+        title: x.id === agent.service ? 'Service habituel' : 'Changement ponctuel pour ce jour',
+        onclick: () => {
+          serviceJour = x.id === agent.service ? '' : x.id;
+          choisir((val && val.code) || '');
+        },
+      }, x.label, x.id === agent.service ? ' ·' : ''))),
     !reglesHs() ? null : h('div', { class: 'pop-hs-types' }, h('span', { class: 'muted' }, 'Type d\'h supp'), HS_TYPES.map((t) => h('button', {
       class: `pop-hs-type${t.id === typeHs ? ' on' : ''}`, style: { '--c': t.couleur }, title: t.detail,
       onclick: (e) => { typeHs = t.id; e.currentTarget.parentNode.querySelectorAll('.pop-hs-type').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); },
@@ -826,7 +841,7 @@ async function absentsPlanning(date, service) {
     planSemCache.set(lundi, entree);
   }
   const out = [];
-  for (const a of planState.agents.filter((x) => equipeEff(x) === service && presentLe(x, date))) {
+  for (const a of planState.agents.filter((x) => equipeEff(x, (entree.sem.cases[x.id] || {})[date]) === service && presentLe(x, date))) {
     const v = (entree.sem.cases[a.id] || {})[date];
     const c = v && planCode(v.code);
     if (c && (c.absence || c.signale)) out.push({ nom: a.nom, motif: v.texte ? `${c.label} · ${v.texte}` : c.label, code: c.code });

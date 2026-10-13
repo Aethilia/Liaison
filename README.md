@@ -131,7 +131,8 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
 - **Responsables** : chacun a un service de rattachement (matin, après-midi
   ou nuit), choisi dans l'onglet *Agents* et repris à l'import (colonnes
   MATIN / AM / NUIT). Il compte alors dans « Agents absents » de ce service
-  et suit ses règles d'heures supp.
+  et suit ses règles d'heures supp. Changement ponctuel : « Service ce jour »
+  dans la palette de sa case (petite étiquette dans la case).
 - **Arrivée / départ** (icône horloge d'un agent, onglet *Agents*) : en dehors
   de ces dates l'agent n'apparaît pas (cases hachurées), ne compte pas dans
   l'effectif de l'équipe ni dans la synthèse. Après son départ il n'est plus

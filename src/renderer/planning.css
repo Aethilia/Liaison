@@ -186,3 +186,4 @@ dialog.plan-fusion select { width: 100%; }
 td.syn-hs[title] { cursor: help; }
 /* Service de rattachement d'un responsable */
 .ag-resp-svc { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; color: #fff; background: var(--c); border-radius: 999px; padding: 0 6px; vertical-align: 1px; }
+.case-svc { position: absolute; left: 3px; top: 2px; font-size: 9px; font-weight: 800; color: #fff; background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 13px; }

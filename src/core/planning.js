@@ -39,7 +39,9 @@ function nettoyerCase(valeur) {
   }
   const couleur = couleurValide(valeur && valeur.couleur);
   if (couleur) v.couleur = couleur;
-  return code || texte || v.hs ? v : null;
+  // Responsable : service ponctuel ce jour-là (matin, après-midi, nuit).
+  if (valeur && ['matin', 'apresmidi', 'nuit'].includes(valeur.service)) v.service = valeur.service;
+  return code || texte || v.hs || v.service ? v : null;
 }
 
 const couleurValide = (c) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : '');

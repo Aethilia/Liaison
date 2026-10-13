@@ -468,6 +468,9 @@ test('planning : import d\'un classeur (format CTVO), heures supp et repères co
   const r = p.importer(d, 'PC');
   assert.equal(r.ajoutes, 11);
   assert.equal(p.loadAgents().find((x) => x.nom === 'Resp N').service, 'nuit');
+  const rn = p.loadAgents().find((x) => x.nom === 'Resp N');
+  p.setCase(rn.id, '2026-10-19', { service: 'matin' }, 'PC'); // changement ponctuel
+  assert.deepEqual(p.loadSemaine('2026-10-19').cases[rn.id]['2026-10-19'], { code: '', texte: '', service: 'matin' });
   const a = p.loadAgents().find((x) => x.nom === 'Agent A');
   assert.equal(a.equipe, 'matin');
   const s = p.loadSemaine('2026-10-12');
