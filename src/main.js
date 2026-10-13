@@ -10,6 +10,7 @@ const M = require('./core/model');
 const { spawn } = require('child_process');
 const { summarizeSite } = require('./core/dashboard');
 const { Inventaire } = require('./core/inventaire');
+const { lirePlanningExcel } = require('./core/planning-import');
 const { Planning } = require('./core/planning');
 const { UPDATE_DIR, findUpdate } = require('./core/update');
 
@@ -180,7 +181,30 @@ handle('plan:saveAgents', (agents) => plan().saveAgents(agents));
 handle('plan:semaine', (date) => plan().loadSemaine(date));
 handle('plan:setCase', (agentId, date, valeur, par) => plan().setCase(agentId, date, valeur, par || config.poste));
 handle('plan:setNotes', (date, notes, par) => plan().setNotes(date, notes, par || config.poste));
+handle('plan:setReperes', (date, reperes, par) => plan().setReperes(date, reperes, par || config.poste));
 handle('plan:entre', (debut, fin) => plan().casesEntre(debut, fin));
+// Import d'un planning Excel : le fichier choisi est gardé ici, l'interface
+// ne fait que confirmer (aperçu puis import).
+let planningAImporter = null;
+handle('plan:importChoisir', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Importer un planning Excel',
+    filters: [{ name: 'Classeur Excel', extensions: ['xlsx', 'xlsm'] }],
+    properties: ['openFile'],
+  });
+  if (r.canceled || !r.filePaths[0]) return null;
+  planningAImporter = r.filePaths[0];
+  const d = await lirePlanningExcel(planningAImporter, { aujourdhui: M.toISODate(new Date()) });
+  const equipes = {};
+  for (const a of d.agents) equipes[a.equipe] = (equipes[a.equipe] || 0) + 1;
+  return { fichier: path.basename(planningAImporter), debut: d.debut, fin: d.fin, nbSemaines: d.nbSemaines, nbCases: d.nbCases, nbAgents: d.agents.length, equipes, anciens: d.anciens };
+});
+handle('plan:importAppliquer', async (par) => {
+  if (!planningAImporter) throw new Error('Aucun planning choisi.');
+  const d = await lirePlanningExcel(planningAImporter, { aujourdhui: M.toISODate(new Date()) });
+  planningAImporter = null;
+  return plan().importer(d, par || config.poste);
+});
 handle('sup:list', () => store.loadSupervisors());
 handle('sup:save', (nom, pin) => store.saveSupervisor(nom, pin));
 handle('sup:remove', (nom) => store.removeSupervisor(nom));

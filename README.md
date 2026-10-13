@@ -96,6 +96,20 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   équipe affiche le nombre de présents par jour ; notes de la semaine à droite.
 - **Nuit** : une case = une vacation, du soir 20H au lendemain 4H (rattachée
   au jour où elle commence, comme le service de nuit de la main courante).
+- **Heures supp** : petite case « + … h supp » dans la palette (1, 2,5 ou
+  3h30), seule (code HS) ou avec un autre code. Badge « +1h » dans la case,
+  total du mois par agent dans la synthèse (colonne *H. supp*).
+- **Couleurs et repères** : chaque semaine a ses **repères** (textes colorés,
+  à droite de la grille, ex. « Congé de naissance du 14/10 au 14/11 » en
+  violet) ; la palette d'une case permet de lui donner la couleur d'un repère,
+  comme dans le classeur Excel.
+- **Importer un planning Excel** (onglet *Agents*, sauf au CPTP) : reprend un
+  classeur au format du CTVO (blocs 5H-13H / 13H-20H / 20H-4H par semaine,
+  responsables MATIN / AM / NUIT). Agents de la semaine en cours et des
+  suivantes (avec leur équipe), toutes les cases avec leurs couleurs, les
+  heures supp « (+1) », les notes et les repères colorés. Un aperçu s'affiche
+  avant l'import ; sur les semaines importées, les cases de ces agents sont
+  remplacées par celles du classeur.
 - **Retard** (RET) : la palette demande la durée (« 30 » devient « 30 min »).
   L'agent reste compté présent, mais apparaît dans « Agents absents » avec la
   durée (ex. *Retard · 30 min*).

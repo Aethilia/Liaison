@@ -1,6 +1,6 @@
 'use strict';
 
-/* global S, M, SVC, h, icon, call, api, ask, toast, promptText, plural */
+/* global S, M, SVC, h, icon, call, api, ask, toast, promptText, plural, siteProfil */
 // Onglet « Planning » : agents du site par équipe, semaine du lundi au
 // dimanche avec un code par jour (repos, CP, maladie…), notes de la semaine,
 // synthèse mensuelle par agent et gestion de la liste des agents.
@@ -26,12 +26,26 @@ const PLAN_CODES = [
   { code: 'CN', label: 'Naissance', couleur: '#e87ba4', absence: true },
   { code: 'FOR', label: 'Formation', couleur: '#4a3aa7', absence: true },
   { code: 'RET', label: 'Retard', couleur: '#d9480f', signale: true },
+  { code: 'HS', label: 'Heures supp', couleur: '#0b7285' },
   { code: 'VM', label: 'Visite médicale', couleur: '#2a78d6' },
   { code: 'INT', label: 'Intempéries', couleur: '#5b6b7f', absence: true },
   { code: 'T', label: 'Travaille (WE)', couleur: '#0f766e' },
   { code: 'H', label: 'Horaire / note', couleur: '#eda100' },
 ];
 const planCode = (c) => PLAN_CODES.find((x) => x.code === c);
+// Couleurs proposées pour les repères et les cases (celles du classeur Excel).
+const PLAN_COULEURS = ['#ffff00', '#ffff99', '#ffc000', '#ff0000', '#92d050', '#99ff33', '#00b0f0', '#b8cce4', '#cc00ff', '#f078df', '#21dfbf', '#f4b183'];
+// Heures supplémentaires : 1 → « +1h », 3.5 → « +3h30 ».
+const fmtHs = (n) => `+${Math.floor(n)}h${Math.round((n % 1) * 60) ? String(Math.round((n % 1) * 60)).padStart(2, '0') : ''}`;
+// « 2 », « 3h30 », « 1,5 » → nombre d'heures (null si illisible).
+function lireHs(t) {
+  const x = String(t || '').trim().replace(/^\+/, '');
+  if (!x) return null;
+  const m = /^(\d{1,2})\s*h\s*(\d{1,2})?$/i.exec(x);
+  if (m) return Number(m[1]) + (m[2] ? Number(m[2]) / 60 : 0);
+  const n = Number(x.replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 const planState = { vue: 'semaine', date: null, agents: [], semaine: null, mois: null, loadedAt: 0 };
@@ -78,7 +92,8 @@ async function renderPlanning({ reload = true } = {}) {
   if (!planState.agents.length && planState.vue !== 'agents') {
     corps = h('div', { class: 'j-empty' }, icon('users', 32), h('p', {}, 'Aucun agent dans le planning.'),
       h('p', { class: 'muted' }, 'Commencez par ajouter vos agents et leur équipe.'),
-      h('button', { class: 'btn accent', onclick: () => { planState.vue = 'agents'; renderPlanning({ reload: false }); } }, icon('plus', 15), 'Ajouter les agents'));
+      h('div', { class: 'row', style: { justifyContent: 'center', gap: '8px' } },
+        h('button', { class: 'btn accent', onclick: () => { planState.vue = 'agents'; renderPlanning({ reload: false }); } }, icon('plus', 15), 'Ajouter les agents'), boutonImport()));
   } else if (planState.vue === 'semaine') corps = vueSemaine(head);
   else if (planState.vue === 'synthese') corps = await vueSynthese(head);
   else corps = vueAgents();
@@ -137,9 +152,80 @@ function vueSemaine(head) {
   });
   return h('div', { class: 'plan-semaine' },
     h('div', { class: 'card plan-grille-card' }, h('div', { class: 'plan-scroll' }, h('table', { class: 'plan-grille' }, colonnes, entete, h('tbody', {}, lignes))), legende),
-    h('div', { class: 'card plan-notes' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('note', 16)), 'Notes de la semaine'),
-      h('div', { class: 'card-body' }, notes)));
+    h('div', { class: 'plan-cote' }, carteReperes(lundi, sem),
+      h('div', { class: 'card plan-notes' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('note', 16)), 'Notes de la semaine'),
+        h('div', { class: 'card-body' }, notes))));
 }
+
+// Repères de la semaine : textes colorés, la couleur se retrouve sur les cases
+// concernées (choisie dans la palette d'une case). Changent d'une semaine à l'autre.
+function carteReperes(lundi, sem) {
+  const reperes = sem.reperes || [];
+  const enregistrer = async (list) => {
+    try {
+      planState.semaine = await call(api.planSetReperes(lundi, list, S.user));
+    } catch (err) {
+      toast(`Non enregistré : ${err.message}`);
+    }
+    renderPlanning({ reload: false });
+  };
+  let couleur = PLAN_COULEURS.find((c) => !reperes.some((x) => x.couleur === c)) || PLAN_COULEURS[0];
+  const texte = h('input', { type: 'text', placeholder: 'Ex. Formation incendie mardi 13H-16H', maxLength: 120 });
+  const pastilles = h('div', { class: 'rep-couleurs' }, PLAN_COULEURS.map((c) => h('button', {
+    class: `pop-couleur${c === couleur ? ' on' : ''}`, style: { '--c': c }, title: 'Couleur du repère',
+    onclick: (e) => { couleur = c; pastilles.querySelectorAll('.pop-couleur').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); },
+  })));
+  const ajouter = () => {
+    const t = texte.value.trim();
+    if (t) enregistrer([...reperes, { texte: t, couleur }]);
+  };
+  texte.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ajouter(); } });
+  return h('div', { class: 'card plan-reperes' },
+    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('flag', 16)), 'Repères de la semaine'),
+    h('div', { class: 'card-body' },
+      reperes.length ? h('div', { class: 'rep-liste' }, reperes.map((x, i) => h('div', { class: 'rep-ligne', style: { '--c': x.couleur } },
+        h('span', { class: 'rep-carre' }), h('span', { class: 'rep-texte' }, x.texte),
+        h('button', { class: 'o-btn rm', title: 'Retirer ce repère', onclick: () => enregistrer(reperes.filter((_, j) => j !== i)) }, icon('x', 13)))))
+        : h('p', { class: 'muted rep-vide' }, 'Aucun repère. La couleur d\'un repère se pose sur les cases depuis leur palette.'),
+      h('div', { class: 'rep-ajout' }, texte, pastilles, h('button', { class: 'btn small', onclick: ajouter }, icon('plus', 13), 'Ajouter'))));
+}
+
+// Import d'un classeur Excel de planning (format du CTVO).
+async function importerPlanningExcel() {
+  let ap;
+  try {
+    ap = await call(api.planImportChoisir());
+  } catch (err) {
+    toast(`Lecture impossible : ${err.message}`);
+    return;
+  }
+  if (!ap) return;
+  const nomEq = (id) => (PLAN_EQUIPES.find((e) => e.id === id) || { label: id }).label;
+  const date = (iso) => (iso ? `${fmtJour(iso)} ${iso.slice(0, 4)}` : '?');
+  const texte = [
+    ap.fichier,
+    '',
+    `${ap.nbAgents} agents : ${Object.entries(ap.equipes).map(([id, n]) => `${nomEq(id)} ${n}`).join(' · ')}`,
+    `${ap.nbSemaines} semaines, du ${date(ap.debut)} au ${date(isoAjout(ap.fin, 6))} · ${ap.nbCases} cases`,
+    '',
+    'Les agents déjà dans le planning sont retrouvés par leur nom. Sur ces semaines, leurs cases sont remplacées par celles du classeur ; notes et repères s\'ajoutent.',
+    ap.anciens.length ? `\nNoms absents des semaines récentes, non repris : ${ap.anciens.join(', ')}` : '',
+  ].join('\n');
+  if (await ask('Importer ce planning ?', texte, [{ label: 'Annuler', value: 'no' }, { label: 'Importer', value: 'yes', cls: 'primary' }]) !== 'yes') return;
+  try {
+    const r = await call(api.planImportAppliquer(S.user));
+    planState.agents = r.agents;
+    planSemCache.clear();
+    await rafraichirAgentsAbsents();
+    toast(`Planning importé : ${plural(r.nbSemaines, 'semaine')}, ${plural(r.ajoutes, 'agent')} ajouté(s).`);
+    planState.vue = 'semaine';
+    renderPlanning();
+  } catch (err) {
+    toast(`Import impossible : ${err.message}`);
+  }
+}
+const importPossible = () => !M.deuxServices(siteProfil());
+const boutonImport = (cls = 'btn') => (importPossible() ? h('button', { class: cls, onclick: importerPlanningExcel, title: 'Reprendre les agents et les semaines d\'un classeur Excel' }, icon('upload', 15), 'Importer un planning Excel') : null);
 
 // Nuit (ou soir au CPTP) : une seule vacation, rattachée au jour où elle commence (20H → 4H le lendemain).
 const libelleJour = (date, nuit) => (nuit ? `${SVC.nuit.label.toLowerCase()} du ${fmtJourCourt(date)} au ${fmtJourCourt(isoAjout(date, 1))}` : fmtJour(date));
@@ -154,14 +240,16 @@ const fmtJourCourt = (iso) => new Intl.DateTimeFormat('fr-FR', { weekday: 'short
 function caseAgent(agent, date, val, { we, auj, nuit = false }) {
   const c = val && planCode(val.code);
   const td = h('td', {
-    class: `plan-case${we ? ' we' : ''}${auj ? ' auj' : ''}${c ? ' rempli' : ''}`,
-    tabIndex: 0, title: `${agent.nom} — ${libelleJour(date, nuit)}${c ? ` : ${c.label}` : ''}${val && val.texte ? ` (${val.texte})` : ''}`,
+    class: `plan-case${we ? ' we' : ''}${auj ? ' auj' : ''}${c ? ' rempli' : ''}${val && val.couleur ? ' colore' : ''}`,
+    style: val && val.couleur ? { '--fond': val.couleur } : null,
+    tabIndex: 0, title: `${agent.nom} — ${libelleJour(date, nuit)}${c ? ` : ${c.label}` : ''}${val && val.texte ? ` (${val.texte})` : ''}${val && val.hs ? ` · ${fmtHs(val.hs)} supp` : ''}`,
     onclick: (e) => ouvrirPalette(e.currentTarget, agent, date, val, nuit),
     onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrirPalette(e.currentTarget, agent, date, val, nuit); } },
   });
-  if (c) td.append(h('span', { class: 'plan-code', style: { '--c': c.couleur } }, val.code === 'H' && val.texte ? val.texte : c.code));
+  if (c) td.append(h('span', { class: 'plan-code', style: { '--c': c.couleur } }, val.code === 'H' && val.texte ? val.texte : val.code === 'HS' && val.hs ? fmtHs(val.hs) : c.code));
   else if (val && val.texte) td.append(h('span', { class: 'plan-texte' }, val.texte));
   if (c && val.texte && val.code !== 'H') td.append(h('small', { class: 'plan-texte' }, val.texte));
+  if (val && val.hs && val.code !== 'HS') td.append(h('span', { class: 'plan-hs', title: 'Heures supplémentaires' }, fmtHs(val.hs)));
   return td;
 }
 
@@ -175,9 +263,20 @@ function fermerPalette() {
 function ouvrirPalette(td, agent, date, val, nuit = false) {
   fermerPalette();
   const texte = h('input', { type: 'text', placeholder: val && val.code === 'RET' ? 'Durée du retard (ex. 30 min)' : 'Horaire ou note (ex. 13H-18H, +3h30)', value: (val && val.texte) || '', maxLength: 40 });
-  let enAttente = null; // code choisi qui attend sa précision (retard → durée)
+  const heures = h('input', { type: 'text', class: 'pop-hs-input', placeholder: 'ex. 1, 3h30', value: val && val.hs ? fmtHs(val.hs).slice(1) : '', maxLength: 6, inputMode: 'decimal' });
+  let couleurChoisie = (val && val.couleur) || '';
+  let enAttente = null; // code choisi qui attend sa précision (retard → durée, heures supp → nombre)
   const choisir = async (code) => {
     let t = texte.value.trim();
+    const hs = lireHs(heures.value);
+    if (heures.value.trim() && hs == null) { toast('Heures supp : nombre d\'heures, ex. 1, 2,5 ou 3h30.'); heures.focus(); return; }
+    // Heures supp seules : on demande le nombre d'heures.
+    if (code === 'HS' && !hs) {
+      enAttente = 'HS';
+      planPop.querySelectorAll('.pop-code').forEach((b) => b.classList.toggle('on', b.dataset.code === 'HS'));
+      heures.focus();
+      return;
+    }
     // Retard : on demande la durée avant d'enregistrer.
     if (code === 'RET' && !t) {
       enAttente = 'RET';
@@ -188,26 +287,48 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
     }
     if (code === 'RET') t = dureeRetard(t);
     fermerPalette();
+    // Seules les heures supp saisies : case « HS ».
+    const codeFinal = code === null ? '' : code || (t ? 'H' : hs ? 'HS' : '');
     try {
-      planState.semaine = await call(api.planSetCase(agent.id, date, { code: code === null ? '' : code || (t ? 'H' : ''), texte: code === null ? '' : t }, S.user));
+      planState.semaine = await call(api.planSetCase(agent.id, date, { code: codeFinal, texte: code === null ? '' : t, hs: code === null ? null : hs, couleur: code === null ? '' : couleurChoisie }, S.user));
       planSemCache.delete(lundiDe(date));
     } catch (err) {
       toast(`Non enregistré : ${err.message}`);
     }
     renderPlanning({ reload: false });
   };
-  const valider = () => choisir(enAttente || ((val && val.code && val.code !== 'H') ? val.code : 'H'));
-  texte.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); valider(); } if (e.key === 'Escape') fermerPalette(); });
+  // Couleur de la case (renvoie à un repère de la semaine) : appliquée tout de
+  // suite si la case a déjà un contenu, sinon avec le code choisi ensuite.
+  function paletteCouleurs() {
+    const reperes = (planState.semaine && planState.semaine.reperes) || [];
+    const titres = new Map();
+    for (const x of reperes) if (!titres.has(x.couleur)) titres.set(x.couleur, x.texte);
+    const couleurs = [...new Set([...titres.keys(), ...PLAN_COULEURS])];
+    const ligne = h('div', { class: 'pop-couleurs' }, h('span', { class: 'muted' }, 'Couleur'),
+      ['', ...couleurs].map((c) => h('button', {
+        class: `pop-couleur${c === couleurChoisie ? ' on' : ''}${c ? '' : ' aucune'}${titres.has(c) ? ' repere' : ''}`, style: c ? { '--c': c } : null,
+        title: c ? (titres.get(c) || 'Couleur') : 'Sans couleur',
+        onclick: (e) => {
+          couleurChoisie = c;
+          ligne.querySelectorAll('.pop-couleur').forEach((b) => b.classList.toggle('on', b === e.currentTarget));
+          if (val && (val.code || val.texte || val.hs)) choisir(val.code || '');
+        },
+      })));
+    return ligne;
+  }
+  const valider = () => choisir(enAttente || ((val && val.code && !['H', 'HS'].includes(val.code)) ? val.code : texte.value.trim() ? 'H' : ''));
+  for (const champ of [texte, heures]) champ.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); valider(); } if (e.key === 'Escape') fermerPalette(); });
   planPop = h('div', { class: 'plan-pop', role: 'dialog' },
     h('div', { class: 'pop-titre' }, h('b', {}, agent.nom), h('span', { class: 'muted' }, ` · ${libelleJour(date, nuit)}`)),
     h('div', { class: 'pop-codes' }, PLAN_CODES.map((c) => h('button', {
       class: `pop-code${val && val.code === c.code ? ' on' : ''}`, style: { '--c': c.couleur }, title: c.label, 'data-code': c.code, onclick: () => choisir(c.code),
     }, h('b', {}, c.code), h('span', {}, c.label)))),
-    h('div', { class: 'pop-texte' }, texte, h('button', { class: 'btn small', onclick: valider }, 'OK')),
+    paletteCouleurs(),
+    h('div', { class: 'pop-texte' }, texte, h('label', { class: 'pop-hs', title: 'Heures supplémentaires' }, h('span', {}, '+'), heures, h('span', {}, 'h supp')), h('button', { class: 'btn small', onclick: valider }, 'OK')),
     h('button', { class: 'btn ghost small pop-effacer', onclick: () => choisir(null) }, icon('x', 13), 'Effacer (travaille normalement)'));
   document.body.append(planPop);
   const r = td.getBoundingClientRect();
-  const w = 340;
+  const w = 380;
   planPop.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
   const bas = r.bottom + 6 + planPop.offsetHeight < window.innerHeight;
   planPop.style.top = `${bas ? r.bottom + 6 : Math.max(8, r.top - planPop.offsetHeight - 6)}px`;
@@ -222,10 +343,11 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
 
 // Jours travaillés : lundi-vendredi sans code d'absence, plus T/H et VM.
 function syntheseAgent(cases, debut, fin) {
-  const r = { travailles: 0, codes: {} };
+  const r = { travailles: 0, codes: {}, hs: 0 };
   for (let d = debut; d <= fin; d = isoAjout(d, 1)) {
     const v = cases[d];
     const c = v && planCode(v.code);
+    if (v && v.hs) r.hs += v.hs;
     if (c) r.codes[c.code] = (r.codes[c.code] || 0) + 1;
     if (c ? !c.absence : !estWeekEnd(d)) r.travailles += 1;
   }
@@ -249,14 +371,15 @@ async function vueSynthese(head) {
   const nbJours = Number(fin.slice(8));
   const codesUtiles = PLAN_CODES.filter((c) => planState.agents.some((a) => Object.values(cases[a.id] || {}).some((v) => v.code === c.code)));
   const lignes = [];
-  const totaux = { travailles: 0, codes: {} };
+  const totaux = { travailles: 0, codes: {}, hs: 0 };
   for (const eq of PLAN_EQUIPES) {
     const agents = planState.agents.filter((a) => a.equipe === eq.id);
     if (!agents.length) continue;
-    lignes.push(h('tr', { class: 'syn-equipe', style: { '--eq': eq.couleur() } }, h('td', { colSpan: 3 + codesUtiles.length }, h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, ` ${eq.heures}`) : null)));
+    lignes.push(h('tr', { class: 'syn-equipe', style: { '--eq': eq.couleur() } }, h('td', { colSpan: 4 + codesUtiles.length }, h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, ` ${eq.heures}`) : null)));
     for (const a of agents) {
       const s = syntheseAgent(cases[a.id] || {}, debut, fin);
       totaux.travailles += s.travailles;
+      totaux.hs += s.hs;
       for (const [c, n] of Object.entries(s.codes)) totaux.codes[c] = (totaux.codes[c] || 0) + n;
       // Barre : composition du mois (travaillé + chaque code).
       const barre = h('div', { class: 'syn-barre', title: `${s.travailles} jour(s) travaillé(s)` },
@@ -266,6 +389,7 @@ async function vueSynthese(head) {
       lignes.push(h('tr', { class: 'syn-agent', onclick: () => detailAgent(a, cases[a.id] || {}, debut, fin) },
         h('th', {}, a.nom),
         h('td', { class: 'num' }, h('b', {}, s.travailles)),
+        h('td', { class: 'num' }, s.hs ? h('span', { class: 'syn-badge', style: { '--c': planCode('HS').couleur } }, fmtHs(s.hs)) : h('span', { class: 'muted' }, '·')),
         codesUtiles.map((c) => h('td', { class: 'num' }, s.codes[c.code] ? h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, s.codes[c.code]) : h('span', { class: 'muted' }, '·'))),
         h('td', {}, barre)));
     }
@@ -275,9 +399,10 @@ async function vueSynthese(head) {
       h('span', { class: 'hint' }, 'Cliquer sur un agent pour le détail du mois')),
     h('div', { class: 'card-body plan-scroll' }, h('table', { class: 'grid syn-table' },
       h('thead', {}, h('tr', {}, h('th', {}, 'Agent'), h('th', { class: 'num', title: 'Du lundi au vendredi sans absence, plus les jours codés T, H ou VM' }, 'Travaillés'),
+        h('th', { class: 'num', title: 'Heures supplémentaires du mois' }, 'H. supp'),
         codesUtiles.map((c) => h('th', { class: 'num', title: c.label }, h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, c.code))), h('th', {}, 'Répartition du mois'))),
       h('tbody', {}, lignes),
-      h('tfoot', {}, h('tr', {}, h('th', {}, 'Total'), h('td', { class: 'num' }, h('b', {}, totaux.travailles)),
+      h('tfoot', {}, h('tr', {}, h('th', {}, 'Total'), h('td', { class: 'num' }, h('b', {}, totaux.travailles)), h('td', { class: 'num' }, h('b', {}, totaux.hs ? fmtHs(totaux.hs) : 0)),
         codesUtiles.map((c) => h('td', { class: 'num' }, h('b', {}, totaux.codes[c.code] || 0))), h('td', {})))),
     codesUtiles.length ? null : h('p', { class: 'muted syn-vide' }, 'Aucun code saisi ce mois-ci : tout le monde travaille normalement.')));
 }
@@ -293,13 +418,15 @@ function detailAgent(agent, cases, debut, fin) {
   const dlg = h('dialog', { class: 'plan-detail' }, h('div', { class: 'dialog-body' },
     h('h2', {}, agent.nom, h('small', { class: 'muted' }, ` · ${eq.label}${eq.heures ? ` ${eq.heures}` : ''}`)),
     h('div', { class: 'det-resume' }, h('span', { class: 'syn-badge', style: { '--c': eq.couleur() } }, `${s.travailles} travaillés`),
+      s.hs ? h('span', { class: 'syn-badge', style: { '--c': planCode('HS').couleur } }, `${fmtHs(s.hs)} supp`) : null,
       PLAN_CODES.filter((c) => s.codes[c.code]).map((c) => h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, `${s.codes[c.code]} ${c.label.toLowerCase()}`))),
     h('div', { class: 'det-cal' }, JOURS_COURTS.map((j) => h('div', { class: 'det-j' }, j)), cellules.map((d) => {
       if (!d) return h('div', { class: 'det-vide' });
       const v = cases[d];
       const c = v && planCode(v.code);
       return h('div', { class: `det-case${estWeekEnd(d) ? ' we' : ''}`, style: c ? { '--c': c.couleur } : null, title: c ? `${c.label}${v.texte ? ` (${v.texte})` : ''}` : '' },
-        h('span', { class: 'det-num' }, Number(d.slice(8))), c ? h('b', {}, v.code === 'H' && v.texte ? v.texte : c.code) : null);
+        h('span', { class: 'det-num' }, Number(d.slice(8))), c ? h('b', {}, v.code === 'H' && v.texte ? v.texte : v.code === 'HS' && v.hs ? fmtHs(v.hs) : c.code) : null,
+        v && v.hs && v.code !== 'HS' ? h('small', { class: 'det-hs' }, fmtHs(v.hs)) : null);
     })),
     h('div', { class: 'dialog-actions' }, h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: () => dlg.close() }, 'Fermer'))));
   dlg.addEventListener('close', () => dlg.remove());
@@ -364,7 +491,7 @@ function vueAgents() {
         h('div', { class: 'row ag-ajout' }, nom, h('button', { class: 'btn small', onclick: ajouter }, icon('plus', 13), 'Ajouter'))));
   });
   return h('div', { class: 'plan-agents' },
-    h('p', { class: 'muted plan-info' }, icon('users', 14), ' Ces agents sont aussi ceux proposés dans « Agents absents » de la main courante.'),
+    h('div', { class: 'row plan-info-ligne' }, h('p', { class: 'muted plan-info' }, icon('users', 14), ' Ces agents sont aussi ceux proposés dans « Agents absents » de la main courante.'), h('span', { class: 'spacer' }), boutonImport('btn small')),
     h('div', { class: 'ag-grille' }, groupes));
 }
 

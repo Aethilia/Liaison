@@ -413,3 +413,64 @@ test('sorties : matières ajoutées ou retirées pour le site', () => {
   assert.equal(M.stats([{ date: s.date, services: { matin: s } }]).matieres.find((m) => m.nom === 'Carton').tonnage, 0.5);
   assert.deepEqual(M.allSorties(M.emptyService('2026-10-02', 'matin')).map((r) => r.nom), M.MATIERES);
 });
+
+test('planning : import d\'un classeur (format CTVO), heures supp et repères colorés', async () => {
+  const { lirePlanningExcel, convertirCase } = require('../src/core/planning-import');
+  const { Planning } = require('../src/core/planning');
+  assert.deepEqual(convertirCase('MATIN(+1)'), { code: 'H', texte: 'MATIN', hs: 1 });
+  assert.deepEqual(convertirCase('(+3h30)'), { code: 'HS', texte: '', hs: 3.5 });
+  assert.deepEqual(convertirCase('CP (K)'), { code: 'CP', texte: '(K)' });
+  assert.equal(convertirCase('REPOS').code, 'R');
+  assert.equal(convertirCase('-5'), null);
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('CTV2026');
+  const jaune = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+  const bloc = (r0, horaire, noms, resp) => {
+    noms.forEach((n, i) => { ws.getCell(r0, 2 + i).value = horaire; ws.getCell(r0 + 1, 2 + i).value = n; });
+    if (resp) ['MATIN', 'AM', 'NUIT'].forEach((t, i) => { ws.getCell(r0, 12 + i).value = t; ws.getCell(r0 + 1, 12 + i).value = resp[i]; });
+    for (let j = 0; j < 7; j++) ws.getCell(r0 + 2 + j, 1).value = new Date(Date.UTC(2026, 9, 12 + j));
+  };
+  bloc(1, '5H-13H', ['Agent A', 'Agent B', 'Agent C'], ['Resp M', 'Resp A', 'Resp N']);
+  bloc(11, '13H-20H', ['Agent D', 'Agent E', 'Agent F']);
+  bloc(21, '20H-4H', ['Agent G', 'Agent H', 'Agent I']);
+  ws.getCell(3, 2).value = 'CP';
+  ws.getCell(3, 2).fill = jaune;
+  ws.getCell(4, 3).value = '(+2)';
+  ws.getCell(13, 3).value = 'MAL';
+  ws.getCell(5, 13).value = 'REPOS';
+  ws.getCell(13, 12).value = 'Agent A en CP du 12/10 au 16/10';
+  ws.getCell(13, 12).fill = jaune;
+  ws.getCell(15, 12).value = 'Réunion sécurité jeudi';
+  const file = path.join(tmp(), 'planning.xlsx');
+  await wb.xlsx.writeFile(file);
+
+  const d = await lirePlanningExcel(file, { aujourdhui: '2026-10-14' });
+  assert.equal(d.nbSemaines, 1);
+  assert.equal(d.agents.length, 12);
+  assert.deepEqual(d.agents.filter((a) => a.equipe === 'responsables').map((a) => a.nom), ['Resp M', 'Resp A', 'Resp N']);
+  assert.equal(d.agents.find((a) => a.nom === 'Agent G').equipe, 'nuit');
+  const sem = d.semaines['2026-10-12'];
+  assert.deepEqual(sem.cases['Agent A']['2026-10-12'], { code: 'CP', texte: '', couleur: '#ffff00' });
+  assert.deepEqual(sem.cases['Agent B']['2026-10-13'], { code: 'HS', texte: '', hs: 2 });
+  assert.equal(sem.cases['Agent E']['2026-10-12'].code, 'MAL');
+  assert.equal(sem.cases['Resp A']['2026-10-14'].code, 'R');
+  assert.deepEqual(sem.reperes, [{ texte: 'Agent A en CP du 12/10 au 16/10', couleur: '#ffff00' }]);
+  assert.equal(sem.notes, 'Réunion sécurité jeudi');
+
+  const p = new Planning(tmp());
+  p.saveAgents([{ nom: 'Agent A', equipe: 'autres' }]);
+  p.setCase(p.loadAgents()[0].id, '2026-10-15', { code: 'ABS' }, 'PC');
+  const r = p.importer(d, 'PC');
+  assert.equal(r.ajoutes, 11);
+  const a = p.loadAgents().find((x) => x.nom === 'Agent A');
+  assert.equal(a.equipe, 'matin');
+  const s = p.loadSemaine('2026-10-12');
+  assert.equal(s.cases[a.id]['2026-10-15'], undefined); // remplacé par le classeur
+  assert.equal(s.cases[a.id]['2026-10-12'].couleur, '#ffff00');
+  assert.equal(s.reperes.length, 1);
+  p.importer(d, 'PC'); // deux fois : pas de doublon
+  assert.equal(p.loadAgents().length, 12);
+  assert.equal(p.loadSemaine('2026-10-12').reperes.length, 1);
+  assert.equal(p.loadSemaine('2026-10-12').notes, 'Réunion sécurité jeudi');
+});
