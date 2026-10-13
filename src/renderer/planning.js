@@ -514,12 +514,7 @@ function vueAgents() {
             } }, icon('edit', 14)),
             h('button', { class: 'o-btn', title: 'Arrivée / départ', onclick: () => datesAgentDialog(a, enregistrer) }, icon('clock', 14)),
             h('button', { class: 'o-btn ag-discret', title: 'Fusionner avec un autre agent (même personne, autre orthographe)', onclick: () => fusionnerAgent(a) }, icon('users', 14)),
-            h('button', { class: 'o-btn rm', title: 'Retirer du planning', onclick: async () => {
-              if (await ask('Retirer cet agent ?', `« ${a.nom} » ne sera plus dans le planning ni proposé dans « Agents absents ». Ses anciennes cases restent enregistrées.`,
-                [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
-              liste.splice(i, 1);
-              enregistrer();
-            } }, icon('x', 14)));
+            h('button', { class: 'o-btn rm', title: 'Retirer (départ de l\'agent)', onclick: () => retirerAgent(a, liste, enregistrer) }, icon('x', 14)));
         })) : h('div', { class: 'muted ag-vide' }, 'Aucun agent.'),
         h('div', { class: 'row ag-ajout' }, nom, h('button', { class: 'btn small', onclick: ajouter }, icon('plus', 13), 'Ajouter'))));
   });
@@ -540,12 +535,41 @@ function anciensAgents(liste, enregistrer) {
       h('span', { class: 'ag-nom' }, a.nom, h('small', { class: 'ag-dates' }, `${(PLAN_EQUIPES.find((e) => e.id === a.equipe) || { label: a.equipe }).label} · ${datesAgent(a)}`)),
       h('button', { class: 'o-btn', title: 'Arrivée / départ', onclick: () => datesAgentDialog(a, enregistrer) }, icon('clock', 14)),
       h('button', { class: 'o-btn ag-discret', title: 'Fusionner avec un autre agent', onclick: () => fusionnerAgent(a) }, icon('users', 14)),
-      h('button', { class: 'o-btn rm', title: 'Retirer du planning', onclick: async () => {
-        if (await ask('Retirer cet agent ?', `« ${a.nom} » ne sera plus dans le planning. Ses anciennes cases restent enregistrées.`,
-          [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
-        liste.splice(liste.indexOf(a), 1);
+      h('button', { class: 'o-btn rm', title: 'Supprimer complètement', onclick: () => retirerAgent(a, liste, enregistrer, { definitif: true }) }, icon('x', 14))))));
+}
+
+// Retirer un agent = noter son dernier jour : il reste affiché dans le
+// planning jusqu'à cette date, puis passe dans « Anciens agents ».
+// La suppression complète (plus aucune trace dans le planning) reste possible.
+function retirerAgent(a, liste, enregistrer, { definitif = false } = {}) {
+  const veille = isoAjout(aujourdhui(), -1);
+  const date = h('input', { type: 'date', value: a.depart || (a.arrivee && a.arrivee > veille ? a.arrivee : veille) });
+  const supprimer = async () => {
+    dlg.close();
+    if (await ask('Supprimer complètement ?', `« ${a.nom} » disparaîtra de toutes les semaines du planning (ses cases restent dans les fichiers mais ne sont plus affichées).`,
+      [{ label: 'Annuler', value: 'no' }, { label: 'Supprimer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+    liste.splice(liste.indexOf(a), 1);
+    enregistrer();
+  };
+  const dlg = h('dialog', { class: 'plan-fusion' }, h('div', { class: 'dialog-body' },
+    h('h2', {}, definitif ? `Supprimer ${a.nom} ?` : `Retirer ${a.nom}`),
+    definitif ? h('p', {}, 'Cet agent est déjà parti. Vous pouvez corriger son dernier jour ou le supprimer complètement du planning.')
+      : h('p', {}, 'L\'agent reste affiché dans le planning jusqu\'à son dernier jour (historique, synthèse), puis passe dans « Anciens agents ». Il n\'est plus proposé dans « Agents absents » après cette date.'),
+    h('label', { class: 'field' }, h('span', {}, 'Dernier jour'), date),
+    h('div', { class: 'dialog-actions' },
+      h('button', { class: 'btn ghost danger-text', onclick: supprimer, title: 'Plus aucune trace dans le planning' }, 'Supprimer complètement'),
+      h('span', { class: 'spacer' }),
+      h('button', { class: 'btn ghost', onclick: () => dlg.close() }, 'Annuler'),
+      h('button', { class: 'btn primary', onclick: () => {
+        if (!date.value) { toast('Indiquez le dernier jour.'); return; }
+        if (a.arrivee && date.value < a.arrivee) { toast('Le dernier jour doit être après l\'arrivée.'); return; }
+        a.depart = date.value;
+        dlg.close();
         enregistrer();
-      } }, icon('x', 14))))));
+      } }, definitif ? 'Enregistrer' : 'Retirer'))));
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
 }
 
 // Dates d'arrivée et de départ d'un agent.

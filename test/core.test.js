@@ -442,6 +442,8 @@ test('planning : import d\'un classeur (format CTVO), heures supp et repères co
   ws.getCell(13, 12).value = 'Agent A en CP du 12/10 au 16/10';
   ws.getCell(13, 12).fill = jaune;
   ws.getCell(15, 12).value = 'Réunion sécurité jeudi';
+  ws.getCell(26, 4).value = 'FDC'; // Agent I : fin de contrat le jeudi 15/10
+  ws.getCell(27, 4).value = 'FDC';
   const file = path.join(tmp(), 'planning.xlsx');
   await wb.xlsx.writeFile(file);
 
@@ -450,6 +452,8 @@ test('planning : import d\'un classeur (format CTVO), heures supp et repères co
   assert.equal(d.agents.length, 12);
   assert.deepEqual(d.agents.filter((a) => a.equipe === 'responsables').map((a) => a.nom), ['Resp M', 'Resp A', 'Resp N']);
   assert.equal(d.agents.find((a) => a.nom === 'Agent G').equipe, 'nuit');
+  assert.equal(d.agents.find((a) => a.nom === 'Agent I').depart, '2026-10-14');
+  assert.deepEqual(d.codes.find((c) => c.code === 'FDC'), { code: 'FDC', label: 'Fin de contrat', couleur: '#495057', absence: true });
   const sem = d.semaines['2026-10-12'];
   assert.deepEqual(sem.cases['Agent A']['2026-10-12'], { code: 'CP', texte: '', couleur: '#ffff00' });
   assert.deepEqual(sem.cases['Agent B']['2026-10-13'], { code: 'HS', texte: '', hs: 2 });

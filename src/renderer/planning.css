@@ -167,3 +167,4 @@ dialog.plan-fusion select { width: 100%; }
 .ag-anciens > summary { cursor: pointer; list-style: none; }
 .ag-anciens > summary::-webkit-details-marker { display: none; }
 .ag-anciens .ag-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 14px; }
+.btn.danger-text { color: #b42318; }

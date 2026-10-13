@@ -78,6 +78,8 @@ const DETAILS = {
   ASA: { label: 'Autorisation spéciale d\'absence', couleur: '#f08c00', absence: true },
   CS: { label: 'Congés spéciaux', couleur: '#12b886', absence: true },
   FCO: { label: 'Formation continue', couleur: '#5f3dc4', absence: true },
+  FDC: { label: 'Fin de contrat', couleur: '#495057', absence: true },
+  MAP: { label: 'Mise à pied', couleur: '#862e9c', absence: true },
 };
 const DE_BASE = new Set(['R', 'CP', 'MAL', 'CN', 'ABS', 'FOR', 'VM', 'INT', 'RET', 'T', 'H', 'HS']);
 // Mots qui ne sont pas des abréviations (gardés en texte).
@@ -247,6 +249,19 @@ async function lirePlanningExcel(file, { aujourdhui = new Date().toISOString().s
     if (a.dernier === lundis[0] && lundis.length > 1) { retenus.delete(k); ecartes.add(a.nom); continue; }
     if (a.premier > debutClasseur) a.arrivee = a.premier;
     if (a.dernier < reference) a.depart = ajouterJours(a.dernier, 6);
+  }
+  // Fin de contrat (FDC) : départ la veille du premier FDC, s'il n'a plus
+  // travaillé ensuite (plus aucune case autre que FDC).
+  const casesDe = (k) => {
+    const out = {};
+    for (const l of lundis) for (const [cle, jours] of Object.entries(semaines.get(l).cases)) if (cleDe(cle) === k) Object.assign(out, jours);
+    return out;
+  };
+  for (const [k, a] of retenus) {
+    const c = casesDe(k);
+    const dates = Object.keys(c).sort();
+    const premierFdc = dates.find((d) => c[d].code === 'FDC');
+    if (premierFdc && dates.every((d) => d < premierFdc || c[d].code === 'FDC')) a.depart = ajouterJours(premierFdc, -1);
   }
   // Un responsable qui porte le nom d'un agent est distingué.
   const nomsAgents = new Set([...retenus.entries()].filter(([k]) => k.startsWith('A|')).map(([, a]) => a.nom.toLowerCase()));

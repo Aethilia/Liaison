@@ -119,7 +119,10 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   l'effectif de l'équipe ni dans la synthèse. Après son départ il n'est plus
   proposé dans « Agents absents » et passe dans *Anciens agents* (repliés en
   bas de l'onglet). L'import Excel les pré-remplit d'après les semaines où
-  chaque nom apparaît.
+  chaque nom apparaît (et la veille du premier « FDC », fin de contrat).
+- **Retirer un agent** (croix) demande son dernier jour : il reste affiché
+  jusqu'à cette date puis passe dans *Anciens agents*. « Supprimer
+  complètement » l'efface de toutes les semaines.
 - **Fusionner** (petite icône au survol d'un agent, onglet *Agents*) : réunit
   deux agents qui sont la même personne écrite autrement ; les cases de
   l'agent gardé priment.
