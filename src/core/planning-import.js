@@ -10,7 +10,9 @@ const ExcelJS = require('exceljs');
 const { lundiDe, ajouterJours } = require('./planning');
 
 const HORAIRE = /^\s*\d{1,2}\s*h/i;
-const RESP = new Set(['MATIN', 'AM', 'NUIT']);
+const RESP = new Set(['MATIN', 'AM', 'APM', 'NUIT']);
+// Colonne d'un responsable → son service de rattachement.
+const SERVICE_RESP = { MATIN: 'matin', AM: 'apresmidi', APM: 'apresmidi', NUIT: 'nuit' };
 const MAX_TEXTE = 40;
 
 // Valeur d'une case du classeur → { code, texte } du planning (H = texte libre).
@@ -145,19 +147,19 @@ function lireFeuille(ws) {
     row.eachCell((cell, c) => {
       const t = texteCellule(cell.value).trim();
       if (HORAIRE.test(t)) horaires.push({ c, t });
-      else if (RESP.has(t.toUpperCase())) resp.push(c);
+      else if (RESP.has(t.toUpperCase())) resp.push({ c, svc: SERVICE_RESP[t.toUpperCase()] });
     });
     if (horaires.length < 3) continue;
     const equipe = equipeDe(horaires[0].t);
     const nom = (c) => texteCellule(valeur(r + 1, c)).replace(/\s+/g, ' ').trim();
     const colsAgents = horaires.map((x) => x.c).filter((c) => nom(c));
-    const colsResp = resp.filter((c) => nom(c));
+    const colsResp = resp.filter((x) => nom(x.c));
     if (!colsAgents.length) continue;
     // Colonne des dates : la première qui contient une date sous les noms.
     let colDate = null;
     for (let c = 1; c <= 4 && !colDate; c++) if (dateCellule(valeur(r + 2, c))) colDate = c;
     if (!colDate) continue;
-    const exclues = new Set([...horaires.map((x) => x.c), ...colsResp, colDate]);
+    const exclues = new Set([...horaires.map((x) => x.c), ...colsResp.map((x) => x.c), colDate]);
     let lundi = null;
     const notes = [];
     let fin = r + 1;
@@ -166,22 +168,22 @@ function lireFeuille(ws) {
       if (!date) break;
       fin = k;
       if (!lundi) lundi = lundiDe(date);
-      const sem = semaines.get(lundi) || { cases: {}, equipes: {}, resp: new Set(), notes: [], reperes: [] };
+      const sem = semaines.get(lundi) || { cases: {}, equipes: {}, resp: new Map(), notes: [], reperes: [] };
       semaines.set(lundi, sem);
-      const poser = (c, estResp) => {
+      const poser = (c, estResp, svc) => {
         const qui = nom(c);
         const cell = ws.getRow(k).getCell(c);
         const v = convertirCase(texteCellule(cell.value));
         const couleur = v && couleurCellule(cell);
         if (couleur) v.couleur = couleur;
-        if (estResp) sem.resp.add(qui);
+        if (estResp) sem.resp.set(qui, svc);
         else sem.equipes[qui] = equipe;
         const cle = `${estResp ? 'R' : 'A'}|${qui}`;
         sem.cases[cle] = sem.cases[cle] || {};
         if (v) sem.cases[cle][date] = v;
       };
       colsAgents.forEach((c) => poser(c, false));
-      colsResp.forEach((c) => poser(c, true));
+      colsResp.forEach((x) => poser(x.c, true, x.svc));
     }
     if (!lundi) continue;
     // Textes libres du bloc (à droite des noms) → notes de la semaine.
@@ -231,14 +233,14 @@ async function lirePlanningExcel(file, { aujourdhui = new Date().toISOString().s
   const cleDe = (cle) => cle.toUpperCase();
   for (const l of lundis) {
     const sem = semaines.get(l);
-    const vus = [...Object.entries(sem.equipes).map(([qui, eq]) => [`A|${qui}`, qui, eq]), ...[...sem.resp].map((qui) => [`R|${qui}`, qui, 'responsables'])];
-    for (const [cle, qui, eq] of vus) {
+    const vus = [...Object.entries(sem.equipes).map(([qui, eq]) => [`A|${qui}`, qui, eq]), ...[...sem.resp].map(([qui, svc]) => [`R|${qui}`, qui, 'responsables', svc])];
+    for (const [cle, qui, eq, svc] of vus) {
       if (!estNom(qui)) { ecartes.add(qui); continue; }
       const k = cleDe(cle);
       const a = retenus.get(k) || { nom: qui, equipe: eq, premier: l, dernier: l };
       a.dernier = l;
       // Nom et équipe : ceux de la semaine de référence (ou la plus récente avant).
-      if (l <= reference || a.premier > reference) { a.nom = qui; a.equipe = eq; }
+      if (l <= reference || a.premier > reference) { a.nom = qui; a.equipe = eq; if (svc) a.service = svc; }
       retenus.set(k, a);
     }
   }
@@ -291,7 +293,7 @@ async function lirePlanningExcel(file, { aujourdhui = new Date().toISOString().s
     }
   }
   return {
-    agents: [...retenus.values()].map(({ nom, equipe, arrivee, depart }) => ({ nom, equipe, ...(arrivee ? { arrivee } : {}), ...(depart ? { depart } : {}) })),
+    agents: [...retenus.values()].map(({ nom, equipe, service, arrivee, depart }) => ({ nom, equipe, ...(service ? { service } : {}), ...(arrivee ? { arrivee } : {}), ...(depart ? { depart } : {}) })),
     partis: [...retenus.values()].filter((a) => a.depart).length,
     arrives: [...retenus.values()].filter((a) => a.arrivee).length,
     codes: [...codes.values()],

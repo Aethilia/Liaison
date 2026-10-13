@@ -66,13 +66,15 @@ const isoAjout = (iso, n) => M.addDays(iso, n);
 // Samedi vide de l'équipe d'après-midi (13H-20H) = heures supp : calculé à
 // l'affichage, rien n'est écrit dans le planning (une case saisie prime).
 const HS_SAMEDI_APM = 7;
-const samediHs = (a, d) => a && a.equipe === 'apresmidi' && M.SERVICES.some((x) => x.id === 'apresmidi') && M.parseISODate(d).getDay() === 6;
+// Équipe « effective » : un responsable compte dans le service auquel il est rattaché.
+const equipeEff = (a) => (a && a.equipe === 'responsables' && a.service ? a.service : a && a.equipe);
+const samediHs = (a, d) => a && equipeEff(a) === 'apresmidi' && M.SERVICES.some((x) => x.id === 'apresmidi') && M.parseISODate(d).getDay() === 6;
 // Jour férié travaillé (case vide) : 7h rouges pour tout le monde (CTVO).
 const HS_FERIE = 7;
 const reglesHs = () => M.SERVICES.some((x) => x.id === 'apresmidi');
 // Jour normalement travaillé : lundi-vendredi, plus le samedi pour l'après-midi.
-const jourNormal = (a, d) => { const j = M.parseISODate(d).getDay(); return (j >= 1 && j <= 5) || (j === 6 && a.equipe === 'apresmidi'); };
-const equipeHs = (a) => !!a && reglesHs() && ['matin', 'apresmidi', 'nuit'].includes(a.equipe);
+const jourNormal = (a, d) => { const j = M.parseISODate(d).getDay(); return (j >= 1 && j <= 5) || (j === 6 && equipeEff(a) === 'apresmidi'); };
+const equipeHs = (a) => !!a && reglesHs() && ['matin', 'apresmidi', 'nuit'].includes(equipeEff(a));
 const ferieHs = (a, d) => equipeHs(a) && !!M.ferie(d) && jourNormal(a, d);
 const valeurCase = (a, d, val) => {
   if (val && (val.code || val.texte || val.hs)) return val;
@@ -107,7 +109,7 @@ function hsDuJour(a, d, val) {
   }
   const j = M.parseISODate(d).getDay();
   const semaine = j >= 1 && j <= 5;
-  if ((a.equipe === 'matin' || a.equipe === 'nuit') && semaine) out.reg.vert += 1;
+  if ((equipeEff(a) === 'matin' || equipeEff(a) === 'nuit') && semaine) out.reg.vert += 1;
   if (samediHs(a, d) && !(val && (val.code || val.texte || val.hs))) out.reg.bleu += HS_SAMEDI_APM;
   return out;
 }
@@ -202,8 +204,9 @@ function vueSemaine(head) {
           h('span', { class: `eq-compte${absents ? ' manque' : ''}` }, `${presents}/${effectif.length}`));
       })));
     for (const a of agents) {
+      const svcResp = a.equipe === 'responsables' && a.service && PLAN_EQUIPES.find((x) => x.id === a.service);
       lignes.push(h('tr', { class: 'plan-agent', style: { '--eq': eq.couleur() } },
-        h('th', { class: 'c-agent' }, a.nom),
+        h('th', { class: 'c-agent', title: svcResp ? `Responsable · ${svcResp.label}` : '' }, a.nom, svcResp ? h('small', { class: 'ag-resp-svc', style: { '--c': svcResp.couleur() } }, svcResp.label) : null),
         jours.map((d) => (presentLe(a, d)
           ? caseAgent(a, d, valeurCase(a, d, (sem.cases[a.id] || {})[d]), { we: estWeekEnd(d), auj: d === auj, nuit: eq.id === 'nuit' })
           : h('td', { class: 'plan-case hors', title: a.arrivee && d < a.arrivee ? `${a.nom} arrive le ${fmtCourt(a.arrivee)}` : `${a.nom} est parti le ${fmtCourt(a.depart)}` })))));
@@ -587,7 +590,16 @@ function vueAgents() {
           };
           return h('div', { class: 'ag-ligne' },
             h('span', { class: 'ag-nom', title: datesAgent(a) }, a.nom, datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
-            h('select', { title: 'Équipe', onchange: (e) => { a.equipe = e.target.value; enregistrer(); } }, PLAN_EQUIPES.map((x) => h('option', { value: x.id, selected: x.id === a.equipe }, x.label))),
+            a.equipe === 'responsables'
+              ? h('select', { title: 'Service du responsable (ou « Changer d\'équipe »)', class: 'ag-service', onchange: (e) => {
+                if (e.target.value.startsWith('eq:')) a.equipe = e.target.value.slice(3);
+                else a.service = e.target.value || undefined;
+                enregistrer();
+              } },
+              h('option', { value: '', selected: !a.service }, 'Service…'),
+              PLAN_EQUIPES.filter((x) => ['matin', 'apresmidi', 'nuit'].includes(x.id)).map((x) => h('option', { value: x.id, selected: x.id === a.service }, x.label)),
+              h('optgroup', { label: 'Changer d\'équipe' }, PLAN_EQUIPES.filter((x) => x.id !== 'responsables').map((x) => h('option', { value: `eq:${x.id}` }, x.label))))
+              : h('select', { title: 'Équipe', onchange: (e) => { a.equipe = e.target.value; enregistrer(); } }, PLAN_EQUIPES.map((x) => h('option', { value: x.id, selected: x.id === a.equipe }, x.label))),
             h('button', { class: 'o-btn haut', title: 'Monter', disabled: pos === 0, onclick: () => deplacer(-1) }, icon('chevronLeft', 14)),
             h('button', { class: 'o-btn bas', title: 'Descendre', disabled: pos === memes.length - 1, onclick: () => deplacer(1) }, icon('chevronRight', 14)),
             h('button', { class: 'o-btn', title: 'Renommer', onclick: async () => {
@@ -814,7 +826,7 @@ async function absentsPlanning(date, service) {
     planSemCache.set(lundi, entree);
   }
   const out = [];
-  for (const a of planState.agents.filter((x) => x.equipe === service && presentLe(x, date))) {
+  for (const a of planState.agents.filter((x) => equipeEff(x) === service && presentLe(x, date))) {
     const v = (entree.sem.cases[a.id] || {})[date];
     const c = v && planCode(v.code);
     if (c && (c.absence || c.signale)) out.push({ nom: a.nom, motif: v.texte ? `${c.label} · ${v.texte}` : c.label, code: c.code });

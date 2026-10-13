@@ -5,7 +5,7 @@
   const ok = (value) => Promise.resolve({ ok: true, value: JSON.parse(JSON.stringify(value)) });
   const M = () => window.LiaisonModel;
   const load = (d, s) => (db[key(d, s)] ? JSON.parse(JSON.stringify(db[key(d, s)])) : M().emptyService(d, s));
-  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.9.0' };
+  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.9.1' };
   let users = window.__users || [];
   let agents = window.__agents || [];
   let site = window.__site || { couleurs: {} };
@@ -99,7 +99,7 @@
     installUpdate: () => ok('1.1.0'),
     openUpdateDir: () => ok(true),
     planAgents: () => ok(plan.agents),
-    planSaveAgents: (list) => { plan.agents = list.filter((a) => a.nom).map((a, i) => ({ id: a.id || `ag${Date.now().toString(36)}${i}`, nom: a.nom.trim(), equipe: a.equipe || 'autres', ...(a.arrivee ? { arrivee: a.arrivee } : {}), ...(a.depart ? { depart: a.depart } : {}) })); return ok(plan.agents); },
+    planSaveAgents: (list) => { plan.agents = list.filter((a) => a.nom).map((a, i) => ({ id: a.id || `ag${Date.now().toString(36)}${i}`, nom: a.nom.trim(), equipe: a.equipe || 'autres', ...(a.service && a.equipe === 'responsables' ? { service: a.service } : {}), ...(a.arrivee ? { arrivee: a.arrivee } : {}), ...(a.depart ? { depart: a.depart } : {}) })); return ok(plan.agents); },
     planSemaine: (d) => { const l = lundi(d); const s = plan.sem[l] || { cases: {}, notes: '' }; return ok({ lundi: l, cases: s.cases, notes: s.notes, reperes: s.reperes || [] }); },
     planSetCase: (id, d, v) => { const l = lundi(d); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.cases[id] = s.cases[id] || {}; if (v && (v.code || v.texte || v.hs)) s.cases[id][d] = { code: v.code || '', texte: v.texte || '', ...(v.hs ? { hs: v.hs, ...(v.hsType ? { hsType: v.hsType } : {}) } : {}), ...(v.couleur ? { couleur: v.couleur } : {}) }; else delete s.cases[id][d]; return ok({ lundi: l, ...s }); },
     planFusionner: (src, cible) => { for (const w of Object.values(plan.sem)) if (w.cases[src]) { w.cases[cible] = { ...w.cases[src], ...(w.cases[cible] || {}) }; delete w.cases[src]; } plan.agents = plan.agents.filter((a) => a.id !== src); return ok({ agents: plan.agents, semaines: 1 }); },

@@ -102,6 +102,8 @@ class Planning {
       if (!nom || seen.has(nom.toLowerCase())) continue;
       seen.add(nom.toLowerCase());
       const ag = { id: a.id && /^[a-z0-9-]+$/i.test(a.id) ? a.id : newId(), nom, equipe: EQUIPES.includes(a.equipe) ? a.equipe : 'autres' };
+      // Responsable : service de rattachement (matin, après-midi ou nuit).
+      if (ag.equipe === 'responsables' && ['matin', 'apresmidi', 'nuit'].includes(a.service)) ag.service = a.service;
       // Arrivée / départ (facultatifs) : l'agent ne compte qu'entre ces dates.
       if (ISO.test(a.arrivee || '')) ag.arrivee = a.arrivee;
       if (ISO.test(a.depart || '') && !(ag.arrivee && a.depart < ag.arrivee)) ag.depart = a.depart;
@@ -180,10 +182,11 @@ class Planning {
       const ex = parNom.get(a.nom.toLowerCase());
       if (ex) {
         ex.equipe = a.equipe;
+        if (a.service && !ex.service) ex.service = a.service;
         if (a.arrivee) ex.arrivee = a.arrivee;
         if (a.depart) ex.depart = a.depart;
       } else {
-        const nv = { id: newId(), nom: a.nom, equipe: a.equipe, arrivee: a.arrivee, depart: a.depart };
+        const nv = { id: newId(), nom: a.nom, equipe: a.equipe, service: a.service, arrivee: a.arrivee, depart: a.depart };
         liste.push(nv);
         parNom.set(a.nom.toLowerCase(), nv);
         ajoutes += 1;

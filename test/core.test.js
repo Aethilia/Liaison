@@ -450,7 +450,7 @@ test('planning : import d\'un classeur (format CTVO), heures supp et repères co
   const d = await lirePlanningExcel(file, { aujourdhui: '2026-10-14' });
   assert.equal(d.nbSemaines, 1);
   assert.equal(d.agents.length, 12);
-  assert.deepEqual(d.agents.filter((a) => a.equipe === 'responsables').map((a) => a.nom), ['Resp M', 'Resp A', 'Resp N']);
+  assert.deepEqual(d.agents.filter((a) => a.equipe === 'responsables').map((a) => `${a.nom}:${a.service}`), ['Resp M:matin', 'Resp A:apresmidi', 'Resp N:nuit']);
   assert.equal(d.agents.find((a) => a.nom === 'Agent G').equipe, 'nuit');
   assert.equal(d.agents.find((a) => a.nom === 'Agent I').depart, '2026-10-14');
   assert.deepEqual(d.codes.find((c) => c.code === 'FDC'), { code: 'FDC', label: 'Fin de contrat', couleur: '#495057', absence: true });
@@ -467,6 +467,7 @@ test('planning : import d\'un classeur (format CTVO), heures supp et repères co
   p.setCase(p.loadAgents()[0].id, '2026-10-15', { code: 'ABS' }, 'PC');
   const r = p.importer(d, 'PC');
   assert.equal(r.ajoutes, 11);
+  assert.equal(p.loadAgents().find((x) => x.nom === 'Resp N').service, 'nuit');
   const a = p.loadAgents().find((x) => x.nom === 'Agent A');
   assert.equal(a.equipe, 'matin');
   const s = p.loadSemaine('2026-10-12');

@@ -128,6 +128,10 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   heures supp « (+1) », les notes et les repères colorés. Un aperçu s'affiche
   avant l'import ; sur les semaines importées, les cases de ces agents sont
   remplacées par celles du classeur.
+- **Responsables** : chacun a un service de rattachement (matin, après-midi
+  ou nuit), choisi dans l'onglet *Agents* et repris à l'import (colonnes
+  MATIN / AM / NUIT). Il compte alors dans « Agents absents » de ce service
+  et suit ses règles d'heures supp.
 - **Arrivée / départ** (icône horloge d'un agent, onglet *Agents*) : en dehors
   de ces dates l'agent n'apparaît pas (cases hachurées), ne compte pas dans
   l'effectif de l'équipe ni dans la synthèse. Après son départ il n'est plus
