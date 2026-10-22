@@ -285,6 +285,16 @@ appareil photo, glisser-déposer ou Ctrl+V) ; elles sont réduites et rangées d
 de l'export Excel. Dans les listes de suggestions (agents, déchets), la croix
 retire une entrée mémorisée par erreur.
 
+## Synthèse Excel
+
+Premier onglet de l'export : bandeau du site et de la période, **chiffres
+clés** avec leur précision (moyenne par jour, part externe, % clôturés…), un
+encadré **En bref** (jour le plus chargé, matière principale…), puis six blocs
+numérotés tableau + graphique (anneaux, histogrammes) avec lignes zébrées,
+totaux et barres dans les cellules. Les **poids des services externes**
+(onglet Externes) sont repris : tonnage total, tonnage par matière (« Bois
+(externe) »), tonnage par jour empilé main courante / externes.
+
 ## Récap du mois : graphiques et recherche
 
 Le récap affiche le **tonnage sorti par jour** (survoler une barre pour le

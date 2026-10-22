@@ -142,13 +142,13 @@ function writePhotosSheet(wb, days, loadPhoto, services = M.SERVICES) {
   }
 }
 
-// days : [{ date, services }] ; options : { tasks, site, siteName, loadPhoto(rel) → { buffer, width, height } }
-async function exportWorkbook(days, file, { tasks = [], site = {}, siteName = '', loadPhoto = null } = {}) {
+// days : [{ date, services }] ; options : { tasks, site, siteName, loadPhoto(rel) → { buffer, width, height }, externes }
+async function exportWorkbook(days, file, { tasks = [], site = {}, siteName = '', loadPhoto = null, externes = [] } = {}) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(TEMPLATE);
   const model = wb.getWorksheet(MODEL_SHEET);
   const services = M.servicesDuSite({ ...site, nom: site.nom || siteName });
-  const charts = days.length ? buildSynthese(wb.addWorksheet(SYNTHESE_SHEET), days, { siteName, services }) : [];
+  const charts = days.length ? buildSynthese(wb.addWorksheet(SYNTHESE_SHEET), days, { siteName, services, externes }) : [];
   for (const day of days) {
     buildDaySheet(wb.addWorksheet(sheetName(day.date)), model, day, { tasks, site, siteName });
   }

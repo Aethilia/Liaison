@@ -409,7 +409,11 @@ handle('excel:export', async ({ from, to, suggestedName }) => {
     }
   };
   const site = store.loadSite();
-  await exportWorkbook(store.loadRange(dates), r.filePath, { tasks: store.listTasks(), site, siteName: siteName(store, config.dataDir), loadPhoto });
+  let externes = [];
+  try {
+    externes = ext().list();
+  } catch { /* pesées illisibles : export sans elles */ }
+  await exportWorkbook(store.loadRange(dates), r.filePath, { tasks: store.listTasks(), site, siteName: siteName(store, config.dataDir), loadPhoto, externes });
   return r.filePath;
 });
 handle('excel:open', (file) => shell.openPath(file));

@@ -245,12 +245,15 @@ test('synthèse Excel : vrais graphiques dans le classeur', async () => {
     return { date, services: { matin: s, nuit: n } };
   });
   const file = path.join(tmp(), 'synthese.xlsx');
-  await exportWorkbook(days, file, { siteName: 'Site Nord' });
+  const externes = [{ date: days[0].date, matiere: 'Bois', nb: 1, tonnage: 4.5 }, { date: '2000-01-01', matiere: 'Bois', tonnage: 99 }];
+  await exportWorkbook(days, file, { siteName: 'Site Nord', externes });
   const zip = await JSZip.loadAsync(fs.readFileSync(file));
   const charts = Object.keys(zip.files).filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f));
   assert.ok(charts.length >= 3, `graphiques : ${charts.length}`);
   const all = (await Promise.all(charts.map((f) => zip.file(f).async('string')))).join('');
-  assert.ok(all.includes('<c:pieChart>') && all.includes('<c:barChart>'));
+  assert.ok(all.includes('<c:doughnutChart>') && all.includes('<c:barChart>'));
+  assert.ok(all.includes('<c:grouping val="stacked"/>')); // tonnage par jour avec les pesées externes
+  assert.ok(all.includes('Bois (externe)'));
   assert.ok(all.includes("'Synthèse'!$B$"));
   const ct = await zip.file('[Content_Types].xml').async('string');
   assert.ok(ct.includes('drawingml.chart+xml'));
