@@ -10,6 +10,7 @@ const M = require('./core/model');
 const { spawn } = require('child_process');
 const { summarizeSite } = require('./core/dashboard');
 const { Inventaire } = require('./core/inventaire');
+const { Externes } = require('./core/externes');
 const { lirePlanningExcel } = require('./core/planning-import');
 const { Planning } = require('./core/planning');
 const { UPDATE_DIR, findUpdate } = require('./core/update');
@@ -175,6 +176,10 @@ handle('inv:deleteMovement', (id) => inv().deleteMovement(id));
 handle('inv:history', (id) => inv().history(id));
 
 // Planning des agents du site actif.
+const ext = () => new Externes(config.dataDir);
+handle('ext:list', () => ext().list());
+handle('ext:save', (e, par) => ext().save(e, par || config.poste));
+handle('ext:delete', (id) => ext().delete(id));
 const plan = () => new Planning(config.dataDir);
 handle('plan:agents', () => plan().loadAgents());
 handle('plan:saveAgents', (agents) => plan().saveAgents(agents));

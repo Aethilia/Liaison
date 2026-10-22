@@ -88,6 +88,7 @@
         <button class="view-btn" data-view="journal" role="tab" data-icon="list">Observations</button>
         <button class="view-btn" data-view="recap" role="tab" data-icon="chart">Récap du mois</button>
         <button class="view-btn" data-view="planning" role="tab" data-icon="users">Planning</button>
+        <button class="view-btn" data-view="externes" role="tab" data-icon="truck">Externes <span id="ext-badge" class="nav-badge" hidden></span></button>
         <button class="view-btn" data-view="inventaire" role="tab" data-icon="box">Inventaire <span id="inv-badge" class="nav-badge" hidden></span></button>
         <button class="view-btn" data-view="dashboard" role="tab" data-icon="eye" hidden>Tableau de bord</button>
       </nav>
@@ -139,6 +140,10 @@
 
     <main id="view-planning" class="view" hidden>
       <div id="planning"></div>
+    </main>
+
+    <main id="view-externes" class="view" hidden>
+      <div id="externes"></div>
     </main>
 
     <main id="view-inventaire" class="view" hidden>
@@ -393,6 +398,7 @@
   <script src="taches.js"></script>
   <script src="inventaire.js"></script>
   <script src="planning.js"></script>
+  <script src="externes.js"></script>
   <script src="fun.js"></script>
   <script src="app.js"></script>
 </body>

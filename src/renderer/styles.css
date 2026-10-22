@@ -744,3 +744,17 @@ tr:hover .mat-name .mat-rm, .mat-name .mat-rm:focus { opacity: 1; }
 .card.info-card { border-left: 4px solid var(--matin); }
 .check-field { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
 #confirm-text { white-space: pre-line; }
+
+/* Services externes */
+.ext-grille { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1150px) { .ext-grille { grid-template-columns: 1fr; } }
+.ext-table { width: 100%; }
+.ext-table td, .ext-table th { white-space: nowrap; }
+.ext-table .num { text-align: right; }
+.ext-table tr.ext-attente td { background: #fff8e6; }
+.ext-wait { font-size: 12px; font-weight: 700; color: #b35c00; background: #ffe8bf; border-radius: 999px; padding: 2px 9px; }
+.ext-ok { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: #1f7a3f; }
+.ext-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.ext-form .field input { width: 100%; }
+dialog.ext-dialog { width: min(560px, 94vw); }
+.ext-table td.num .o-btn { display: inline-flex; vertical-align: middle; }

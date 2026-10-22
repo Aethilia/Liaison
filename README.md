@@ -253,6 +253,19 @@ Les deux figurent dans la fiche, l'impression, la recherche et l'export Excel.
   ou ligne entière) ; les sorties externes sont en vert par défaut. Les couleurs
   sont communes au site (`site.json`) et reprises dans l'export Excel.
 
+## Services externes
+
+Onglet **Externes** : les sorties gérées par un service externe (Bois,
+Matelas…) n'ont qu'un nombre de bennes dans la main courante ; leur poids
+arrive plus tard.
+- **Enlèvements du mois** : repris de la main courante, « en attente » tant
+  qu'aucun poids n'est saisi (« Saisir le poids »). Le nombre en attente
+  (mois en cours et précédent) s'affiche sur l'onglet.
+- **Pesées** : date de l'enlèvement (modifiable), matière, bennes, poids
+  (`5,54+4,74` accepté), n° de bon, commentaire ; « + Pesée » pour une pesée
+  libre. Fichiers dans `<données>/externes/`.
+- Le **récap du mois** affiche ces poids pour les matières externes.
+
 ## Déchets non conformes et photos
 
 Sous l'état des boxs : type, quantité (pièces, kg ou T), provenance,

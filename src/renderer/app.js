@@ -1841,10 +1841,12 @@ function setView(view, { silent = false } = {}) {
   $('#view-dashboard').hidden = view !== 'dashboard';
   $('#view-inventaire').hidden = view !== 'inventaire';
   $('#view-planning').hidden = view !== 'planning';
-  document.querySelector('.toolbar').hidden = view === 'inventaire' || view === 'planning'; // dates et exports sans objet
+  $('#view-externes').hidden = view !== 'externes';
+  document.querySelector('.toolbar').hidden = ['inventaire', 'planning', 'externes'].includes(view); // dates et exports sans objet
   if (silent) return;
   if (view === 'inventaire') renderInventaire();
   if (view === 'planning') { fermerPalette(); renderPlanning(); }
+  if (view === 'externes') renderExternes();
   if (view === 'saisie') synchroAbsentsPlanning();
   if (view === 'dashboard') renderDashboard();
   if (view === 'recap') {
@@ -1926,6 +1928,12 @@ async function poll() {
 async function renderRecap() {
   const { year, month } = S.recapMonth;
   const days = await call(api.loadMonth(year, month));
+  // Poids des services externes saisis après coup (onglet Externes).
+  const prefixeMois = `${year}-${String(month).padStart(2, '0')}`;
+  const tonExterne = {};
+  for (const e of await call(api.extList()).catch(() => [])) {
+    if (e.date.startsWith(prefixeMois) && e.tonnage != null) tonExterne[e.matiere] = (tonExterne[e.matiere] || 0) + e.tonnage;
+  }
   const parMatiere = Object.fromEntries(M.matieresDuSite(siteProfil()).map((m) => [m, { nb: 0, tonnage: 0 }]));
   const ponctuelles = new Set();
   const parNc = {};
@@ -2041,7 +2049,7 @@ async function renderRecap() {
             return h('div', { class: 'matiere-row' }, h('span', { title: ponctuelles.has(m) ? 'Sortie ponctuelle' : '' }, m, ponctuelles.has(m) ? '*' : ''),
               h('div', { class: 'bar' }, h('i', { style: { width: `${Math.round(ratio * 100)}%` } })),
               h('b', {}, fmtNum(parMatiere[m].nb)),
-              h('span', {}, ext ? 'externe' : fmtTon(parMatiere[m].tonnage)));
+              h('span', { title: ext && tonExterne[m] != null ? 'Pesées du service externe (onglet Externes)' : '' }, ext ? (tonExterne[m] != null ? fmtTon(tonExterne[m]) : 'externe') : fmtTon(parMatiere[m].tonnage)));
           }))),
         h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('recycle', 16)), 'Déchets non conformes'),
           h('div', { class: 'card-body' }, Object.keys(parNc).length
@@ -2925,6 +2933,8 @@ async function loadSiteData() {
   await loadTasks();
   await loadInventaire();
   if (S.view === 'inventaire' && S.screen === 'app') renderInventaire({ reload: false });
+  extState.loadedAt = 0;
+  majBadgeExternes();
 }
 
 /* ---------- Démarrage ---------- */

@@ -523,3 +523,18 @@ test('planning : arrivée et départ des agents (enregistrement, fusion)', () =>
   assert.equal(gardé.arrivee, '2025-11-03'); // période la plus large
   assert.equal(gardé.depart, undefined); // toujours présent
 });
+
+test('services externes : pesées saisies après coup', () => {
+  const { Externes } = require('../src/core/externes');
+  const x = new Externes(tmp());
+  assert.throws(() => x.save({ matiere: 'Bois' }, 'PC'), /date/);
+  const e = x.save({ date: '2026-10-05', matiere: 'Bois', nb: 2, tonnage: 10.28, pesees: [5.54, 4.74], bon: 'B123' }, 'PC');
+  x.save({ date: '2026-10-07', matiere: 'Matelas', nb: 1, tonnage: 1.2 }, 'PC');
+  assert.deepEqual(x.list().map((y) => y.date), ['2026-10-07', '2026-10-05']);
+  const modif = x.save({ ...e, date: '2026-10-06', tonnage: 10.3 }, 'Autre');
+  assert.equal(modif.creePar, 'PC');
+  assert.equal(modif.modifiePar, 'Autre');
+  assert.equal(x.list().find((y) => y.id === e.id).date, '2026-10-06');
+  x.delete(e.id);
+  assert.equal(x.list().length, 1);
+});
