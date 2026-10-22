@@ -5,7 +5,7 @@
   const ok = (value) => Promise.resolve({ ok: true, value: JSON.parse(JSON.stringify(value)) });
   const M = () => window.LiaisonModel;
   const load = (d, s) => (db[key(d, s)] ? JSON.parse(JSON.stringify(db[key(d, s)])) : M().emptyService(d, s));
-  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.9.1' };
+  let config = { dataDir: 'C:\\Partage\\Liaison', poste: 'Pont-bascule', appVersion: '1.9.2' };
   let users = window.__users || [];
   let agents = window.__agents || [];
   let site = window.__site || { couleurs: {} };
@@ -111,6 +111,9 @@
     planImportAppliquer: () => { const imp = window.__planImport; for (const a of imp.agents) if (!plan.agents.some((x) => x.nom === a.nom)) plan.agents.push({ id: `ag${plan.agents.length}x`, ...a }); for (const [l, w] of Object.entries(imp.semaines)) { const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; for (const [nom, j] of Object.entries(w.cases)) s.cases[plan.agents.find((x) => x.nom === nom).id] = j; s.reperes = w.reperes || []; } plan.codes = [...(plan.codes || []), ...(imp.codes || [])]; return ok({ codes: plan.codes, agents: plan.agents, ajoutes: imp.agents.length, nbSemaines: Object.keys(imp.semaines).length }); },
     planSetNotes: (d, n) => { const l = lundi(d); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.notes = n; return ok({ lundi: l, ...s }); },
     planEntre: (a, b) => { const out = {}; for (const s of Object.values(plan.sem)) for (const [id, j] of Object.entries(s.cases)) for (const [d, v] of Object.entries(j)) if (d >= a && d <= b) (out[id] = out[id] || {})[d] = v; return ok(out); },
+    impList: () => { const t = window.__imp || []; return ok({ actifs: t.filter((m) => !m.valideLe).reverse(), valides: t.filter((m) => m.valideLe).reverse().slice(0, 5) }); },
+    impAjouter: (texte, par) => { const m = { id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, texte, creePar: par || '', creeLe: new Date().toISOString(), validePar: '', valideLe: null }; (window.__imp = window.__imp || []).push(m); return ok(m); },
+    impValider: (id, par) => { const m = (window.__imp || []).find((x) => x.id === id); if (m && !m.valideLe) Object.assign(m, { validePar: par || '', valideLe: new Date().toISOString() }); return ok(m); },
     extList: () => ok([...(window.__ext || (window.__ext = []))].sort((a, b) => b.date.localeCompare(a.date))),
     extSave: (e, par) => { window.__ext = window.__ext || []; const x = { ...e, id: e.id || `e${Date.now().toString(36)}`, creePar: par || '' }; window.__ext = window.__ext.filter((y) => y.id !== x.id).concat(x); return ok(x); },
     extDelete: (id) => { window.__ext = (window.__ext || []).filter((y) => y.id !== id); return ok(true); },

@@ -758,3 +758,26 @@ tr:hover .mat-name .mat-rm, .mat-name .mat-rm:focus { opacity: 1; }
 .ext-form .field input { width: 100%; }
 dialog.ext-dialog { width: min(560px, 94vw); }
 .ext-table td.num .o-btn { display: inline-flex; vertical-align: middle; }
+
+/* « Important » : pastille dans la barre, liste au clic, liseré sur la saisie */
+.imp-zone { position: relative; display: inline-flex; margin-right: 6px; }
+.imp-pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  background: transparent; color: var(--muted, #64748b); border: 1px dashed #cbd5e1; }
+.imp-pill:hover { color: #b42318; border-color: #f5c2bd; }
+.imp-pill.actif { background: #fdecea; color: #b42318; border: 1px solid #f5c2bd; font-weight: 800; }
+.imp-point { width: 8px; height: 8px; border-radius: 50%; background: #e03131; box-shadow: 0 0 0 4px rgba(224, 49, 49, .18); animation: imp-pulse 2.4s ease-in-out infinite; }
+@keyframes imp-pulse { 50% { box-shadow: 0 0 0 7px rgba(224, 49, 49, .06); } }
+.imp-pop { position: absolute; z-index: 60; top: calc(100% + 8px); right: 0; width: 380px; background: #fff; border-radius: 14px; padding: 10px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, .22), 0 0 0 1px rgba(15, 23, 42, .06); }
+.imp-it { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: 10px; }
+.imp-it + .imp-it { border-top: 1px solid #eef1f5; }
+.imp-it p { margin: 0; flex: 1; font-weight: 600; font-size: 13px; color: var(--text, #1e293b); white-space: normal; }
+.imp-it small { display: block; margin-top: 2px; color: #64748b; font-weight: 500; font-size: 11.5px; }
+.imp-it.fait p { color: #64748b; text-decoration: line-through; text-decoration-color: #cbd5e1; }
+.imp-it.fait small { text-decoration: none; }
+.imp-vide { margin: 4px 8px 8px; }
+.imp-ajout { display: flex; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eef1f5; }
+.imp-ajout input { flex: 1; min-width: 0; }
+.imp-valides { margin-top: 8px; font-size: 12px; color: #64748b; }
+.imp-valides summary { cursor: pointer; padding: 2px 8px; }
+#form.imp-liseré { box-shadow: inset 4px 0 0 #e03131; border-radius: 4px; }

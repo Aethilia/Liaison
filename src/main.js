@@ -11,6 +11,7 @@ const { spawn } = require('child_process');
 const { summarizeSite } = require('./core/dashboard');
 const { Inventaire } = require('./core/inventaire');
 const { Externes } = require('./core/externes');
+const { Importants } = require('./core/importants');
 const { lirePlanningExcel } = require('./core/planning-import');
 const { Planning } = require('./core/planning');
 const { UPDATE_DIR, findUpdate } = require('./core/update');
@@ -176,6 +177,10 @@ handle('inv:deleteMovement', (id) => inv().deleteMovement(id));
 handle('inv:history', (id) => inv().history(id));
 
 // Planning des agents du site actif.
+const imp = () => new Importants(config.dataDir);
+handle('imp:list', () => imp().list());
+handle('imp:ajouter', (texte, par) => imp().ajouter(texte, par || config.poste));
+handle('imp:valider', (id, par) => imp().valider(id, par || config.poste));
 const ext = () => new Externes(config.dataDir);
 handle('ext:list', () => ext().list());
 handle('ext:save', (e, par) => ext().save(e, par || config.poste));

@@ -1843,6 +1843,7 @@ function setView(view, { silent = false } = {}) {
   $('#view-planning').hidden = view !== 'planning';
   $('#view-externes').hidden = view !== 'externes';
   document.querySelector('.toolbar').hidden = ['inventaire', 'planning', 'externes'].includes(view); // dates et exports sans objet
+  renderImportants();
   if (silent) return;
   if (view === 'inventaire') renderInventaire();
   if (view === 'planning') { fermerPalette(); renderPlanning(); }
@@ -1881,6 +1882,7 @@ async function poll() {
     return;
   }
   if (Date.now() - invState.loadedAt > 60000) loadInventaire();
+  if (S.view === 'saisie' && !impState.ouvert && await loadImportants()) renderImportants();
   if (S.view !== 'saisie' || S.saving || $('#fiche').open) return;
   synchroAbsentsPlanning();
   let revs;
@@ -2935,6 +2937,8 @@ async function loadSiteData() {
   if (S.view === 'inventaire' && S.screen === 'app') renderInventaire({ reload: false });
   extState.loadedAt = 0;
   majBadgeExternes();
+  await loadImportants();
+  renderImportants();
 }
 
 /* ---------- Démarrage ---------- */

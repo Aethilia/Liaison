@@ -538,3 +538,19 @@ test('services externes : pesées saisies après coup', () => {
   x.delete(e.id);
   assert.equal(x.list().length, 1);
 });
+
+test('important : messages affichés jusqu\'à validation', () => {
+  const { Importants } = require('../src/core/importants');
+  const x = new Importants(tmp());
+  assert.deepEqual(x.list(), { actifs: [], valides: [] });
+  assert.throws(() => x.ajouter('  ', 'PC'), /vide/);
+  const a = x.ajouter('Benne Fer à changer avant 10H', 'Resp nuit');
+  x.ajouter('Portail quai 2 bloqué', 'Resp AM');
+  assert.equal(x.list().actifs.length, 2);
+  const v = x.valider(a.id, 'Resp matin');
+  assert.equal(v.validePar, 'Resp matin');
+  assert.equal(x.valider(a.id, 'Autre').validePar, 'Resp matin'); // déjà validé : inchangé
+  const l = x.list();
+  assert.deepEqual(l.actifs.map((m) => m.texte), ['Portail quai 2 bloqué']);
+  assert.deepEqual(l.valides.map((m) => m.texte), ['Benne Fer à changer avant 10H']);
+});

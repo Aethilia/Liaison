@@ -253,6 +253,15 @@ Les deux figurent dans la fiche, l'impression, la recherche et l'export Excel.
   ou ligne entière) ; les sorties externes sont en vert par défaut. Les couleurs
   sont communes au site (`site.json`) et reprises dans l'export Excel.
 
+## Important
+
+Dans la saisie, une pastille **Important** dans la barre du haut : n'importe
+quel responsable y laisse un message. Tant qu'il n'est pas validé, la pastille
+passe au rouge (« 2 importants ») pour tous les services et un fin liseré
+rouge borde la saisie ; un clic ouvre la liste, « Valider » le fait
+disparaître pour tout le monde (qui et quand sont gardés, « Validés
+récemment »). Fichiers dans `<données>/importants/`.
+
 ## Services externes
 
 Onglet **Externes** : les sorties gérées par un service externe (Bois,
