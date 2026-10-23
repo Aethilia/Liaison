@@ -262,7 +262,7 @@ test('synthèse Excel : vrais graphiques dans le classeur', async () => {
   assert.equal(back.length, 3);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
-  assert.equal(wb.getWorksheet('Synthèse').getCell('A1').value, 'Synthèse  ·  Site Nord');
+  assert.equal(wb.getWorksheet('Synthèse').getCell('A1').value, 'SYNTHÈSE  ·  SITE NORD');
 });
 
 test('inventaire : catégories, articles, mouvements, stock et seuil', () => {

@@ -60,7 +60,7 @@ function chartXml(ch) {
   const plot = rond ? pieXml(ch) : barXml(ch);
   const legende = rond ? 'r' : (ch.series && ch.series.length > 1 ? 'b' : null);
   const legend = legende ? `<c:legend><c:legendPos val="${legende}"/><c:overlay val="0"/>${textProps(900, '0B0B0B')}</c:legend>` : '';
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<c:chartSpace xmlns:c="${NS_C}" xmlns:a="${NS_A}" xmlns:r="${NS_R}"><c:roundedCorners val="1"/><c:chart>${title(ch.title)}<c:plotArea><c:layout/>${plot}</c:plotArea>${legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart><c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="${hex(ch.bordure || 'DDE2EA')}"/></a:solidFill></a:ln></c:spPr></c:chartSpace>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<c:chartSpace xmlns:c="${NS_C}" xmlns:a="${NS_A}" xmlns:r="${NS_R}"><c:roundedCorners val="0"/><c:chart>${title(ch.title)}<c:plotArea><c:layout/>${plot}</c:plotArea>${legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart><c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="9525"><a:solidFill><a:srgbClr val="DDE2EA"/></a:solidFill></a:ln></c:spPr></c:chartSpace>`;
 }
 
 function anchorXml(ch, i) {
