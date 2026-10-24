@@ -65,3 +65,161 @@
 .jeu-scene.grand { width: min(384px, 60vw); height: auto; aspect-ratio: 96 / 108; border: 4px solid #f8f9fa; box-shadow: 0 0 0 4px #2b2838; }
 .jeu-ecran-txt { margin: 0; font-size: 13px; color: #b197fc; animation: jeu-clignote 1.2s steps(2) infinite; }
 @keyframes jeu-clignote { 50% { opacity: .35; } }
+
+/* ===================== La Guilde ===================== */
+.jeu-ecran.gd { justify-content: flex-start; gap: 0; overflow: auto; }
+.gd-cadre { width: 100%; min-height: 100%; display: flex; flex-direction: column; }
+.gd-entete { display: flex; align-items: center; gap: 14px; padding: 8px 16px; background: #1d1a2b; border-bottom: 3px solid #2b2838; font-size: 13px; position: sticky; top: 0; z-index: 5; }
+.gd-logo { color: #fff3a3; letter-spacing: .15em; text-shadow: 2px 2px 0 #7048e8; }
+.gd-etage { color: #b197fc; font-weight: 700; }
+.gd-eclats { color: #63e6be; font-weight: 800; font-size: 15px; }
+.gd-rembob { color: #6b6585; font-weight: 800; }
+.gd-rembob.ok { color: #ffd43b; }
+.gd-reliques { display: flex; flex-wrap: wrap; gap: 3px; }
+.gd-reliques i { width: 20px; height: 20px; display: grid; place-items: center; font-style: normal; font-size: 11px; font-weight: 900; color: #14121c; background: var(--c); box-shadow: inset -2px -2px 0 rgb(0 0 0 / 25%); cursor: help; }
+.gd-reliques i.temp { background: #ffd43b; }
+.gd-corps { flex: 1; padding: 14px 18px 24px; display: flex; flex-direction: column; align-items: center; }
+.gd .spacer { flex: 1; }
+.gd-btn.petit { padding: 6px 12px; font-size: 12px; margin: 0; }
+.gd-btn.gris { background: #868e96; box-shadow: inset -4px -4px 0 #495057, 0 0 0 3px #14121c; }
+.gd-btn.rouge { background: #ff8787; box-shadow: inset -4px -4px 0 #c92a2a, 0 0 0 3px #14121c; }
+.gd-btn.desactive { opacity: .4; cursor: not-allowed; }
+.gd-bandeau { display: flex; align-items: center; gap: 12px; width: 100%; max-width: 1180px; margin-bottom: 10px; font-size: 14px; }
+.gd-msg { color: #ffd43b; font-size: 13px; }
+.gd-msg.rouge { color: #ff8787; }
+.gd-centre { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 1000px; text-align: center; }
+.gd-centre h2 { margin: 6px 0 0; color: #fff3a3; font-size: 18px; letter-spacing: .04em; }
+.gd-recit { margin: 0; color: #ced4da; font-size: 14px; max-width: 640px; }
+.gd-choix { display: flex; flex-direction: column; gap: 10px; align-items: stretch; min-width: 420px; }
+.gd-choix .gd-btn { text-transform: none; letter-spacing: 0; font-size: 13px; }
+.gd-vide { color: #6b6585; font-size: 12px; }
+.gd-titre-bloc { margin: 4px 0 6px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #8a93a3; }
+
+/* Cartes */
+.gd-cartes { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.gd-carte { position: relative; width: 220px; display: flex; flex-direction: column; gap: 6px; padding: 10px; text-align: left; font: inherit; color: #f8f9fa; background: #2b2838; border: 3px solid #3a3456; cursor: pointer; box-shadow: 4px 4px 0 rgb(0 0 0 / 35%); }
+.gd-carte.petite { width: 180px; }
+.gd-carte:hover:not(:disabled) { border-color: #f7c948; transform: translateY(-2px); }
+.gd-carte:disabled { opacity: .5; cursor: not-allowed; }
+.gd-carte.choisi { border-color: #63e6be; background: #1f3a35; }
+.gd-carte.vendu { display: grid; place-items: center; min-height: 80px; color: #6b6585; cursor: default; }
+.gd-carte-haut { display: flex; align-items: center; gap: 8px; }
+.gd-carte-haut > div { display: flex; flex-direction: column; }
+.gd-carte-haut small { font-size: 11px; font-weight: 700; }
+.gd-carte-stats { font-size: 11px; color: #adb5bd; }
+.gd-carte-txt { font-size: 12px; color: #dee2e6; line-height: 1.35; }
+.gd-prix { position: absolute; top: -10px; right: -8px; padding: 2px 7px; font-weight: 900; font-size: 13px; color: #14121c; background: #63e6be; box-shadow: 2px 2px 0 #14121c; }
+.gd-rar { display: inline-block; padding: 0 5px; font-size: 10px; font-weight: 800; color: #14121c; background: var(--c); }
+.gd-noeud { align-items: center; text-align: center; }
+.gd-noeud-ic { font-size: 30px; font-weight: 900; color: #f7c948; }
+.gd-noeud-ic.grand { font-size: 46px; }
+.gd-noeud-ic.feu { color: #ff922b; }
+
+/* Jetons (homunculus provisoires) */
+.gd-jeton { position: relative; width: 52px; height: 52px; flex: none; display: grid; place-items: center; border-radius: 50% 50% 46% 46%; background: radial-gradient(circle at 35% 30%, #d0d4dc, #8a93a3 60%, #5c6270); box-shadow: 0 0 0 3px var(--c), 0 0 0 6px var(--c2), 0 4px 0 6px rgb(0 0 0 / 30%); cursor: pointer; }
+.gd-jeton.petit { width: 40px; height: 40px; }
+.gd-jeton.ennemi { background: radial-gradient(circle at 35% 30%, #ffc9c9, #c92a2a 60%, #6b1414); }
+.gd-jeton.boss { width: 64px; height: 64px; box-shadow: 0 0 0 4px #ffd43b, 0 0 0 7px #e03131, 0 4px 0 7px rgb(0 0 0 / 30%); }
+.gd-jeton.sel { outline: 3px dashed #fff3a3; outline-offset: 7px; }
+.gd-num { font-size: 18px; font-weight: 900; color: #14121c; text-shadow: 1px 1px 0 rgb(255 255 255 / 40%); }
+.gd-jeton.petit .gd-num { font-size: 14px; }
+.gd-jeton.ennemi .gd-num { color: #fff; font-size: 13px; text-shadow: 1px 1px 0 #000; }
+.gd-rang { position: absolute; right: -8px; bottom: -6px; width: 18px; height: 18px; display: grid; place-items: center; font-size: 11px; font-weight: 900; color: #14121c; background: #ced4da; box-shadow: 0 0 0 2px #14121c; }
+.gd-rang.rB { background: #4dabf7; }
+.gd-rang.rA { background: #b197fc; }
+.gd-rang.rS { background: #ffd43b; }
+
+/* Plateau hexagonal */
+.gd-plateau-cadre { position: relative; padding: 14px; background: #1d1a2b; border: 4px solid #f8f9fa; box-shadow: 0 0 0 4px #2b2838; }
+.gd-plateau { position: relative; }
+.gd-case { position: absolute; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); background: #2b2740; transform: scale(.94); }
+.gd-case.allie { background: #2a3350; }
+.gd-case.active { cursor: pointer; }
+.gd-case.active:hover { background: #3b4a75; }
+.gd-pose { position: absolute; margin: 9px 9px; transition: left .25s steps(4), top .25s steps(4); }
+.gd-pose.boss { margin: 3px; }
+.gd-u.mort { opacity: .18; filter: grayscale(1); }
+.gd-u.furtif { opacity: .45; }
+.gd-u.etourdi { animation: gd-tremble .3s steps(2) infinite; }
+.gd-u.frappe { animation: gd-frappe .18s steps(2); }
+@keyframes gd-frappe { 50% { transform: scale(1.12); } }
+@keyframes gd-tremble { 50% { transform: translateX(2px); } }
+.gd-barres { position: absolute; left: -4px; right: -4px; top: -12px; display: block; height: 8px; background: #14121c; }
+.gd-barres i { position: absolute; left: 0; display: block; }
+.gd-barres .pv { top: 1px; height: 4px; width: 100%; background: #ff6b6b; }
+.ennemi .gd-barres .pv { background: #fa5252; }
+.gd-barres .bouclier { top: 1px; height: 4px; background: rgb(255 255 255 / 75%); }
+.gd-barres .mana { top: 6px; height: 2px; background: #4dabf7; }
+.gd-statuts { position: absolute; left: -6px; bottom: -8px; display: flex; gap: 1px; }
+.gd-statuts i { min-width: 13px; height: 13px; padding: 0 2px; font-size: 9px; font-style: normal; font-weight: 900; line-height: 13px; text-align: center; color: #fff; }
+.gd-statuts .poison { background: #2f9e44; }
+.gd-statuts .brulure { background: #e8590c; }
+.gd-statuts .gel { background: #339af0; }
+.gd-statuts .etourdi { background: #f59f00; }
+.gd-flottant { position: absolute; z-index: 4; pointer-events: none; transform: translateX(-50%); font-size: 14px; font-weight: 900; color: #fff; text-shadow: 2px 2px 0 #14121c; animation: gd-monte .9s ease-out forwards; white-space: nowrap; }
+.gd-flottant.mag { color: #d0bfff; }
+.gd-flottant.vrai { color: #b2f2bb; font-size: 12px; }
+.gd-flottant.crit { color: #ffd43b; font-size: 19px; }
+.gd-flottant.soin { color: #69db7c; }
+.gd-flottant.esquive { color: #adb5bd; font-size: 11px; }
+.gd-flottant.resu { color: #fff3a3; }
+.gd-flottant.lance { color: #fff3a3; font-size: 11px; background: #14121c; padding: 1px 5px; animation-duration: 1.3s; }
+@keyframes gd-monte { to { transform: translate(-50%, -34px); opacity: 0; } }
+.gd-fin-combat { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: rgb(20 18 28 / 70%); }
+.gd-fin-combat b { font-size: 38px; letter-spacing: .2em; text-shadow: 4px 4px 0 #14121c; }
+.gd-fin-combat.ok b { color: #ffd43b; }
+.gd-fin-combat.ko b { color: #ff6b6b; }
+
+/* Préparation, boutique */
+.gd-guilde { display: flex; gap: 16px; align-items: flex-start; width: 100%; max-width: 1180px; justify-content: center; }
+.gd-cote { width: 330px; display: flex; flex-direction: column; gap: 12px; }
+.gd-banc, .gd-inventaire, .gd-fiche, .gd-aide { padding: 10px; background: #1d1a2b; border: 3px solid #2b2838; }
+.gd-aide { font-size: 12px; color: #8a93a3; }
+.gd-banc-liste { display: flex; flex-wrap: wrap; gap: 14px; min-height: 46px; padding: 6px 4px; }
+.gd-inventaire { display: flex; flex-wrap: wrap; gap: 5px; }
+.gd-inventaire .gd-titre-bloc { width: 100%; }
+.gd-objet { padding: 3px 7px; font: inherit; font-size: 11.5px; font-weight: 700; color: #f8f9fa; background: #2b2838; border: 2px solid var(--c); cursor: pointer; }
+.gd-objet:hover { background: #3a3456; }
+.gd-fiche { font-size: 12px; text-align: left; }
+.gd-fiche p { margin: 6px 0; color: #dee2e6; line-height: 1.35; }
+.gd-fiche-haut { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.gd-fiche-haut > div { display: flex; flex-direction: column; }
+.gd-fiche-haut small { color: #b197fc; }
+.gd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.gd-stats span { display: flex; flex-direction: column; padding: 3px 4px; background: #14121c; font-weight: 800; }
+.gd-stats small { font-size: 9.5px; color: #8a93a3; font-weight: 700; }
+.gd-fiche .gd-objet { margin: 0 4px 4px 0; }
+.gd-fiche-actions { display: flex; gap: 8px; margin-top: 8px; }
+.gd-boutique, .gd-prep, .gd-combat { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.gd-etals { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+
+/* Combat */
+.gd-combat-corps { display: flex; gap: 16px; align-items: flex-start; }
+.gd-journal { width: 300px; height: 440px; overflow-y: auto; padding: 8px; background: #1d1a2b; border: 3px solid #2b2838; font-size: 12px; }
+.gd-log { padding: 2px 0; color: #ced4da; }
+.gd-log small { color: #6b6585; }
+.gd-log.allie { color: #74c0fc; }
+.gd-log.ennemi { color: #ff8787; }
+.gd-log.mort { color: #868e96; font-style: italic; }
+.gd-log.victoire { color: #ffd43b; font-weight: 800; }
+.gd-log.defaite { color: #ff6b6b; font-weight: 800; }
+.gd-chrono { font-weight: 800; color: #b197fc; min-width: 90px; }
+.gd-vitesses { display: flex; gap: 4px; }
+
+/* Accueil */
+.gd-accueil { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-top: 20px; }
+.gd-nouvelle { display: flex; align-items: center; gap: 12px; }
+.gd-nouvelle > span { font-size: 12px; color: #8a93a3; font-weight: 700; }
+.gd-diffs { display: flex; gap: 4px; }
+.gd-diff { width: 30px; height: 28px; font: inherit; font-weight: 900; color: #f8f9fa; background: #2b2838; border: 2px solid #3a3456; cursor: pointer; }
+.gd-diff.on { background: #7048e8; border-color: #b197fc; }
+.gd-diff:disabled { opacity: .3; cursor: not-allowed; }
+.gd-scores { min-width: 420px; padding: 10px 14px; background: #1d1a2b; border: 3px solid #2b2838; }
+.gd-scores table { width: 100%; font-size: 13px; border-collapse: collapse; }
+.gd-scores td { padding: 3px 6px; }
+.gd-scores td.num { text-align: right; color: #63e6be; font-weight: 800; }
+.gd-regles { max-width: 640px; font-size: 13px; color: #ced4da; }
+.gd-regles summary { cursor: pointer; color: #b197fc; font-weight: 700; }
+.gd-log.coup { color: #8a93a3; font-size: 11px; }
+.gd-log.coup.allies { color: #8fb8de; }
+.gd-log.coup.ennemis { color: #d4a0a0; }

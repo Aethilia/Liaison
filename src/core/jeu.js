@@ -85,4 +85,56 @@ class Jeu {
   }
 }
 
+// Profil de jeu (partie en cours, difficulté débloquée) et scores : dans le
+// premier dossier principal joignable, un fichier par joueur.
+Jeu.prototype.lireJson = function lireJson(nomFichier, defaut) {
+  for (const dir of this.dirs) {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(dir, nomFichier), 'utf8'));
+    } catch { /* suivant */ }
+  }
+  return defaut;
+};
+Jeu.prototype.ecrireJson = function ecrireJson(nomFichier, data) {
+  let ecrit = 0;
+  for (const dir of this.dirs) {
+    try {
+      const file = path.join(dir, nomFichier);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(data), 'utf8');
+      fs.renameSync(tmp, file);
+      ecrit += 1;
+    } catch { /* dossier inaccessible */ }
+  }
+  if (!ecrit) throw new Error('Sauvegarde impossible (dossier commun inaccessible).');
+  return data;
+};
+Jeu.prototype.profil = function profil(nom) {
+  if (!estJoueur(nom)) throw new Error('Action impossible.');
+  return this.lireJson(path.join('joueurs', `${empreinte(nom)}.json`), { partie: null, diffMax: 1 });
+};
+Jeu.prototype.sauverProfil = function sauverProfil(nom, p) {
+  if (!estJoueur(nom)) throw new Error('Action impossible.');
+  const s = JSON.stringify(p || {});
+  if (s.length > 2e6) throw new Error('Sauvegarde trop volumineuse.');
+  return this.ecrireJson(path.join('joueurs', `${empreinte(nom)}.json`), { partie: p.partie || null, diffMax: Math.min(8, Math.max(1, Number(p.diffMax) || 1)) });
+};
+Jeu.prototype.scores = function scores() {
+  const l = this.lireJson('scores.json', { scores: [] }).scores;
+  return Array.isArray(l) ? l : [];
+};
+Jeu.prototype.ajouterScore = function ajouterScore(nom, sc) {
+  if (!estJoueur(nom)) throw new Error('Action impossible.');
+  const l = this.scores();
+  l.push({
+    joueur: normNom(nom).split(' ')[0].replace(/^./, (c) => c.toUpperCase()),
+    score: Number(sc.score) || 0, etage: Number(sc.etage) || 0, endless: Number(sc.endless) || 0,
+    difficulte: Number(sc.difficulte) || 1, gagne: !!sc.gagne, equipe: (sc.equipe || []).slice(0, 6).map(String), date: new Date().toISOString(),
+  });
+  l.sort((a, b) => b.score - a.score);
+  this.ecrireJson('scores.json', { scores: l.slice(0, 50) });
+  return l.slice(0, 50);
+};
+
 module.exports = { Jeu, estJoueur, empreinte, normNom };

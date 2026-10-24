@@ -311,6 +311,10 @@ const jeu = () => new Jeu([config.dataDir, ...withSites(config).sites.map((x) =>
 handle('jeu:statut', (nom) => jeu().statut(nom));
 handle('jeu:verifier', (nom, code) => jeu().verifier(nom, code));
 handle('jeu:definir', (nom, code, ancien) => jeu().definir(nom, code, ancien));
+handle('jeu:profil', (nom) => jeu().profil(nom));
+handle('jeu:sauverProfil', (nom, p) => jeu().sauverProfil(nom, p));
+handle('jeu:scores', () => jeu().scores());
+handle('jeu:ajouterScore', (nom, sc) => jeu().ajouterScore(nom, sc));
 
 handle('fun:find', (nom, cle = 'fun') => {
   if (!['fun', 'farce', 'clic', 'caca', 'bonhomme'].includes(cle)) throw new Error('Réglage inconnu.');

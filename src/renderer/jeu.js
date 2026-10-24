@@ -293,28 +293,8 @@ function fenetreChoix(nom) {
   });
 }
 
-// Écran du jeu (en construction pour l'instant). Résout au retour.
-function ecranJeu(nom) {
-  return new Promise((resolve) => {
-    // Le côté « donjon » de la scène, en grand.
-    const canvas = h('canvas', { class: 'jeu-scene grand', width: 96, height: 108 });
-    const stop = animer(canvas, (ctx, t) => {
-      ctx.save();
-      ctx.translate(-96, 0);
-      dessinerChoix(ctx, t);
-      ctx.restore();
-    });
-    const fermer = () => { stop(); document.removeEventListener('keydown', echap); ecran.remove(); resolve(); };
-    const echap = (e) => { if (e.key === 'Escape') fermer(); };
-    const ecran = h('div', { class: 'jeu-ecran' },
-      h('div', { class: 'jeu-ecran-titre' }, 'LA GUILDE', h('small', {}, `Joueur : ${nom}`)),
-      canvas,
-      h('p', { class: 'jeu-ecran-txt' }, 'En construction · on le développe ensemble'),
-      h('button', { class: 'jeu-btn', onclick: fermer }, '◀ Retour'));
-    document.body.append(ecran);
-    document.addEventListener('keydown', echap);
-  });
-}
+// Écran du jeu : La Guilde (guilde-ui.js). Résout au retour.
+const ecranJeu = (nom) => window.Guilde.UI.ouvrir(nom);
 
 // Point d'entrée, appelé au clic sur un nom. Résout 'travail' (suite normale)
 // ou null (annulé : on reste sur le choix du responsable).
