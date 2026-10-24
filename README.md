@@ -143,7 +143,12 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   à reporter pour un responsable), calendrier du mois à droite avec le nombre
   de présents par rôle et par équipe. Un clic sur un agent le « colle » à la
   souris : chaque clic sur un jour l'ajoute (avec le rôle choisi), change son
-  rôle ou le retire ; Échap ou clic droit le lâche. HS d'un jour posé : matin
+  rôle ou le retire ; Échap ou clic droit le lâche. Sélecteur **Matin /
+  Après-midi / Nuit / Total** : on travaille un service à la fois (ses agents
+  et ses responsables, noms affichés dans les jours), ou tout le monde. Sans
+  agent en main, un clic sur un jour ouvre son **détail** : présents par
+  service et par rôle, HS du jour de chacun, absence au planning réel, et
+  retrait d'un agent. HS d'un jour posé : matin
   et nuit +1h verte en semaine, samedi +7h bleues, dimanche 6h rouges, férié
   7h rouges (+ les HS ponctuelles du planning, au choix). Plusieurs scénarios
   par mois, enregistrés et partagés ; « Partir du planning réel » ;

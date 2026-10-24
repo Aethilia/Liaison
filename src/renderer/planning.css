@@ -211,7 +211,7 @@ td.syn-hs[title] { cursor: help; }
 .sim-agent.depasse .sim-jauge i, .sim-agent.depasse .sim-hs { background: #e03131; color: #e03131; }
 .sim-agent.depasse .sim-hs { background: none; }
 .sim-agent.report .sim-jauge i { background: #8e6cef; }
-.sim-report { grid-area: report; width: 58px; font-size: 11.5px; padding: 1px 4px; text-align: center; }
+.sim-agent input.sim-report { grid-area: report; width: 58px; min-width: 0; box-sizing: border-box; font-size: 11.5px; padding: 1px 4px; text-align: center; }
 .sim-alerte-txt { color: #e03131 !important; font-weight: 700; }
 
 .sim-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
@@ -250,3 +250,18 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .sim-calendrier .card-head { flex-wrap: wrap; gap: 6px 10px; }
 .sim-roles-choix { white-space: nowrap; }
 .sim-role-btn { white-space: nowrap; }
+/* Simulation : choix du service et détail d'un jour */
+.sim-seg button { display: inline-flex; align-items: center; gap: 5px; }
+.sim-seg button.on { color: #fff; background: var(--c); }
+.sim-case:not(.cible) { cursor: pointer; }
+.sim-pop { max-height: 70vh; overflow-y: auto; }
+.sim-pop .pop-titre { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sim-pop-roles { margin: 2px 0 8px; }
+.sim-pop-groupe .sim-equipe { margin: 8px 2px 4px; }
+.sim-pop-ligne { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 7px; font-size: 13px; }
+.sim-pop-ligne:hover { background: #f6f8fb; }
+.sim-pop-ligne .sim-role { margin-left: 0; }
+.sim-pop-nom { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sim-pop-abs { color: #f08c00; font-weight: 700; }
+.sim-pop-hs { display: inline-flex; gap: 4px; font-size: 11.5px; font-weight: 800; }
+.sim-pop-ligne .o-btn { padding: 2px; }
