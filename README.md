@@ -106,7 +106,8 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   couleur (détail au survol).
   - *Régulières* (CTVO, calculées à l'affichage, rien n'est enregistré) :
     matin et nuit +1h verte par jour travaillé du lundi au vendredi ;
-    après-midi +7h bleues le samedi (case vide) ; jour férié travaillé
+    après-midi +7h bleues le samedi (case vide) ; dimanche travaillé (case
+    remplie) 6h rouges ; jour férié travaillé
     (jour normalement travaillé ou case remplie) : 7h rouges pour tout le
     monde, sans heure verte. Une case saisie (R, CP…) prime. CTVO
     seulement (le CPTP garde un total simple).
@@ -133,6 +134,21 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   MATIN / AM / NUIT). Il compte alors dans « Agents absents » de ce service
   et suit ses règles d'heures supp. Changement ponctuel : « Service ce jour »
   dans la palette de sa case (petite étiquette dans la case).
+- **Rôles** : sous le nom de chaque agent (onglet *Agents*), un clic fait
+  défiler Pelliste / Chauffeur / Agent de quai.
+- **Simulation** (onglet du planning) : brouillon d'un mois pour organiser les
+  jours en surveillant la limite de **35h d'HS par mois** (toutes HS
+  confondues ; report possible pour les responsables). Agents à gauche avec
+  leur compteur et une jauge (vert, orange, rouge au-delà de 35h ; violet =
+  à reporter pour un responsable), calendrier du mois à droite avec le nombre
+  de présents par rôle et par équipe. Un clic sur un agent le « colle » à la
+  souris : chaque clic sur un jour l'ajoute (avec le rôle choisi), change son
+  rôle ou le retire ; Échap ou clic droit le lâche. HS d'un jour posé : matin
+  et nuit +1h verte en semaine, samedi +7h bleues, dimanche 6h rouges, férié
+  7h rouges (+ les HS ponctuelles du planning, au choix). Plusieurs scénarios
+  par mois, enregistrés et partagés ; « Partir du planning réel » ;
+  « Appliquer au planning » pose « T » (jour travaillé en plus) ou « R »
+  (jour non travaillé) sur les cases vides seulement.
 - **Arrivée / départ** (icône horloge d'un agent, onglet *Agents*) : en dehors
   de ces dates l'agent n'apparaît pas (cases hachurées), ne compte pas dans
   l'effectif de l'équipe ni dans la synthèse. Après son départ il n'est plus

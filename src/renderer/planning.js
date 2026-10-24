@@ -1,6 +1,6 @@
 'use strict';
 
-/* global S, M, SVC, h, icon, call, api, ask, toast, promptText, plural, siteProfil */
+/* global S, M, SVC, h, icon, call, api, ask, toast, promptText, plural, siteProfil, vueSimulation, lacherPinceau */
 // Onglet « Planning » : agents du site par équipe, semaine du lundi au
 // dimanche avec un code par jour (repos, CP, maladie…), notes de la semaine,
 // synthèse mensuelle par agent et gestion de la liste des agents.
@@ -16,6 +16,15 @@ function majPlanEquipes() {
     { id: 'responsables', label: 'Responsables', heures: '', couleur: () => '#0f766e' },
     { id: 'autres', label: 'Autres', heures: '', couleur: () => '#64748b' });
 }
+// Rôles des agents (rôle habituel ; ponctuellement un autre en simulation).
+const ROLES = [
+  { id: 'Pelliste', court: 'P', couleur: '#8e6cef' },
+  { id: 'Chauffeur', court: 'C', couleur: '#f28c38' },
+  { id: 'Agent de quai', court: 'Q', couleur: '#3fb8c9' },
+];
+const roleInfo = (r) => ROLES.find((x) => x.id === r) || (r ? { id: r, court: r.slice(0, 1).toUpperCase(), couleur: '#94a3b8' } : null);
+const roleSuivant = (r) => { const i = ROLES.findIndex((x) => x.id === r); return i === ROLES.length - 1 ? undefined : ROLES[i + 1].id; };
+
 // Codes du planning. `absence` : l'agent n'est pas là (compte dans « Agents absents »).
 // `signale` : l'agent est là mais apparaît aussi dans « Agents absents » (retard).
 const PLAN_CODES_BASE = [
@@ -72,6 +81,7 @@ const equipeEff = (a, val) => (a && a.equipe === 'responsables' ? (val && val.se
 const samediHs = (a, d, val) => a && equipeEff(a, val) === 'apresmidi' && M.SERVICES.some((x) => x.id === 'apresmidi') && M.parseISODate(d).getDay() === 6;
 // Jour férié travaillé (case vide) : 7h rouges pour tout le monde (CTVO).
 const HS_FERIE = 7;
+const HS_DIMANCHE = 6; // dimanche travaillé (6H-12H) : heures rouges
 const reglesHs = () => M.SERVICES.some((x) => x.id === 'apresmidi');
 // Jour normalement travaillé : lundi-vendredi, plus le samedi pour l'après-midi.
 const jourNormal = (a, d, val) => { const j = M.parseISODate(d).getDay(); return (j >= 1 && j <= 5) || (j === 6 && equipeEff(a, val) === 'apresmidi'); };
@@ -110,6 +120,11 @@ function hsDuJour(a, d, val) {
     return out;
   }
   const j = M.parseISODate(d).getDay();
+  // Dimanche travaillé (case remplie autre qu'une absence ou des HS seules) : 6h rouges.
+  if (equipeHs(a, val) && j === 0) {
+    if (c && c.code !== 'HS') out.reg.rouge += HS_DIMANCHE;
+    return out;
+  }
   const semaine = j >= 1 && j <= 5;
   if ((equipeEff(a, val) === 'matin' || equipeEff(a, val) === 'nuit') && semaine) out.reg.vert += 1;
   if (samediHs(a, d, val) && !(val && (val.code || val.texte || val.hs))) out.reg.bleu += HS_SAMEDI_APM;
@@ -144,6 +159,7 @@ async function loadPlanAgents() {
 
 async function renderPlanning({ reload = true } = {}) {
   fermerPalette();
+  if (planState.vue !== 'simulation') lacherPinceau();
   if (!planState.date) planState.date = aujourdhui();
   if (!planState.mois) {
     const d = M.parseISODate(planState.date);
@@ -156,12 +172,13 @@ async function renderPlanning({ reload = true } = {}) {
     planState.loadedAt = Date.now();
   }
   const root = document.getElementById('planning');
-  const onglets = h('div', { class: 'seg plan-seg' }, [['semaine', 'Semaine', 'list'], ['synthese', 'Synthèse', 'chart'], ['agents', 'Agents', 'users'], ['codes', 'Codes', 'palette']].map(([id, label, ic]) => h('button', {
+  const onglets = h('div', { class: 'seg plan-seg' }, [['semaine', 'Semaine', 'list'], ['synthese', 'Synthèse', 'chart'], ['simulation', 'Simulation', 'clock'], ['agents', 'Agents', 'users'], ['codes', 'Codes', 'palette']].map(([id, label, ic]) => h('button', {
     class: planState.vue === id ? 'on' : '', onclick: () => { planState.vue = id; renderPlanning(); },
   }, icon(ic, 14), label)));
   const head = h('div', { class: 'recap-head plan-head' }, h('h2', {}, `Planning${S.siteName ? ` · ${S.siteName}` : ''}`), onglets, h('span', { class: 'spacer' }));
   let corps;
   if (!planState.agents.length && !['agents', 'codes'].includes(planState.vue)) {
+    lacherPinceau();
     corps = h('div', { class: 'j-empty' }, icon('users', 32), h('p', {}, 'Aucun agent dans le planning.'),
       h('p', { class: 'muted' }, 'Commencez par ajouter vos agents et leur équipe.'),
       h('div', { class: 'row', style: { justifyContent: 'center', gap: '8px' } },
@@ -169,6 +186,7 @@ async function renderPlanning({ reload = true } = {}) {
   } else if (planState.vue === 'semaine') corps = vueSemaine(head);
   else if (planState.vue === 'synthese') corps = await vueSynthese(head);
   else if (planState.vue === 'codes') corps = vueCodes();
+  else if (planState.vue === 'simulation') corps = await vueSimulation(head, { reload });
   else corps = vueAgents();
   root.replaceChildren(head, corps);
 }
@@ -604,7 +622,9 @@ function vueAgents() {
             enregistrer();
           };
           return h('div', { class: 'ag-ligne' },
-            h('span', { class: 'ag-nom', title: datesAgent(a) }, a.nom, datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
+            h('span', { class: 'ag-nom', title: datesAgent(a) }, a.nom,
+              a.equipe !== 'responsables' ? h('button', { class: `ag-role${a.role ? ' defini' : ''}`, title: 'Rôle habituel (cliquer pour changer)', onclick: () => { a.role = roleSuivant(a.role); enregistrer(); } }, a.role || '+ rôle') : null,
+              datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
             a.equipe === 'responsables'
               ? h('select', { title: 'Service du responsable (ou « Changer d\'équipe »)', class: 'ag-service', onchange: (e) => {
                 if (e.target.value.startsWith('eq:')) a.equipe = e.target.value.slice(3);

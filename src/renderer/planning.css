@@ -187,3 +187,66 @@ td.syn-hs[title] { cursor: help; }
 /* Service de rattachement d'un responsable */
 .ag-resp-svc { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; color: #fff; background: var(--c); border-radius: 999px; padding: 0 6px; vertical-align: 1px; }
 .case-svc { position: absolute; left: 3px; top: 2px; font-size: 9px; font-weight: 800; color: #fff; background: var(--c); border-radius: 4px; padding: 0 4px; line-height: 13px; }
+
+/* Simulation */
+.sim { display: flex; flex-direction: column; gap: 12px; }
+.sim-outils { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #fff; border-radius: 12px; padding: 8px 12px; box-shadow: 0 1px 2px rgba(15, 23, 42, .06); }
+.sim-scenarios { min-width: 160px; }
+.sim-option { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--text-2, #475569); }
+.sim-corps { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .sim-corps { grid-template-columns: 1fr; } }
+.sim-agents .card-body { padding: 8px; max-height: calc(100vh - 250px); overflow-y: auto; }
+.sim-equipe { display: flex; align-items: center; font-size: 11.5px; font-weight: 800; color: color-mix(in srgb, var(--eq) 75%, #000); text-transform: uppercase; letter-spacing: .04em; margin: 10px 4px 4px; }
+.sim-equipe:first-child { margin-top: 2px; }
+.sim-agent { display: grid; grid-template-columns: minmax(0, 1fr) 58px auto; grid-template-areas: "nom hs hs" "jauge jauge report"; align-items: center; gap: 3px 8px; padding: 6px 8px; border-radius: 9px; cursor: pointer; border: 1px solid transparent; border-left: 3px solid var(--c); background: #fff; }
+.sim-agent:hover { background: #f6f8fb; }
+.sim-agent.actif { background: color-mix(in srgb, var(--c) 12%, #fff); border-color: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 25%, transparent); }
+.sim-nom { grid-area: nom; font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sim-nom small { font-weight: 600; color: #94a3b8; margin-left: 6px; }
+.sim-hs { grid-area: hs; justify-self: end; font-size: 13px; color: #1e293b; white-space: nowrap; }
+.sim-hs small { font-weight: 600; color: #94a3b8; }
+.sim-jauge { grid-area: jauge; height: 6px; border-radius: 999px; background: #eef1f5; overflow: hidden; }
+.sim-jauge i { display: block; height: 100%; background: #2bb673; border-radius: 999px; transition: width .15s; }
+.sim-agent.proche .sim-jauge i { background: #f2b544; }
+.sim-agent.depasse .sim-jauge i, .sim-agent.depasse .sim-hs { background: #e03131; color: #e03131; }
+.sim-agent.depasse .sim-hs { background: none; }
+.sim-agent.report .sim-jauge i { background: #8e6cef; }
+.sim-report { grid-area: report; width: 58px; font-size: 11.5px; padding: 1px 4px; text-align: center; }
+.sim-alerte-txt { color: #e03131 !important; font-weight: 700; }
+
+.sim-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.sim-j { text-align: center; font-size: 11.5px; font-weight: 800; color: #64748b; text-transform: uppercase; }
+.sim-case { min-height: 86px; border-radius: 10px; border: 1px solid #e7eaf0; background: #fff; padding: 6px; display: flex; flex-direction: column; gap: 4px; position: relative; transition: background .1s, box-shadow .1s; }
+.sim-case.we { background: #f6f7fa; }
+.sim-case.ferie { background: #fdf1f0; border-color: #f5c2bd; }
+.sim-case.cible { cursor: copy; }
+.sim-case.cible:hover { box-shadow: inset 0 0 0 2px #9cc3f5; }
+.sim-case.pose { box-shadow: inset 0 0 0 2px var(--accent, #c55a11); }
+.sim-date { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.sim-date b { font-size: 14px; color: #1e293b; }
+.sim-ferie { font-size: 10px; font-weight: 800; color: #fff; background: #e03131; border-radius: 5px; padding: 0 5px; }
+.sim-alerte { font-size: 10px; font-weight: 900; color: #fff; background: #f08c00; border-radius: 50%; width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; }
+.sim-total { margin-left: auto; font-size: 11px; font-weight: 800; color: #64748b; }
+.sim-equipes { display: flex; flex-wrap: wrap; gap: 3px; }
+.sim-badge { font-size: 10.5px; font-weight: 800; color: #fff; background: var(--c); border-radius: 6px; padding: 1px 6px; }
+.sim-chips { display: flex; flex-wrap: wrap; gap: 3px; }
+.sim-chip { font-size: 10.5px; font-weight: 700; color: color-mix(in srgb, var(--c) 80%, #000); background: color-mix(in srgb, var(--c) 14%, #fff); border-radius: 5px; padding: 0 5px; cursor: pointer; white-space: nowrap; }
+.sim-chip.moi { color: #fff; background: var(--c); }
+.sim-legende { margin: 10px 2px 0; font-size: 12px; }
+body.sim-pinceau .sim-case { cursor: copy; }
+.sim-curseur { position: fixed; left: 0; top: 0; z-index: 2000; pointer-events: none; font-size: 12px; font-weight: 800; color: #fff; background: var(--c); border-radius: 8px; padding: 3px 9px; box-shadow: 0 6px 16px rgba(15, 23, 42, .25); }
+/* Rôle habituel d'un agent */
+.ag-role { align-self: flex-start; margin-top: 1px; border: 0; background: none; padding: 0; font: inherit; font-size: 10.5px; font-weight: 700; color: #b0b8c6; cursor: pointer; }
+.ag-role.defini { color: #3fb8c9; }
+.ag-role:hover { color: #1e293b; text-decoration: underline; }
+.sim-role { font-style: normal; font-size: 9.5px; font-weight: 900; color: #fff; background: var(--c); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: 1px; }
+.sim-roles, .sim-equipes { display: flex; flex-wrap: wrap; gap: 3px; }
+.sim-badge.equipe { font-size: 9.5px; opacity: .75; }
+.sim-roles-choix { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: #64748b; margin-left: 10px; }
+.sim-role-btn { border: 1px solid color-mix(in srgb, var(--c) 45%, #fff); background: #fff; color: var(--c); border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.sim-role-btn.on { background: var(--c); color: #fff; }
+.sim-outils select.sim-scenarios { width: auto; flex: 0 0 auto; min-width: 180px; }
+.sim-outils > .muted { white-space: nowrap; }
+.sim-calendrier .card-head { flex-wrap: wrap; gap: 6px 10px; }
+.sim-roles-choix { white-space: nowrap; }
+.sim-role-btn { white-space: nowrap; }

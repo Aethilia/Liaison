@@ -106,6 +106,9 @@ class Planning {
       const ag = { id: a.id && /^[a-z0-9-]+$/i.test(a.id) ? a.id : newId(), nom, equipe: EQUIPES.includes(a.equipe) ? a.equipe : 'autres' };
       // Responsable : service de rattachement (matin, après-midi ou nuit).
       if (ag.equipe === 'responsables' && ['matin', 'apresmidi', 'nuit'].includes(a.service)) ag.service = a.service;
+      // Rôle habituel (pelliste, chauffeur, agent de quai…).
+      const role = String(a.role || '').trim().slice(0, 30);
+      if (role) ag.role = role;
       // Arrivée / départ (facultatifs) : l'agent ne compte qu'entre ces dates.
       if (ISO.test(a.arrivee || '')) ag.arrivee = a.arrivee;
       if (ISO.test(a.depart || '') && !(ag.arrivee && a.depart < ag.arrivee)) ag.depart = a.depart;
@@ -260,6 +263,84 @@ class Planning {
     fs.rmSync(path.join(this.dir, 'semaines'), { recursive: true, force: true });
     this.writeJson(path.join(this.dir, 'agents.json'), { agents: [] });
     return [];
+  }
+
+  // ---- Simulations (brouillons d'un mois, plusieurs scénarios) ----
+  // { id, mois: 'AAAA-MM', nom, jours: { agentId: [dates] }, reports: { agentId: h } }
+  dossierSim() {
+    return path.join(this.dir, 'simulations');
+  }
+
+  listSimulations(mois) {
+    let noms;
+    try {
+      noms = fs.readdirSync(this.dossierSim()).filter((f) => f.endsWith('.json'));
+    } catch (err) {
+      if (err.code === 'ENOENT') return [];
+      throw err;
+    }
+    const out = [];
+    for (const f of noms) {
+      try {
+        const sim = JSON.parse(fs.readFileSync(path.join(this.dossierSim(), f), 'utf8'));
+        if (!mois || sim.mois === mois) out.push(sim);
+      } catch { /* en cours d'écriture : ignoré */ }
+    }
+    return out.sort((a, b) => String(a.creeLe).localeCompare(String(b.creeLe)));
+  }
+
+  saveSimulation(sim, by) {
+    if (!/^\d{4}-\d{2}$/.test(sim && sim.mois)) throw new Error('Mois invalide.');
+    const id = sim.id && /^[a-z0-9-]+$/i.test(sim.id) ? sim.id : newId();
+    const jours = {};
+    for (const [ag, dates] of Object.entries(sim.jours || {})) {
+      const ok = [...new Set((dates || []).filter((d) => ISO.test(d) && d.startsWith(sim.mois)))].sort();
+      if (ok.length && /^[a-z0-9-]+$/i.test(ag)) jours[ag] = ok;
+    }
+    // Rôle d'un agent un jour donné, quand il diffère de son rôle habituel.
+    const roles = {};
+    for (const [ag, parJour] of Object.entries(sim.roles || {})) {
+      const garde = Object.fromEntries(Object.entries(parJour || {}).filter(([d, r]) => (jours[ag] || []).includes(d) && typeof r === 'string' && r.trim()).map(([d, r]) => [d, r.trim().slice(0, 30)]));
+      if (Object.keys(garde).length) roles[ag] = garde;
+    }
+    const reports = {};
+    for (const [ag, h] of Object.entries(sim.reports || {})) if (Number.isFinite(Number(h)) && Number(h) !== 0) reports[ag] = Math.round(Number(h) * 100) / 100;
+    const out = {
+      id, mois: sim.mois, nom: String(sim.nom || 'Scénario').trim().slice(0, 40) || 'Scénario', jours, roles, reports,
+      creeLe: sim.creeLe || new Date().toISOString(), majLe: new Date().toISOString(), majPar: by || '',
+    };
+    return this.writeJson(path.join(this.dossierSim(), `${id}.json`), out);
+  }
+
+  deleteSimulation(id) {
+    if (!/^[a-z0-9-]+$/i.test(id)) throw new Error('Identifiant invalide.');
+    fs.rmSync(path.join(this.dossierSim(), `${id}.json`), { force: true });
+    return true;
+  }
+
+  // Report d'une simulation dans le planning : [{ agentId, date, code }],
+  // posé seulement sur les cases encore vides (rien n'est écrasé).
+  appliquerCases(changements, by) {
+    const parSemaine = new Map();
+    for (const c of changements || []) {
+      if (!ISO.test(c.date) || !c.agentId || !c.code) continue;
+      const l = lundiDe(c.date);
+      if (!parSemaine.has(l)) parSemaine.set(l, []);
+      parSemaine.get(l).push(c);
+    }
+    let poses = 0;
+    let ignores = 0;
+    for (const [l, liste] of parSemaine) {
+      const sem = this.loadSemaine(l);
+      for (const c of liste) {
+        const ag = sem.cases[c.agentId] || {};
+        if (ag[c.date]) { ignores += 1; continue; }
+        sem.cases[c.agentId] = { ...ag, [c.date]: { code: String(c.code).slice(0, 5), texte: '' } };
+        poses += 1;
+      }
+      this.enregistrer(sem, by);
+    }
+    return { poses, ignores };
   }
 
   // Toutes les cases entre deux dates (incluses) : { agentId: { date: {code, texte} } }.

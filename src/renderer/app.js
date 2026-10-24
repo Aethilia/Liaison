@@ -1844,6 +1844,7 @@ function setView(view, { silent = false } = {}) {
   $('#view-externes').hidden = view !== 'externes';
   document.querySelector('.toolbar').hidden = ['inventaire', 'planning', 'externes'].includes(view); // dates et exports sans objet
   renderImportants();
+  if (view !== 'planning') lacherPinceau();
   if (silent) return;
   if (view === 'inventaire') renderInventaire();
   if (view === 'planning') { fermerPalette(); renderPlanning(); }
@@ -1878,7 +1879,7 @@ async function poll() {
   if (S.view === 'planning') {
     const actif = document.activeElement;
     const saisie = actif && actif.closest && actif.closest('#planning') && /INPUT|TEXTAREA|SELECT/.test(actif.tagName);
-    if (!planPop && !saisie && !document.querySelector('dialog[open]') && Date.now() - planState.loadedAt > 8000) renderPlanning();
+    if (!planPop && !saisie && !simState.pinceau && !simState.minuterie && !document.querySelector('dialog[open]') && Date.now() - planState.loadedAt > 8000) renderPlanning();
     return;
   }
   if (Date.now() - invState.loadedAt > 60000) loadInventaire();

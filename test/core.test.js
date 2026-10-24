@@ -557,3 +557,21 @@ test('important : messages affichés jusqu\'à validation', () => {
   assert.deepEqual(l.actifs.map((m) => m.texte), ['Portail quai 2 bloqué']);
   assert.deepEqual(l.valides.map((m) => m.texte), ['Benne Fer à changer avant 10H']);
 });
+
+test('planning : simulations (scénarios, rôles, application au planning)', () => {
+  const { Planning } = require('../src/core/planning');
+  const p = new Planning(tmp());
+  const [a] = p.saveAgents([{ nom: 'Agent Un', equipe: 'apresmidi', role: 'Chauffeur' }]);
+  assert.equal(p.loadAgents()[0].role, 'Chauffeur');
+  const s = p.saveSimulation({ mois: '2026-11', nom: 'A', jours: { [a.id]: ['2026-11-07', '2026-11-07', '2026-12-01', '2026-11-09'] }, roles: { [a.id]: { '2026-11-07': 'Pelliste', '2026-11-20': 'Pelliste' } }, reports: {} }, 'PC');
+  assert.deepEqual(s.jours[a.id], ['2026-11-07', '2026-11-09']); // doublon et autre mois retirés
+  assert.deepEqual(s.roles[a.id], { '2026-11-07': 'Pelliste' }); // rôle d'un jour non posé retiré
+  p.saveSimulation({ mois: '2026-12', nom: 'B', jours: {} }, 'PC');
+  assert.deepEqual(p.listSimulations('2026-11').map((x) => x.nom), ['A']);
+  p.setCase(a.id, '2026-11-10', { code: 'CP' }, 'PC');
+  const r = p.appliquerCases([{ agentId: a.id, date: '2026-11-07', code: 'T' }, { agentId: a.id, date: '2026-11-10', code: 'R' }], 'PC');
+  assert.deepEqual(r, { poses: 1, ignores: 1 }); // la case CP n'est pas écrasée
+  assert.equal(p.loadSemaine('2026-11-07').cases[a.id]['2026-11-07'].code, 'T');
+  p.deleteSimulation(s.id);
+  assert.equal(p.listSimulations('2026-11').length, 0);
+});
