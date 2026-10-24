@@ -41,7 +41,14 @@
   };
 
   // Départ : un héros au choix, un kit, quelques éclats et une première boutique.
-  R.ECLATS_DEPART = 8;
+  R.ECLATS_DEPART = 15; // comme Guildrun
+  R.ECLATS_PAR_SURVIVANT = 2;
+  R.REMBOBINAGE_PAR_VICTOIRE = 10;
+  // Réglages d'équilibrage (calés avec un robot qui joue au hasard : en
+  // difficulté 1 il passe le 1er boss 2 fois sur 3 et gagne 1 fois sur 8 ;
+  // en difficulté 8, presque jamais).
+  G.FORCE_MONSTRES = G.FORCE_MONSTRES || 0.85;
+  G.FORCE_BOSS = G.FORCE_BOSS || 0.7;
   R.choisirDepart = (r, heroId, kitId) => {
     R.ajouterHeros(r, heroId);
     r.eclats += R.ECLATS_DEPART;
@@ -238,7 +245,7 @@
 
   G.ficheMonstre = (id, niveau, difficulte, variante = null) => {
     const def = G.monstre(id) || G.BOSS.find((b) => b.id === id);
-    const k = (1 + 0.11 * (niveau - 1)) * (1 + 0.12 * (difficulte - 1));
+    const k = (1 + 0.11 * (niveau - 1)) * (1 + 0.12 * (difficulte - 1)) * G.FORCE_MONSTRES * (def.boss ? G.FORCE_BOSS : 1);
     const stats = { ...def.stats };
     for (const s of ['pv', 'atk', 'mag']) stats[s] = Math.round((stats[s] || 0) * k);
     stats.def = (stats.def || 0) + 2 * (niveau - 1);
@@ -304,18 +311,18 @@
   };
 
   // ---------- Après le combat ----------
-  R.resultatCombat = (r, gagne) => {
+  // survivants : héros encore debout (2 éclats chacun, comme Guildrun).
+  R.resultatCombat = (r, gagne, survivants = R.enCombat(r).length) => {
     const type = r.combat.type;
     r.reliqueTemp = null;
     r.malediction = 0;
     r.historique.push({ etage: r.etage, endless: r.endless, type, gagne });
     if (gagne) {
       r.victoires += 1;
-      let gain = 3 + R.acteDe(Math.min(r.etage, 12)) + (type === 'defi' ? 3 : 0) + (type === 'boss' ? 8 : 0);
-      if (type === 'endless') gain = 6;
+      const gain = R.ECLATS_PAR_SURVIVANT * survivants + (type === 'defi' ? 4 : 0) + (type === 'boss' ? 8 : 0);
       r.eclats += gain;
       for (const id of r.reliques) { const x = G.relique(id); if (x.run && x.run.victoire) x.run.victoire(r, R); }
-      if (r.rembobinage.dispo && type !== 'endless') r.rembobinage.reserve += 5;
+      if (r.rembobinage.dispo && type !== 'endless') r.rembobinage.reserve += R.REMBOBINAGE_PAR_VICTOIRE;
       r.message = `Victoire ! +${gain} éclats.`;
       if (type === 'boss' && r.etage === R.ETAGES_PAR_ACTE) return R.recompenseRelique(r, ['r', 'e'], 'finActe1');
       if (type === 'boss') { r.gagne = true; r.ecran = { type: 'victoireFinale' }; return r; }
@@ -369,13 +376,19 @@
     const rar = pondere(r, poidsRelique(n));
     const pool = reliquesDispo(r, rar);
     const relique = (pool.length ? tirer(r, pool) : tirer(r, reliquesDispo(r)) || {}).id || null;
-    return { heros: heros.map((id) => ({ id, vendu: false })), objets: objets.map((id) => ({ id, vendu: false })), reliques: relique ? [{ id: relique, vendu: false }] : [] };
+    const offres = { heros: heros.map((id) => ({ id, vendu: false })), objets: objets.map((id) => ({ id, vendu: false })), reliques: relique ? [{ id: relique, vendu: false }] : [] };
+    // Une offre au hasard à -25 %.
+    const toutes = [...offres.heros, ...offres.objets, ...offres.reliques];
+    tirer(r, toutes).promo = true;
+    return offres;
   };
   R.ouvrirBoutique = (r) => {
     r.ecran = { type: 'boutique', offres: R.genererOffres(r), relances: 0, gratuites: R.bonusRun(r, 'relanceGratuite') };
     return r;
   };
-  R.prixRelance = (r) => (r.ecran.gratuites > 0 ? 0 : 2 + r.ecran.relances);
+  R.prixRelance = (r) => (r.ecran.gratuites > 0 ? 0 : 1 + r.ecran.relances);
+  const promo = (o, prix) => (o.promo ? Math.max(1, Math.round(prix * 0.75)) : prix);
+  R.prixOffre = (r, sorte, o) => promo(o, sorte === 'heros' ? R.prixHeros(r, o.id) : sorte === 'objets' ? G.PRIX_RARETE_OBJET[G.objet(o.id).rarete] : G.PRIX_RARETE_RELIQUE[G.relique(o.id).rarete]);
   R.relancer = (r) => {
     const p = R.prixRelance(r);
     if (r.eclats < p) return false;
@@ -388,7 +401,7 @@
   R.acheterHeros = (r, i) => {
     const o = r.ecran.offres.heros[i];
     if (!o || o.vendu) return 'Déjà acheté.';
-    const prix = R.prixHeros(r, o.id);
+    const prix = R.prixOffre(r, 'heros', o);
     if (r.eclats < prix) return 'Pas assez d\'éclats.';
     const double = r.heros.find((h) => h.id === o.id && h.rang !== 'S');
     if (!double && !R.placeLibre(r)) return 'Guilde complète (6 héros) : vendez-en un d\'abord.';
@@ -401,7 +414,7 @@
   R.acheterObjet = (r, i) => {
     const o = r.ecran.offres.objets[i];
     if (!o || o.vendu) return 'Déjà acheté.';
-    const prix = G.PRIX_RARETE_OBJET[G.objet(o.id).rarete];
+    const prix = R.prixOffre(r, 'objets', o);
     if (r.eclats < prix) return 'Pas assez d\'éclats.';
     if (r.objets.length >= R.MAX_INVENTAIRE) return 'Inventaire plein.';
     r.eclats -= prix;
@@ -412,7 +425,7 @@
   R.acheterRelique = (r, i) => {
     const o = r.ecran.offres.reliques[i];
     if (!o || o.vendu) return 'Déjà achetée.';
-    const prix = G.PRIX_RARETE_RELIQUE[G.relique(o.id).rarete];
+    const prix = R.prixOffre(r, 'reliques', o);
     if (r.eclats < prix) return 'Pas assez d\'éclats.';
     r.eclats -= prix;
     o.vendu = true;
@@ -485,9 +498,9 @@
     const exp = G.RELIQUES.filter((x) => x.enchere && !r.reliques.includes(x.id));
     const lotRelique = (exp.length && r.places < 5 ? tirer(r, exp) : tirer(r, reliquesDispo(r, 'l')) || tirer(r, reliquesDispo(r))).id;
     r.ecran = { type: 'enchere', lots: [
-      { type: 'heros', id: lotHeros, prix: 12, vendu: false },
-      { type: 'objet', id: lotObjet, prix: 15, vendu: false },
-      { type: 'relique', id: lotRelique, prix: 18, vendu: false },
+      { type: 'heros', id: lotHeros, prix: 20, vendu: false },
+      { type: 'objet', id: lotObjet, prix: 25, vendu: false },
+      { type: 'relique', id: lotRelique, prix: 30, vendu: false },
     ] };
     return r;
   };

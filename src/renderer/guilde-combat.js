@@ -40,8 +40,13 @@
   G.PRIORITE = ['tank', 'avantgarde', 'guerrier', 'duelliste', 'assassin', 'mage', 'mystique', 'monstre'];
   const STATS = ['pv', 'atk', 'def', 'mag', 'mana', 'regen', 'vit', 'portee', 'crit', 'critdeg', 'mvt', 'soins', 'esquive', 'vol', 'regenPv'];
   G.STATS = STATS;
-  const DUREE_MAX = 90;
-  const FUREUR = 40;
+  // Chiffres calés sur Guildrun : la défense divise les dégâts par
+  // (100 + déf) / 100 (pas les dégâts « vrais » : poison, brûlure…), le
+  // critique plafonne à 100 % (le surplus s'ajoute aux dégâts critiques),
+  // la mana vient des impulsions de 2 s ET des attaques.
+  G.MANA_PAR_ATTAQUE = 10;
+  const DUREE_MAX = 120;
+  const FUREUR = 60;
 
   class Combat {
     // fiches : { nom, num, classes, stats, comp, effets, pos, boss? } ; options :
@@ -153,8 +158,8 @@
       if (!cible || cible.mort || !(montant > 0)) return 0;
       const info = { montant, type, crit: false, auto: !!opts.auto, src, esquive: false };
       if (opts.peutCrit !== false && src && (opts.auto || opts.peutCrit)) {
-        const chance = (opts.critForce ? 100 : this.s(src, 'crit'));
-        if (this.rng() * 100 < chance) { info.crit = true; info.montant *= 1.5 + this.s(src, 'critdeg') / 100 - 0.5; }
+        const crit = opts.critForce ? 100 : this.s(src, 'crit');
+        if (this.rng() * 100 < Math.min(100, crit)) { info.crit = true; info.montant *= 1 + (this.s(src, 'critdeg') + Math.max(0, crit - 100)) / 100; }
       }
       if (src) this.declencher(src, 'avantDegats', cible, info);
       this.declencher(cible, 'subit', src, info);
@@ -163,8 +168,7 @@
         return 0;
       }
       let m = info.montant;
-      if (type === 'phys') m *= 100 / (100 + this.s(cible, 'def'));
-      else if (type === 'mag') m *= 100 / (100 + this.s(cible, 'def') / 2);
+      if (type !== 'vrai') m *= 100 / (100 + this.s(cible, 'def'));
       m *= this.fureur;
       m = Math.max(1, Math.round(m));
       if (cible.bouclier > 0) {
@@ -319,6 +323,7 @@
           this.effet('attaque', u, { cible: c.uid });
           const m = this.degats(u, c, this.s(u, 'atk') * info.mult + info.bonus, 'phys', { auto: true });
           if (m) this.log(`${u.nom} a infligé ${m} dégâts à ${c.nom}`, `coup ${u.cote}`);
+          if (this.s(u, 'mana') > 0) u.mana = Math.min(this.s(u, 'mana'), u.mana + G.MANA_PAR_ATTAQUE);
           this.declencher(u, 'apresAttaque', c);
         }
       } else {

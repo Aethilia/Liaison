@@ -627,7 +627,7 @@ test('jeu caché : joueurs reconnus par empreinte, code secret chiffré', () => 
     assert.throws(() => j.profil('Quelqu\'un'));
     j.ajouterScore('Joueur Essai', { score: 900, etage: 7 });
     j.ajouterScore('Joueur Essai', { score: 1500, etage: 12, gagne: true });
-    assert.deepEqual(j.scores().map((x) => [x.joueur, x.score]), [['Joueur', 1500], ['Joueur', 900]]);
+    assert.deepEqual(j.scores().map((x) => [x.joueur, x.score]), [['Joueur', 900], ['Joueur', 1500]]);
   } finally {
     delete process.env.LIAISON_JEU_JOUEURS;
   }

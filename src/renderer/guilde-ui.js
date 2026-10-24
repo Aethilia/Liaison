@@ -53,27 +53,27 @@
       `${def.comp.nom} : ${def.comp.desc}`, spec ? `Spécialisation : ${spec.nom} — ${spec.desc}` : ''].filter(Boolean).join('\n');
   };
 
-  function carteHeros(id, { prix = null, onclick, choisi = false, desactive = false, rang = 'C' } = {}) {
+  function carteHeros(id, { prix = null, promo = false, onclick, choisi = false, desactive = false, rang = 'C' } = {}) {
     const def = G.heros(id);
     return h('button', { class: `gd-carte${choisi ? ' choisi' : ''}`, disabled: desactive, onclick, title: def.specs.map((s) => `• ${s.nom}${s.classe2 ? ` (+${nomClasse(s.classe2)})` : ''} : ${s.desc}`).join('\n') },
       h('div', { class: 'gd-carte-haut' }, jeton(def, { rang }), h('div', {}, h('b', {}, def.nom), h('small', { style: { color: couleurClasse(def.classes[0]) } }, nomClasse(def.classes[0])))),
       h('div', { class: 'gd-carte-stats' }, `PV ${def.stats.pv} · Att ${def.stats.atk} · Mag ${def.stats.mag} · Portée ${def.stats.portee}`),
       h('div', { class: 'gd-carte-txt' }, h('b', {}, def.comp.nom), ` : ${def.comp.desc}`),
-      prix != null ? h('div', { class: 'gd-prix' }, `${prix} ◆`) : null);
+      prix != null ? h('div', { class: `gd-prix${promo ? ' promo' : ''}` }, promo ? `-25 % · ${prix} ◆` : `${prix} ◆`) : null);
   }
-  function carteObjet(id, { prix = null, onclick, desactive = false } = {}) {
+  function carteObjet(id, { prix = null, promo = false, onclick, desactive = false } = {}) {
     const o = G.objet(id);
     return h('button', { class: 'gd-carte petite', disabled: desactive, onclick },
       h('div', { class: 'gd-carte-haut' }, h('b', {}, o.nom), pastille(o.rarete)),
       h('div', { class: 'gd-carte-txt' }, o.desc),
-      prix != null ? h('div', { class: 'gd-prix' }, `${prix} ◆`) : null);
+      prix != null ? h('div', { class: `gd-prix${promo ? ' promo' : ''}` }, promo ? `-25 % · ${prix} ◆` : `${prix} ◆`) : null);
   }
-  function carteRelique(id, { prix = null, onclick, desactive = false, choisi = false } = {}) {
+  function carteRelique(id, { prix = null, promo = false, onclick, desactive = false, choisi = false } = {}) {
     const x = G.relique(id);
     return h('button', { class: `gd-carte petite${choisi ? ' choisi' : ''}`, disabled: desactive, onclick },
       h('div', { class: 'gd-carte-haut' }, h('b', {}, x.nom), pastille(x.rarete)),
       h('div', { class: 'gd-carte-txt' }, x.desc),
-      prix != null ? h('div', { class: 'gd-prix' }, `${prix} ◆`) : null);
+      prix != null ? h('div', { class: `gd-prix${promo ? ' promo' : ''}` }, promo ? `-25 % · ${prix} ◆` : `${prix} ◆`) : null);
   }
 
   const bouton = (txt, onclick, cls = '') => h('button', { class: `jeu-btn gd-btn ${cls}`, onclick }, txt);
@@ -199,6 +199,38 @@
   }
 
   // ---------- Écrans ----------
+  // Classement entre joueurs : tous les résultats de chacun, résumés.
+  function classement(liste) {
+    const parJoueur = new Map();
+    for (const s of liste) {
+      const j = parJoueur.get(s.joueur) || { joueur: s.joueur, parties: 0, victoires: 0, meilleur: 0, diffMax: 0, endless: 0, etages: 0, derniere: '' };
+      j.parties += 1;
+      if (s.gagne) { j.victoires += 1; j.diffMax = Math.max(j.diffMax, s.difficulte || 1); }
+      j.meilleur = Math.max(j.meilleur, s.score || 0);
+      j.endless = Math.max(j.endless, s.endless || 0);
+      j.etages += s.etage || 0;
+      if (s.date > j.derniere) j.derniere = s.date;
+      parJoueur.set(s.joueur, j);
+    }
+    return [...parJoueur.values()].sort((a, b) => b.meilleur - a.meilleur);
+  }
+  function tableauClassement(liste) {
+    const cl = classement(liste);
+    const top = liste.slice().sort((a, b) => b.score - a.score).slice(0, 6);
+    if (!cl.length) return h('div', { class: 'gd-scores' }, h('div', { class: 'gd-titre-bloc' }, 'Classement'), h('small', { class: 'gd-vide' }, 'Aucune partie terminée pour l\'instant.'));
+    return h('div', { class: 'gd-scores' },
+      h('div', { class: 'gd-titre-bloc' }, 'Classement des joueurs'),
+      h('table', {},
+        h('thead', {}, h('tr', {}, ['', 'Joueur', 'Record', 'Parties', 'Failles scellées', 'Diff. max', 'Endless'].map((x) => h('th', {}, x)))),
+        h('tbody', {}, cl.map((j, i) => h('tr', { class: i === 0 ? 'premier' : '' },
+          h('td', {}, i === 0 ? '♛' : `${i + 1}.`), h('td', {}, h('b', {}, j.joueur)), h('td', { class: 'num' }, j.meilleur),
+          h('td', { class: 'num2' }, j.parties), h('td', { class: 'num2' }, j.victoires), h('td', { class: 'num2' }, j.diffMax || '—'), h('td', { class: 'num2' }, j.endless ? `manche ${j.endless}` : '—'))))),
+      h('div', { class: 'gd-titre-bloc' }, 'Meilleures parties'),
+      h('table', {}, h('tbody', {}, top.map((s, i) => h('tr', {}, h('td', {}, `${i + 1}.`), h('td', {}, s.joueur), h('td', { class: 'num' }, s.score),
+        h('td', {}, s.gagne ? (s.endless ? `Endless ${s.endless}` : 'Faille scellée') : `Étage ${s.etage}`), h('td', {}, `Diff. ${s.difficulte}`),
+        h('td', { class: 'gd-date' }, new Date(s.date).toLocaleDateString('fr-FR')))))));
+  }
+
   function ecranAccueil() {
     const p = S.profil;
     let diff = Math.min(p.diffMax, S.diffChoisie || p.diffMax);
@@ -206,9 +238,7 @@
       class: `gd-diff${d === diff ? ' on' : ''}`, disabled: d > p.diffMax, title: d > p.diffMax ? 'Gagnez une partie au niveau précédent pour débloquer' : `Difficulté ${d} : ennemis +${(d - 1) * 12} %`,
       onclick: () => { S.diffChoisie = d; rendre(); },
     }, d)));
-    const scores = h('div', { class: 'gd-scores' }, h('div', { class: 'gd-titre-bloc' }, 'Meilleurs scores'), S.scores && S.scores.length
-      ? h('table', {}, h('tbody', {}, S.scores.slice(0, 8).map((s, i) => h('tr', {}, h('td', {}, `${i + 1}.`), h('td', {}, s.joueur), h('td', { class: 'num' }, s.score), h('td', {}, s.gagne ? (s.endless ? `Endless ${s.endless}` : 'Victoire') : `Étage ${s.etage}`), h('td', {}, `Diff. ${s.difficulte}`)))))
-      : h('small', { class: 'gd-vide' }, 'Aucune partie terminée pour l\'instant.'));
+    const scores = tableauClassement(S.scores || []);
     cadre(h('div', { class: 'gd-accueil' },
       h('div', { class: 'jeu-ecran-titre' }, 'LA GUILDE', h('small', {}, `Joueur : ${S.nom}`)),
       p.partie ? bouton(`Continuer (${R.titreEtage(p.partie)})`, () => { S.r = p.partie; S.sel = null; rendre(); }) : null,
@@ -354,7 +384,7 @@
       h('b', {}, gagne ? 'VICTOIRE' : 'DÉFAITE'),
       bouton('Continuer', () => {
         S.combat = null;
-        R.resultatCombat(r, gagne);
+        R.resultatCombat(r, gagne, c.vivants('allies').filter((u) => !u.invoque).length);
         if (r.fini) finPartie();
         sauver();
         rendre();
@@ -382,10 +412,10 @@
         bouton(`Relancer (${R.prixRelance(r)} ◆)`, () => { if (!R.relancer(r)) toast('Pas assez d\'éclats.'); msg(); }, 'petit gris'),
         bouton(e.retour === 'combat' ? 'Au combat ▶' : 'Continuer ▶', () => { r.message = ''; R.quitterBoutique(r); S.sel = null; sauver(); rendre(); })),
       h('div', { class: 'gd-etals' },
-        h('div', { class: 'gd-cartes' }, e.offres.heros.map((o, i) => (o.vendu ? h('div', { class: 'gd-carte vendu' }, 'Vendu') : carteHeros(o.id, { prix: R.prixHeros(r, o.id), desactive: r.eclats < R.prixHeros(r, o.id), onclick: () => msg(R.acheterHeros(r, i)) })))),
+        h('div', { class: 'gd-cartes' }, e.offres.heros.map((o, i) => (o.vendu ? h('div', { class: 'gd-carte vendu' }, 'Vendu') : carteHeros(o.id, { prix: R.prixOffre(r, 'heros', o), promo: o.promo, desactive: r.eclats < R.prixOffre(r, 'heros', o), onclick: () => msg(R.acheterHeros(r, i)) })))),
         h('div', { class: 'gd-cartes' },
-          e.offres.objets.map((o, i) => (o.vendu ? h('div', { class: 'gd-carte petite vendu' }, 'Vendu') : carteObjet(o.id, { prix: G.PRIX_RARETE_OBJET[G.objet(o.id).rarete], desactive: r.eclats < G.PRIX_RARETE_OBJET[G.objet(o.id).rarete], onclick: () => msg(R.acheterObjet(r, i)) }))),
-          e.offres.reliques.map((o, i) => (o.vendu ? h('div', { class: 'gd-carte petite vendu' }, 'Vendu') : carteRelique(o.id, { prix: G.PRIX_RARETE_RELIQUE[G.relique(o.id).rarete], desactive: r.eclats < G.PRIX_RARETE_RELIQUE[G.relique(o.id).rarete], onclick: () => msg(R.acheterRelique(r, i)) }))))),
+          e.offres.objets.map((o, i) => (o.vendu ? h('div', { class: 'gd-carte petite vendu' }, 'Vendu') : carteObjet(o.id, { prix: R.prixOffre(r, 'objets', o), promo: o.promo, desactive: r.eclats < R.prixOffre(r, 'objets', o), onclick: () => msg(R.acheterObjet(r, i)) }))),
+          e.offres.reliques.map((o, i) => (o.vendu ? h('div', { class: 'gd-carte petite vendu' }, 'Vendu') : carteRelique(o.id, { prix: R.prixOffre(r, 'reliques', o), promo: o.promo, desactive: r.eclats < R.prixOffre(r, 'reliques', o), onclick: () => msg(R.acheterRelique(r, i)) }))))),
       panneauGuilde({ vente: true })));
   }
 

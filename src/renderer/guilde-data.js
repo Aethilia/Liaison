@@ -123,15 +123,17 @@
   const flag = (k, v = true) => ({ debut(c, u) { u[k] = v; } });
 
   // ---------- Héros : 25 homunculus ----------
-  // palier : 1 (3 éclats), 2 (5), 3 (8). Stats au rang C.
+  // palier : 1 (6 éclats), 2 (10), 3 (15). Stats au rang C.
+  // Ordres de grandeur de Guildrun (démo) : 575-1000 PV, 25-60 défense,
+  // 20-46 d'attaque, 0,39-0,6 attaque/s, 50-110 de mana max.
   const ST = {
-    guerrier: { pv: 820, atk: 72, def: 35, mag: 0, mana: 80, regen: 16, vit: 0.75, portee: 1, crit: 8, mvt: 1.6 },
-    tank: { pv: 1050, atk: 42, def: 60, mag: 10, mana: 100, regen: 16, vit: 0.55, portee: 1, crit: 3, mvt: 1.3 },
-    avantgarde: { pv: 880, atk: 62, def: 42, mag: 0, mana: 70, regen: 15, vit: 0.7, portee: 1, crit: 6, mvt: 2 },
-    assassin: { pv: 620, atk: 74, def: 25, mag: 0, mana: 60, regen: 15, vit: 0.9, portee: 1, crit: 20, mvt: 2 },
-    duelliste: { pv: 760, atk: 62, def: 33, mag: 0, mana: 80, regen: 16, vit: 1, portee: 1, crit: 15, mvt: 1.6 },
-    mage: { pv: 600, atk: 30, def: 25, mag: 48, mana: 90, regen: 20, vit: 0.6, portee: 4, crit: 5, mvt: 1.3 },
-    mystique: { pv: 650, atk: 26, def: 30, mag: 36, mana: 80, regen: 25, vit: 0.6, portee: 3, crit: 3, mvt: 1.3 },
+    guerrier: { pv: 850, atk: 42, def: 38, mag: 0, mana: 75, regen: 6, vit: 0.48, portee: 1, crit: 8, mvt: 1.6 },
+    tank: { pv: 950, atk: 30, def: 58, mag: 10, mana: 105, regen: 6, vit: 0.4, portee: 1, crit: 3, mvt: 1.3 },
+    avantgarde: { pv: 900, atk: 38, def: 45, mag: 0, mana: 70, regen: 6, vit: 0.45, portee: 1, crit: 6, mvt: 2 },
+    assassin: { pv: 625, atk: 40, def: 28, mag: 0, mana: 50, regen: 6, vit: 0.55, portee: 1, crit: 20, mvt: 2 },
+    duelliste: { pv: 750, atk: 38, def: 35, mag: 0, mana: 70, regen: 6, vit: 0.6, portee: 1, crit: 15, mvt: 1.6 },
+    mage: { pv: 600, atk: 20, def: 26, mag: 42, mana: 90, regen: 8, vit: 0.43, portee: 4, crit: 10, mvt: 1.3 },
+    mystique: { pv: 600, atk: 18, def: 27, mag: 34, mana: 80, regen: 12, vit: 0.42, portee: 3, crit: 3, mvt: 1.3 },
   };
   const H = (num, classe, palier, comp, specs, ajust = {}) => ({
     id: `h${num}`, num, nom: `Homunculus n°${num}`, classes: [classe], palier, stats: { ...ST[classe], ...ajust }, comp, specs,
@@ -147,7 +149,7 @@
       SP('s2a', 'Vampire', 'Vol de vie 20 %', E.stats({ vol: 20 })),
       SP('s2b', 'Moulinet ardent', 'Tourbillon brûle (30/s, 3 s)', flag('tourbillonBrule'), 'avantgarde'),
       SP('s2c', 'Écrasement', 'Tourbillon touche jusqu\'à 2 cases', flag('rayonBonus', 1)),
-    ], { pv: 860 }),
+    ], { pv: 880 }),
     H(3, 'guerrier', 2, COMP.criDeGuerre(0.2, 5), [
       SP('s3a', 'Chef de meute', 'Cri de guerre donne aussi +15 % vitesse d\'attaque', flag('criVitesse', 0.15)),
       SP('s3b', 'Porte-étendard', 'Renfort : toute l\'équipe +8 % attaque (même depuis le banc)', E.renfort((c, cote) => { for (const a of c.vivants(cote)) c.buff(a, 'atk', { mul: 0.08 }); })),
@@ -157,7 +159,7 @@
       SP('s4a', 'Chasseur de têtes', 'Chaque élimination : +40 mana', { tue(c, u) { u.mana += 40; } }),
       SP('s4b', 'Sang-froid', '+20 % critique', E.stats({ crit: 20 }), 'duelliste'),
       SP('s4c', 'Brise-armure', 'Ses attaques retirent 5 défense (cumulable 10 fois)', E.surAttaque((c, u, t) => { t.brise = (t.brise || 0) + 1; if (t.brise <= 10) c.buff(t, 'def', { add: -5 }); })),
-    ], { atk: 80 }),
+    ], { atk: 46 }),
     // Tanks
     H(5, 'tank', 1, COMP.provocation(2, 3, 30), [
       SP('s5a', 'Épines', 'Renvoie 25 % des dégâts physiques', E.epines(0.25)),
@@ -178,7 +180,7 @@
       SP('s8a', 'Paladin', 'Rempart soigne aussi de 90', flag('rempartSoin', 90), 'mystique'),
       SP('s8b', 'Charge défensive', 'Rush (6) : +60 défense', E.rush(6, { def: 60 })),
       SP('s8c', 'Inébranlable', 'Insensible à l\'étourdissement, +15 % PV', [E.stats({}, { pv: 0.15 }), { debut(c, u) { u.st.insensible = true; } }]),
-    ], { pv: 1120 }),
+    ], { pv: 1000 }),
     // Avant-gardes
     H(9, 'avantgarde', 1, COMP.charge(1.8), [
       SP('s9a', 'Impact', 'Charge touche aussi les ennemis autour (50 %)', flag('chargeImpact')),
@@ -226,7 +228,7 @@
       SP('s17a', 'Tireur d\'élite', '+1 portée, +10 % critique', E.stats({ portee: 1, crit: 10 })),
       SP('s17b', 'Flèches de glace', 'Ses attaques gèlent (+1)', E.surAttaque((c, u, t) => c.statut(t, 'gel', 1, 0, u))),
       SP('s17c', 'Salve', 'Stall (15) : deux Tirs précis gratuits', E.stall(15, (c, u) => { u.comp.lancer(c, u); u.comp.lancer(c, u); })),
-    ], { portee: 4, pv: 680, atk: 58 }),
+    ], { portee: 5, pv: 675, atk: 37 }),
     // Mages
     H(18, 'mage', 1, COMP.bouleDeFeu(2.2, 1), [
       SP('s18a', 'Combustion', 'Les cibles en feu prennent +20 % de ses dégâts', { avantDegats(c, u, t, info) { if (t.st.brulure > 0 && c.t <= t.st.brulureFin) info.montant *= 1.2; } }),
@@ -271,7 +273,7 @@
     ]),
   ];
   G.heros = (id) => G.HEROS.find((x) => x.id === id);
-  G.PRIX_PALIER = { 1: 3, 2: 5, 3: 8 };
+  G.PRIX_PALIER = { 1: 6, 2: 10, 3: 15 };
 
   // Feinte : attaques critiques garanties (géré ici pour tous les héros).
   G.EFFETS_COMMUNS = [{
@@ -281,9 +283,9 @@
   }];
 
   // ---------- Objets (2 par héros) ----------
-  // rarete : c, r, e, l ; prix 4 / 7 / 11 / 16.
+  // rarete : c, r, e, l ; prix 6 / 10 / 15 / 22.
   const OB = (id, rarete, nom, desc, effet) => ({ id, rarete, nom, desc, effet });
-  G.PRIX_RARETE_OBJET = { c: 4, r: 7, e: 11, l: 16 };
+  G.PRIX_RARETE_OBJET = { c: 6, r: 10, e: 15, l: 22 };
   G.OBJETS = [
     OB('o1', 'c', 'Épée courte', '+12 attaque', E.stats({ atk: 12 })),
     OB('o2', 'c', 'Bouclier en bois', '+10 défense', E.stats({ def: 10 })),
@@ -387,16 +389,16 @@
   // ---------- Monstres ----------
   const MO = (id, nom, stats, comp, effets = []) => ({ id, nom, classes: ['monstre'], stats: { mvt: 1.5, critdeg: 50, ...stats }, comp, effets });
   G.MONSTRES = [
-    MO('m1', 'Rat géant', { pv: 380, atk: 34, def: 10, vit: 1.1, portee: 1, mvt: 2.2, mana: 0, regen: 0, crit: 5 }, null, [E.surAttaque((c, u, t) => { if (c.rng() < 0.3) c.statut(t, 'poison', 1, 0, u); })]),
-    MO('m2', 'Gobelin', { pv: 480, atk: 44, def: 18, vit: 0.85, portee: 1, mana: 60, regen: 15, crit: 10 }, COMP.coupPuissant(1.8, 0)),
-    MO('m3', 'Squelette', { pv: 560, atk: 40, def: 40, vit: 0.7, portee: 1, mana: 0, regen: 0, crit: 5 }, null, [{ subit(c, u, s, info) { if (info.type === 'phys') info.montant *= 0.85; } }]),
-    MO('m4', 'Slime', { pv: 620, atk: 30, def: 15, vit: 0.6, portee: 1, mvt: 1, mana: 0, regen: 0 }, null, [E.surAttaque((c, u, t) => c.statut(t, 'poison', 1, 0, u))]),
-    MO('m5', 'Loup', { pv: 460, atk: 46, def: 15, vit: 1.05, portee: 1, mvt: 2.4, mana: 50, regen: 15, crit: 12 }, { nom: 'Morsure', desc: '', lancer(c, u) { const t = c.cibleDe(u); if (t) { c.degats(u, t, c.s(u, 'atk') * 1.6, 'phys'); c.statut(t, 'brulure', 15, 3, u); } } }),
-    MO('m6', 'Orc', { pv: 900, atk: 58, def: 35, vit: 0.6, portee: 1, mana: 70, regen: 15, crit: 5 }, COMP.coupPuissant(2, 1.2)),
-    MO('m7', 'Archer squelette', { pv: 420, atk: 40, def: 20, vit: 0.75, portee: 4, mana: 0, regen: 0, crit: 8 }, null),
-    MO('m8', 'Sorcier gobelin', { pv: 440, atk: 20, def: 18, mag: 34, vit: 0.6, portee: 4, mana: 80, regen: 20 }, COMP.bouleDeFeu(1.8, 1)),
-    MO('m9', 'Golem de pierre', { pv: 1300, atk: 50, def: 60, vit: 0.45, portee: 1, mvt: 1, mana: 100, regen: 15 }, COMP.provocation(2, 3, 20)),
-    MO('m10', 'Spectre', { pv: 520, atk: 30, def: 20, mag: 38, vit: 0.7, portee: 2, mvt: 2, mana: 60, regen: 15, esquive: 20 }, { nom: 'Hurlement', desc: '', lancer(c, u) { for (const e of c.autour(u.pos, 2, c.ennemisDe(u))) { c.degats(u, e, c.s(u, 'mag') * 1.4, 'mag'); c.statut(e, 'gel', 1); } } }, [{ debut(c, u) { c.statut(u, 'furtif', 0, 2); } }]),
+    MO('m1', 'Rat géant', { pv: 380, atk: 21, def: 10, vit: 0.66, portee: 1, mvt: 2.2, mana: 0, regen: 0, crit: 5 }, null, [E.surAttaque((c, u, t) => { if (c.rng() < 0.3) c.statut(t, 'poison', 1, 0, u); })]),
+    MO('m2', 'Gobelin', { pv: 480, atk: 27, def: 18, vit: 0.51, portee: 1, mana: 60, regen: 6, crit: 10 }, COMP.coupPuissant(1.8, 0)),
+    MO('m3', 'Squelette', { pv: 560, atk: 25, def: 40, vit: 0.42, portee: 1, mana: 0, regen: 0, crit: 5 }, null, [{ subit(c, u, s, info) { if (info.type === 'phys') info.montant *= 0.85; } }]),
+    MO('m4', 'Slime', { pv: 620, atk: 19, def: 15, vit: 0.36, portee: 1, mvt: 1, mana: 0, regen: 0 }, null, [E.surAttaque((c, u, t) => c.statut(t, 'poison', 1, 0, u))]),
+    MO('m5', 'Loup', { pv: 460, atk: 29, def: 15, vit: 0.63, portee: 1, mvt: 2.4, mana: 50, regen: 6, crit: 12 }, { nom: 'Morsure', desc: '', lancer(c, u) { const t = c.cibleDe(u); if (t) { c.degats(u, t, c.s(u, 'atk') * 1.6, 'phys'); c.statut(t, 'brulure', 15, 3, u); } } }),
+    MO('m6', 'Orc', { pv: 900, atk: 36, def: 35, vit: 0.36, portee: 1, mana: 70, regen: 6, crit: 5 }, COMP.coupPuissant(2, 1.2)),
+    MO('m7', 'Archer squelette', { pv: 420, atk: 25, def: 20, vit: 0.45, portee: 4, mana: 0, regen: 0, crit: 8 }, null),
+    MO('m8', 'Sorcier gobelin', { pv: 440, atk: 12, def: 18, mag: 34, vit: 0.36, portee: 4, mana: 80, regen: 6 }, COMP.bouleDeFeu(1.8, 1)),
+    MO('m9', 'Golem de pierre', { pv: 1300, atk: 31, def: 60, vit: 0.27, portee: 1, mvt: 1, mana: 100, regen: 6 }, COMP.provocation(2, 3, 20)),
+    MO('m10', 'Spectre', { pv: 520, atk: 19, def: 20, mag: 38, vit: 0.42, portee: 2, mvt: 2, mana: 60, regen: 6, esquive: 20 }, { nom: 'Hurlement', desc: '', lancer(c, u) { for (const e of c.autour(u.pos, 2, c.ennemisDe(u))) { c.degats(u, e, c.s(u, 'mag') * 1.4, 'mag'); c.statut(e, 'gel', 1); } } }, [{ debut(c, u) { c.statut(u, 'furtif', 0, 2); } }]),
   ];
   G.monstre = (id) => G.MONSTRES.find((x) => x.id === id);
   // Variantes d'élite.
@@ -416,19 +418,19 @@
   G.BOSS = [
     {
       id: 'b1', nom: 'L\'Hydre', acte: 1, classes: ['monstre'], boss: true,
-      stats: { pv: 3600, atk: 60, def: 35, mag: 30, vit: 0.8, portee: 2, mvt: 1, mana: 100, regen: 18, crit: 5 },
+      stats: { pv: 3600, atk: 37, def: 35, mag: 30, vit: 0.48, portee: 2, mvt: 1, mana: 100, regen: 8, crit: 5 },
       comp: { nom: 'Trois têtes', desc: 'Mord les 3 ennemis les plus proches', lancer(c, u) { const l = c.ennemisDe(u).filter((x) => c.ciblable(x)).sort((a, b) => Guilde.dist(u.pos, a.pos) - Guilde.dist(u.pos, b.pos)).slice(0, 3); for (const e of l) { c.degats(u, e, c.s(u, 'atk') * 1.8, 'phys'); c.statut(e, 'poison', 2, 0, u); } } },
       effets: [E.stall(15, (c, u) => { c.soin(u, u, c.s(u, 'pv') * 0.25); c.log('L\'Hydre fait repousser ses têtes !', 'ennemi'); })],
     },
     {
       id: 'b2', nom: 'Le Démon', acte: 1, classes: ['monstre'], boss: true,
-      stats: { pv: 3200, atk: 55, def: 30, mag: 45, vit: 0.75, portee: 1, mvt: 1.4, mana: 90, regen: 18, crit: 10 },
+      stats: { pv: 3200, atk: 34, def: 30, mag: 45, vit: 0.45, portee: 1, mvt: 1.4, mana: 90, regen: 8, crit: 10 },
       comp: { nom: 'Souffle infernal', desc: 'Brûle tous les ennemis à 2 cases', lancer(c, u) { for (const e of c.autour(u.pos, 2, c.ennemisDe(u))) { c.degats(u, e, c.s(u, 'mag') * 2, 'mag'); c.statut(e, 'brulure', 35, 4, u); } } },
       effets: [{ tick(c, u) { if (!u.enrage && u.pv < c.s(u, 'pv') / 2) { u.enrage = true; c.buff(u, 'atk', { mul: 0.4 }); c.buff(u, 'vit', { mul: 0.3 }); c.log('Le Démon entre en furie !', 'ennemi'); } } }],
     },
     {
       id: 'b3', nom: 'Le Seigneur de la Faille', acte: 2, classes: ['monstre'], boss: true,
-      stats: { pv: 6200, atk: 75, def: 45, mag: 60, vit: 0.75, portee: 2, mvt: 1, mana: 110, regen: 20, crit: 10 },
+      stats: { pv: 6200, atk: 46, def: 45, mag: 60, vit: 0.45, portee: 2, mvt: 1, mana: 110, regen: 8, crit: 10 },
       comp: { nom: 'Vague d\'ombre', desc: 'Frappe tous les ennemis et les gèle', lancer(c, u) { for (const e of c.ennemisDe(u)) { c.degats(u, e, c.s(u, 'mag') * 1.5, 'mag'); c.statut(e, 'gel', 2); } } },
       effets: [{
         tick(c, u) {
@@ -449,7 +451,7 @@
   // choix : { txt, fn(r, R) → message } ; fixe : étage où il revient toujours.
   G.EVENEMENTS = [
     { id: 'e1', nom: 'Marchand ambulant', txt: 'Un marchand vous propose un objet rare à prix cassé.', choix: [
-      { txt: 'Acheter un objet rare (4 éclats)', cond: (r) => r.eclats >= 4, fn: (r, R) => { r.eclats -= 4; return `Vous obtenez ${R.donnerObjet(r, 'r').nom}.`; } },
+      { txt: 'Acheter un objet rare (6 éclats)', cond: (r) => r.eclats >= 6, fn: (r, R) => { r.eclats -= 6; return `Vous obtenez ${R.donnerObjet(r, 'r').nom}.`; } },
       { txt: 'Passer son chemin', fn: () => 'Le marchand hausse les épaules.' }] },
     { id: 'e2', nom: 'Fontaine de jouvence', fixe: 4, txt: 'Une eau claire qui fortifie.', choix: [
       { txt: 'Faire boire un héros (il monte d\'un rang)', heros: true, fn: (r, R, h) => R.monterRang(r, h) },

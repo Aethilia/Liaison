@@ -223,3 +223,10 @@
 .gd-log.coup { color: #8a93a3; font-size: 11px; }
 .gd-log.coup.allies { color: #8fb8de; }
 .gd-log.coup.ennemis { color: #d4a0a0; }
+.gd-prix.promo { background: #ffd43b; }
+.gd-scores th { padding: 2px 6px; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #6b6585; text-align: left; }
+.gd-scores td.num2 { text-align: center; color: #ced4da; }
+.gd-scores tr.premier td { color: #ffd43b; }
+.gd-scores tr.premier td.num { color: #ffd43b; }
+.gd-scores .gd-date { color: #6b6585; font-size: 11px; }
+.gd-scores table + .gd-titre-bloc { margin-top: 12px; }

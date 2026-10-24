@@ -97,7 +97,7 @@ test('guilde : mana par impulsions de 2 s, Rush et Stall', () => {
   c.pas(0.1);
   assert.equal(u.mana, 0);
   for (let i = 0; i < 19; i++) c.pas(0.1);
-  assert.equal(u.mana, 20); // une impulsion à 2 s
+  assert.ok(u.mana >= c.s(u, 'regen')); // une impulsion à 2 s (+ la mana des attaques)
   const rush = G.E.rush(5, { atk: 100 });
   const v = c.ajouter({ nom: 'x', stats: { pv: 100, atk: 10 }, effets: [rush, G.E.stall(3, (cc, uu) => { uu.stallOk = true; })], pos: { c: 0, l: 5 } }, 'allies');
   c.declencher(v, 'debut');
@@ -117,6 +117,7 @@ test('guilde : boutique, doublon → rang B et spécialisation, vente', () => {
   R.ouvrirBoutique(r);
   r.ecran.offres.heros[0] = { id: r.heros[0].id, vendu: false };
   r.eclats = 50;
+  r.ecran.offres.heros[0].promo = false;
   R.acheterHeros(r, 0);
   assert.equal(r.heros.length, 1);
   assert.equal(r.heros[0].rang, 'B');
@@ -136,7 +137,7 @@ test('guilde : rembobinage d\'urgence puis fin de partie', () => {
   R.choisirDepart(r, r.ecran.heros[0], 'k1');
   R.quitterBoutique(r);
   R.resultatCombat(r, true);
-  assert.equal(r.rembobinage.reserve, 5);
+  assert.equal(r.rembobinage.reserve, R.REMBOBINAGE_PAR_VICTOIRE);
   R.quitterBoutique(r);
   R.etageSuivant(r);
   R.resultatCombat(r, false);
@@ -160,7 +161,7 @@ function robot(graine, difficulte = 1) {
       for (const h of r.heros) R.placerAuto(r, h);
       for (const h of r.heros) while (r.objets.length && h.objets.length < 2) R.equiper(r, h, 0);
       const c = R.creerCombat(r);
-      R.resultatCombat(r, c.jusquAuBout() === 'allies');
+      R.resultatCombat(r, c.jusquAuBout() === 'allies', c.vivants('allies').length);
     } else if (e.type === 'boutique') {
       e.offres.heros.forEach((_, i) => R.acheterHeros(r, i));
       e.offres.objets.forEach((_, i) => R.acheterObjet(r, i));

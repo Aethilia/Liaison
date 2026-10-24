@@ -132,9 +132,9 @@ Jeu.prototype.ajouterScore = function ajouterScore(nom, sc) {
     score: Number(sc.score) || 0, etage: Number(sc.etage) || 0, endless: Number(sc.endless) || 0,
     difficulte: Number(sc.difficulte) || 1, gagne: !!sc.gagne, equipe: (sc.equipe || []).slice(0, 6).map(String), date: new Date().toISOString(),
   });
-  l.sort((a, b) => b.score - a.score);
-  this.ecrireJson('scores.json', { scores: l.slice(0, 50) });
-  return l.slice(0, 50);
+  // Toutes les parties sont gardées (les 500 dernières) pour le classement.
+  this.ecrireJson('scores.json', { scores: l.slice(-500) });
+  return l.slice(-500);
 };
 
 module.exports = { Jeu, estJoueur, empreinte, normNom };
