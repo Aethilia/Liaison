@@ -137,13 +137,24 @@ const reglesHs = () => M.SERVICES.some((x) => x.id === 'apresmidi');
 const jourNormal = (a, d, val) => { const j = M.parseISODate(d).getDay(); return (j >= 1 && j <= 5) || (j === 6 && equipeEff(a, val) === 'apresmidi'); };
 const equipeHs = (a, val) => !!a && reglesHs() && ['matin', 'apresmidi', 'nuit'].includes(equipeEff(a, val));
 const ferieHs = (a, d, val) => equipeHs(a, val) && !!M.ferie(d) && jourNormal(a, d, val);
+const regModifie = (val) => !!val && val.hsReg != null;
 const valeurCase = (a, d, val) => {
   if (val && (val.code || val.texte || val.hs)) return val;
-  const svc = val && val.service ? { service: val.service } : {};
-  if (ferieHs(a, d, val)) return { code: 'HS', texte: '', hs: HS_FERIE, hsType: 'rouge', auto: true, ...svc };
-  if (samediHs(a, d, val)) return { code: 'HS', texte: '', hs: HS_SAMEDI_APM, hsType: 'bleu', auto: true, ...svc };
+  const extra = { ...(val && val.service ? { service: val.service } : {}), ...(regModifie(val) ? { hsReg: val.hsReg } : {}) };
+  const auto = (hs, hsType) => (regModifie(val) && !val.hsReg ? val : { code: 'HS', texte: '', hs: regModifie(val) ? val.hsReg : hs, hsType, auto: true, ...extra });
+  if (ferieHs(a, d, val)) return auto(HS_FERIE, 'rouge');
+  if (samediHs(a, d, val)) return auto(HS_SAMEDI_APM, 'bleu');
   return val;
 };
+// HS automatiques corrigées à la main sur le jour (« hsReg », 0 = retirées) :
+// remplacent celles calculées, dans le même type d'heures.
+function corrigerReg(reg, val, d) {
+  if (!regModifie(val)) return reg;
+  const type = HS_TYPES.find((t) => reg[t.id]) || hsType(typeHsDefaut(d));
+  const out = hsVide();
+  out[type.id] = val.hsReg;
+  return out;
+}
 // Heures supp : trois types (bleues = normales, rouges = dimanche / férié,
 // vertes = nuit). Régulières (calculées, CTVO) : matin et nuit +1h verte par
 // jour travaillé du lundi au vendredi, après-midi +7h bleues le samedi ;
@@ -158,6 +169,13 @@ const hsType = (id) => HS_TYPES.find((x) => x.id === id) || HS_TYPES[0];
 const typeHsDefaut = (d) => (M.parseISODate(d).getDay() === 0 || M.ferie(d) ? 'rouge' : 'bleu');
 const hsVide = () => ({ bleu: 0, rouge: 0, vert: 0 });
 function hsDuJour(a, d, val) {
+  const out = hsDuJourCalcule(a, d, val);
+  out.calcule = out.reg;
+  const c = val && planCode(val.code);
+  if (!(c && c.absence) && a && presentLe(a, d)) out.reg = corrigerReg(out.reg, val, d);
+  return out;
+}
+function hsDuJourCalcule(a, d, val) {
   const out = { reg: hsVide(), ponct: hsVide() };
   if (val && val.hs) out.ponct[hsType(val.hsType || typeHsDefaut(d)).id] += val.hs;
   if (!a || !presentLe(a, d) || !reglesHs()) return out;
@@ -445,13 +463,20 @@ function caseAgent(agent, date, val, { we, auj, nuit = false }) {
   if (autreSvc) td.append(h('span', { class: 'case-svc', style: { '--c': autreSvc.couleur() }, title: `Ce jour : ${autreSvc.label}` }, autreSvc.label));
   // Heures supp automatiques : un simple point de couleur (détail au survol).
   if (val && val.auto) {
-    td.append(h('span', { class: 'hs-point', style: { '--c': couleurHs } }));
+    td.append(h('span', { class: `hs-point${regModifie(val) ? ' modif' : ''}`, style: { '--c': couleurHs } }));
+    if (regModifie(val)) td.title += ' · corrigées à la main';
     return td;
   }
   if (c) td.append(h('span', { class: 'plan-code', style: { '--c': val.code === 'HS' && couleurHs ? couleurHs : c.couleur } }, val.code === 'H' && val.texte ? val.texte : val.code === 'HS' && val.hs ? fmtHs(val.hs) : c.code));
   else if (val && val.texte) td.append(h('span', { class: 'plan-texte' }, val.texte));
   if (c && val.texte && val.code !== 'H') td.append(h('small', { class: 'plan-texte' }, val.texte));
   if (val && val.hs && val.code !== 'HS') td.append(h('span', { class: 'plan-hs', style: { background: couleurHs }, title: 'Heures supplémentaires' }, fmtHs(val.hs)));
+  // HS automatiques corrigées à la main : petit point cerclé (barré si retirées).
+  if (regModifie(val)) {
+    const t = HS_TYPES.find((x) => hsDuJour(agent, date, val).reg[x.id]);
+    td.append(h('span', { class: `hs-point modif${val.hsReg ? '' : ' zero'}`, style: { '--c': t ? t.couleur : '#94a3b8' } }));
+    td.title += val.hsReg ? ` · HS automatiques corrigées : ${fmtHs(val.hsReg)}` : ' · HS automatiques retirées';
+  }
   return td;
 }
 
@@ -464,7 +489,21 @@ function fermerPalette() {
 // Petite palette posée sous la case : un clic sur un code l'enregistre.
 function ouvrirPalette(td, agent, date, val, nuit = false) {
   fermerPalette();
-  if (val && val.auto) val = undefined; // samedi après-midi automatique : case vide en réalité
+  // Case automatique (samedi après-midi, férié) : vide en réalité, sauf service / HS corrigées.
+  if (val && val.auto) val = { code: '', texte: '', ...(val.service ? { service: val.service } : {}), ...(regModifie(val) ? { hsReg: val.hsReg } : {}) };
+  // HS automatiques du jour (calculées) et correction éventuelle.
+  const calc = reglesHs() ? hsDuJourCalcule(agent, date, val).reg : hsVide();
+  const calcTot = HS_TYPES.reduce((t, x) => t + calc[x.id], 0);
+  const calcType = HS_TYPES.find((x) => calc[x.id]);
+  const regInput = h('input', { type: 'text', class: 'pop-hs-input', value: String(regModifie(val) ? val.hsReg : calcTot).replace('.', ','), maxLength: 5, inputMode: 'decimal', title: 'HS automatiques de ce jour (0 pour les retirer)' });
+  const lireReg = () => {
+    const x = regInput.value.trim().replace(',', '.');
+    if (!x) return { ok: true, v: null };
+    const m = /^(\d{1,2})\s*h\s*(\d{1,2})?$/i.exec(x);
+    const n = m ? Number(m[1]) + (m[2] ? Number(m[2]) / 60 : 0) : Number(x);
+    if (!Number.isFinite(n) || n < 0 || n > 24) return { ok: false };
+    return { ok: true, v: Math.abs(n - calcTot) < 0.001 ? null : n };
+  };
   const texte = h('input', { type: 'text', placeholder: val && val.code === 'RET' ? 'Durée du retard (ex. 30 min)' : 'Horaire ou note (ex. 13H-18H, +3h30)', value: (val && val.texte) || '', maxLength: 40 });
   const heures = h('input', { type: 'text', class: 'pop-hs-input', placeholder: 'ex. 1, 3h30', value: val && val.hs ? fmtHs(val.hs).slice(1) : '', maxLength: 6, inputMode: 'decimal' });
   let couleurChoisie = (val && val.couleur) || '';
@@ -475,6 +514,8 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
     let t = texte.value.trim();
     const hs = lireHs(heures.value);
     if (heures.value.trim() && hs == null) { toast('Heures supp : nombre d\'heures, ex. 1, 2,5 ou 3h30.'); heures.focus(); return; }
+    const reg = lireReg();
+    if (!reg.ok) { toast('HS automatiques : nombre d\'heures, ex. 0, 1 ou 0,5.'); regInput.focus(); return; }
     // Heures supp seules : on demande le nombre d'heures.
     if (code === 'HS' && !hs) {
       enAttente = 'HS';
@@ -495,14 +536,12 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
     // Seules les heures supp saisies : case « HS ».
     const codeFinal = code === null ? '' : code || (t ? 'H' : hs ? 'HS' : '');
     try {
-      planState.semaine = await call(api.planSetCase(agent.id, date, { code: codeFinal, texte: code === null ? '' : t, hs: code === null ? null : hs, hsType: typeHs, couleur: code === null ? '' : couleurChoisie, service: code === null ? '' : serviceJour }, S.user));
+      planState.semaine = await call(api.planSetCase(agent.id, date, { code: codeFinal, texte: code === null ? '' : t, hs: code === null ? null : hs, hsType: typeHs, couleur: code === null ? '' : couleurChoisie, service: code === null ? '' : serviceJour, hsReg: code === null ? null : reg.v }, S.user));
       planSemCache.delete(lundiDe(date));
     } catch (err) {
       toast(`Non enregistré : ${err.message}`);
     }
-    await renderPlanning({ reload: false });
-    const b = document.querySelector('.roles-couleurs-btn');
-    if (b) menuCouleursRoles(b);
+    renderPlanning({ reload: false });
   };
   // Couleur de la case (renvoie à un repère de la semaine) : appliquée tout de
   // suite si la case a déjà un contenu, sinon avec le code choisi ensuite.
@@ -524,7 +563,15 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
     return ligne;
   }
   const valider = () => choisir(enAttente || ((val && val.code && !['H', 'HS'].includes(val.code)) ? val.code : texte.value.trim() ? 'H' : ''));
-  for (const champ of [texte, heures]) champ.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); valider(); } if (e.key === 'Escape') fermerPalette(); });
+  const codeActuel = () => (val && val.code) || '';
+  const ligneReg = !reglesHs() || (!calcTot && !regModifie(val)) ? null : h('div', { class: 'pop-hs-types pop-reg' },
+    h('span', { class: 'muted' }, 'HS auto'),
+    h('label', { class: 'pop-hs', title: calcTot ? `Calculé : ${fmtHs(calcTot)} ${calcType.label.toLowerCase()}` : 'Pas d\'HS automatiques ce jour' }, regInput, h('span', {}, 'h')),
+    h('small', { class: 'muted' }, calcTot ? `calculé ${fmtHs(calcTot)} ${calcType.label.toLowerCase()}` : ''),
+    h('span', { class: 'spacer' }),
+    calcTot && !(regModifie(val) && !val.hsReg) ? h('button', { class: 'btn ghost small', title: 'Retirer les HS automatiques de ce jour', onclick: () => { regInput.value = '0'; choisir(codeActuel()); } }, 'Retirer') : null,
+    regModifie(val) ? h('button', { class: 'btn ghost small', title: 'Revenir au calcul automatique', onclick: () => { regInput.value = String(calcTot).replace('.', ','); choisir(codeActuel()); } }, 'Auto') : null);
+  for (const champ of [texte, heures, regInput]) champ.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); valider(); } if (e.key === 'Escape') fermerPalette(); });
   planPop = h('div', { class: 'plan-pop', role: 'dialog' },
     h('div', { class: 'pop-titre' }, h('b', {}, agent.nom), h('span', { class: 'muted' }, ` · ${libelleJour(date, nuit)}`)),
     h('div', { class: 'pop-codes' }, PLAN_CODES.map((c) => h('button', {
@@ -544,6 +591,7 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
       class: `pop-hs-type${t.id === typeHs ? ' on' : ''}`, style: { '--c': t.couleur }, title: t.detail,
       onclick: (e) => { typeHs = t.id; e.currentTarget.parentNode.querySelectorAll('.pop-hs-type').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); },
     }, t.label))),
+    ligneReg,
     h('div', { class: 'pop-texte' }, texte, h('label', { class: 'pop-hs', title: 'Heures supplémentaires' }, h('span', {}, '+'), heures, h('span', {}, 'h supp')), h('button', { class: 'btn small', onclick: valider }, 'OK')),
     h('button', { class: 'btn ghost small pop-effacer', onclick: () => choisir(null) }, icon('x', 13), 'Effacer (travaille normalement)'));
   document.body.append(planPop);

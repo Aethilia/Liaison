@@ -41,7 +41,10 @@ function nettoyerCase(valeur) {
   if (couleur) v.couleur = couleur;
   // Responsable : service ponctuel ce jour-là (matin, après-midi, nuit).
   if (valeur && ['matin', 'apresmidi', 'nuit'].includes(valeur.service)) v.service = valeur.service;
-  return code || texte || v.hs || v.service ? v : null;
+  // HS automatiques du jour corrigées à la main (0 = retirées).
+  const reg = valeur && valeur.hsReg != null && valeur.hsReg !== '' ? Number(valeur.hsReg) : NaN;
+  if (Number.isFinite(reg) && reg >= 0) v.hsReg = Math.round(reg * 100) / 100;
+  return code || texte || v.hs || v.service || v.hsReg != null ? v : null;
 }
 
 const couleurValide = (c) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : '');

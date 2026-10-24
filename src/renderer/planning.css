@@ -295,3 +295,11 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .roles-couleur { padding: 4px 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .roles-couleur span { flex: 1; }
 .roles-couleur input[type=color] { width: 28px; height: 22px; padding: 0; border: 1px solid #e2e8f0; border-radius: 6px; background: none; cursor: pointer; }
+.sim-chip.multi { color: #fff; background: var(--fond); text-shadow: 0 1px 1px rgb(0 0 0 / 30%); }
+.sim-chip.multi.moi { box-shadow: 0 0 0 1.5px #1e293b; }
+/* HS automatiques corrigées à la main */
+.hs-point.modif { background: #fff; box-shadow: inset 0 0 0 2.5px var(--c), 0 0 0 2px #fff; }
+.hs-point.modif.zero { background: linear-gradient(135deg, transparent 42%, #94a3b8 42%, #94a3b8 58%, transparent 58%); box-shadow: inset 0 0 0 1.5px #94a3b8, 0 0 0 2px #fff; }
+.pop-reg { align-items: center; }
+.pop-reg .pop-hs-input { width: 42px; }
+.pop-reg .spacer { flex: 1; }

@@ -1,7 +1,7 @@
 'use strict';
 
 /* global S, M, h, icon, call, api, ask, toast, promptText, plural, planState, PLAN_EQUIPES, planCode, presentLe, presentEntre,
-   equipeEff, jourNormal, hsType, hsVide, typeHsDefaut, HS_TYPES, fmtHs, HS_FERIE, HS_DIMANCHE, renderPlanning, planSemCache, ROLES, roleInfo, rolesDe, pastillesRoles */
+   equipeEff, jourNormal, hsType, hsVide, typeHsDefaut, corrigerReg, HS_TYPES, fmtHs, HS_FERIE, HS_DIMANCHE, renderPlanning, planSemCache, ROLES, roleInfo, rolesDe, pastillesRoles, fondRoles, titreRoles */
 // Onglet « Simulation » du planning : un brouillon du mois pour organiser les
 // jours travaillés en gardant un œil sur la limite d'heures supp (35h par mois,
 // toutes HS confondues ; report possible pour les responsables). On choisit un
@@ -15,6 +15,10 @@ const simState = { equipe: 'total', mois: null, sims: [], id: null, pinceau: nul
 const roleJour = (sim, a, d) => ((sim.roles || {})[a.id] || {})[d] || a.role || '';
 // Couleur d'un agent dans un jour : celle de son rôle ce jour-là (sinon de son équipe).
 const couleurChip = (sim, a, d) => (roleJour(sim, a, d) ? roleInfo(roleJour(sim, a, d)).couleur : couleurEquipe(a));
+// Agent à plusieurs rôles sans rôle précis choisi ce jour-là : dégradé de ses rôles.
+const multiJour = (sim, a, d) => rolesDe(a).length > 1 && !((sim.roles || {})[a.id] || {})[d];
+const styleChip = (sim, a, d) => (multiJour(sim, a, d) ? { '--c': couleurChip(sim, a, d), '--fond': fondRoles(a) } : { '--c': couleurChip(sim, a, d) });
+const classeChip = (sim, a, d) => (multiJour(sim, a, d) ? ' multi' : '');
 
 const isoMois = (y, m) => `${y}-${String(m).padStart(2, '0')}`;
 const simCourante = () => simState.sims.find((x) => x.id === simState.id) || null;
@@ -41,6 +45,8 @@ function hsSimJour(a, d, pose, val) {
     else if (j === 0) out.rouge += HS_DIMANCHE;
     else if (j === 6) out.bleu += 7;
     else if (['matin', 'nuit'].includes(equipeEff(a))) out.vert += 1;
+    // HS automatiques corrigées au planning pour ce jour : elles priment.
+    if (val && val.hsReg != null) Object.assign(out, corrigerReg(out, val, d));
   }
   if (simState.inclurePonct && val && val.hs) out[hsType(val.hsType || typeHsDefaut(d)).id] += val.hs;
   return out;
@@ -300,10 +306,10 @@ async function vueSimulation(head, { reload = true } = {}) {
         absentReel ? h('span', { class: 'sim-alerte', title: `${absentReel} au planning` }, '!') : null,
         h('span', { class: 'sim-total' }, presents.length || '')),
       nomsVisibles
-        ? h('div', { class: 'sim-chips' }, presents.map((a) => h('span', { class: `sim-chip${pinceau === a ? ' moi' : ''}`, style: { '--c': couleurChip(sim, a, d) }, title: `${roleJour(sim, a, d) || 'sans rôle'}${pinceau ? ' · cliquer pour le retirer' : ''}`, onclick: (e) => { if (!pinceau) return; e.stopPropagation(); basculer(a.id, d, { retirer: true }); } }, a.nom)))
+        ? h('div', { class: 'sim-chips' }, presents.map((a) => h('span', { class: `sim-chip${pinceau === a ? ' moi' : ''}${classeChip(sim, a, d)}`, style: styleChip(sim, a, d), title: `${multiJour(sim, a, d) ? titreRoles(a) : roleJour(sim, a, d) || 'sans rôle'}${pinceau ? ' · cliquer pour le retirer' : ''}`, onclick: (e) => { if (!pinceau) return; e.stopPropagation(); basculer(a.id, d, { retirer: true }); } }, a.nom)))
         : [h('div', { class: 'sim-roles' }, parRole.map((x) => h('span', { class: 'sim-badge', style: { '--c': x.r.couleur }, title: `${x.r.id} : ${x.n}` }, `${x.n}`))),
           h('div', { class: 'sim-equipes' }, parEquipe.map((x) => h('span', { class: 'sim-badge equipe', style: { '--c': x.e.couleur() }, title: x.e.label }, `${x.e.label.slice(0, 1)} ${x.n}`)))],
-      avecPinceau && !nomsVisibles ? h('span', { class: 'sim-chip moi', style: { '--c': couleurChip(sim, pinceau, d) } }, pinceau.nom) : null);
+      avecPinceau && !nomsVisibles ? h('span', { class: `sim-chip moi${classeChip(sim, pinceau, d)}`, style: styleChip(sim, pinceau, d) }, pinceau.nom) : null);
     }));
 
   majCurseur();
@@ -353,7 +359,7 @@ function detailJour(cellule, sim, d, visibles) {
         const v = (simState.reel[a.id] || {})[d];
         const c = v && planCode(v.code);
         return h('div', { class: 'sim-pop-ligne' },
-          h('i', { class: 'sim-role', style: { '--c': role ? roleInfo(role).couleur : '#cbd5e1' }, title: role || 'Sans rôle' }),
+          multiJour(sim, a, d) ? h('i', { class: 'sim-role multi', style: { '--fond': fondRoles(a) }, title: titreRoles(a) }) : h('i', { class: 'sim-role', style: { '--c': role ? roleInfo(role).couleur : '#cbd5e1' }, title: role || 'Sans rôle' }),
           h('span', { class: 'sim-pop-nom' }, a.nom, c && c.absence ? h('small', { class: 'sim-pop-abs' }, ` ${c.label} au planning`) : null),
           h('span', { class: 'sim-pop-hs' }, HS_TYPES.filter((t) => hj[t.id]).map((t) => h('span', { style: { color: t.couleur } }, fmtHs(hj[t.id])))),
           h('button', { class: 'o-btn rm', title: 'Retirer ce jour', onclick: () => { fermerDetailJour(); basculer(a.id, d, { retirer: true }); } }, icon('x', 13)));
