@@ -310,3 +310,22 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .sim-pop-hs.modif input.sim-pop-reg { background: color-mix(in srgb, var(--c) 12%, #fff); border-color: var(--c); }
 .sim-pop-mini { border: 1px solid #e2e8f0; background: #fff; color: #64748b; font: inherit; font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 5px; cursor: pointer; line-height: 17px; }
 .sim-pop-mini:hover { color: #1e293b; border-color: #94a3b8; }
+/* Simulation : rôles seuls dans les jours, encadré « qui est là » au survol */
+.sim-roles-liste { display: flex; flex-direction: column; gap: 2px; margin-top: 3px; }
+.sim-role-ligne { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 1px 6px 1px 7px; border-radius: 5px; font-size: 11px; font-weight: 700; color: color-mix(in srgb, var(--c) 75%, #000); background: color-mix(in srgb, var(--c) 13%, #fff); border-left: 3px solid var(--c); }
+.sim-role-ligne b { font-size: 12px; font-weight: 900; color: var(--c); }
+.sim-survol { position: fixed; z-index: 60; min-width: 190px; max-width: 280px; padding: 10px 12px 8px; background: #fff; border-radius: 12px; box-shadow: 0 10px 30px rgb(15 23 42 / 18%), 0 0 0 1px rgb(15 23 42 / 6%); pointer-events: none; animation: sim-survol .12s ease-out; }
+@keyframes sim-survol { from { opacity: 0; transform: translateY(3px); } }
+.sim-survol-titre { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid #eef1f5; }
+.sim-survol-titre span { font-size: 11px; font-weight: 700; color: #94a3b8; }
+.sim-survol-alerte { font-size: 11.5px; font-weight: 700; color: #f08c00; background: #fff4e0; border-radius: 6px; padding: 2px 6px; margin-bottom: 6px; }
+.sim-survol-groupe + .sim-survol-groupe { margin-top: 6px; }
+.sim-survol-role { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: color-mix(in srgb, var(--c) 80%, #000); }
+.sim-survol-role i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.sim-survol-role small { margin-left: auto; font-size: 11px; color: #94a3b8; }
+.sim-survol-noms { display: flex; flex-wrap: wrap; gap: 3px 10px; padding: 2px 0 0 15px; }
+.sim-survol-noms span { font-size: 12.5px; font-weight: 600; color: #1e293b; white-space: nowrap; }
+.sim-survol-noms span::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 2px; margin-right: 4px; vertical-align: 1px; background: var(--eq); opacity: .7; }
+.sim-survol-noms .sim-role { width: 14px; height: 7px; margin-left: 4px; vertical-align: 1px; }
+.sim-survol-vide { font-size: 12px; color: #94a3b8; }
+.sim-survol-aide { margin-top: 8px; font-size: 10.5px; color: #94a3b8; }

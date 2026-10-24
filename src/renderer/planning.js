@@ -1,6 +1,6 @@
 'use strict';
 
-/* global S, M, SVC, h, icon, call, api, ask, toast, promptText, plural, siteProfil, vueSimulation, lacherPinceau, fermerDetailJour */
+/* global S, M, SVC, h, icon, call, api, ask, toast, promptText, plural, siteProfil, vueSimulation, lacherPinceau, fermerDetailJour, cacherSurvol */
 // Onglet « Planning » : agents du site par équipe, semaine du lundi au
 // dimanche avec un code par jour (repos, CP, maladie…), notes de la semaine,
 // synthèse mensuelle par agent et gestion de la liste des agents.
@@ -228,7 +228,7 @@ async function loadPlanAgents() {
 
 async function renderPlanning({ reload = true } = {}) {
   fermerPalette();
-  if (planState.vue !== 'simulation') { lacherPinceau(); fermerDetailJour(); }
+  if (planState.vue !== 'simulation') { lacherPinceau(); fermerDetailJour(); cacherSurvol(); }
   if (!planState.date) planState.date = aujourdhui();
   if (!planState.mois) {
     const d = M.parseISODate(planState.date);
