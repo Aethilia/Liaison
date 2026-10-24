@@ -207,7 +207,6 @@
 .gd-vitesses { display: flex; gap: 4px; }
 
 /* Accueil */
-.gd-accueil { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-top: 20px; }
 .gd-nouvelle { display: flex; align-items: center; gap: 12px; }
 .gd-nouvelle > span { font-size: 12px; color: #8a93a3; font-weight: 700; }
 .gd-diffs { display: flex; gap: 4px; }
@@ -230,3 +229,24 @@
 .gd-scores tr.premier td.num { color: #ffd43b; }
 .gd-scores .gd-date { color: #6b6585; font-size: 11px; }
 .gd-scores table + .gd-titre-bloc { margin-top: 12px; }
+
+/* Accueil Workfall */
+.gd-corps:has(.gd-accueil) { padding: 0; }
+.gd-accueil { position: relative; width: 100%; height: 100vh; display: flex; justify-content: center; overflow: hidden; }
+.gd-fond { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.gd-accueil-contenu { position: relative; z-index: 1; overflow-y: auto; max-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 6vh 16px 40px; }
+.gd-logo-pixel { width: min(640px, 80vw); aspect-ratio: 58 / 13; image-rendering: pixelated; filter: drop-shadow(0 0 18px rgb(177 151 252 / 45%)); }
+.gd-accroche { margin-top: -4px; font-size: 13px; font-weight: 700; letter-spacing: .25em; text-transform: uppercase; color: #d0bfff; text-shadow: 2px 2px 0 #14121c; }
+.gd-menu { display: flex; flex-direction: column; gap: 4px; min-width: 380px; margin-top: 10px; padding: 14px 18px; background: rgb(20 18 28 / 82%); border: 4px solid #f8f9fa; box-shadow: 0 0 0 4px #14121c, 8px 8px 0 4px rgb(0 0 0 / 40%); }
+.gd-menu-ligne { display: flex; align-items: center; gap: 10px; }
+.gd-menu-item { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; background: none; font: inherit; font-size: 17px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: #f8f9fa; text-align: left; cursor: pointer; }
+.gd-menu-item > span:last-child { display: flex; flex-direction: column; }
+.gd-menu-item small { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: none; color: #8a93a3; }
+.gd-curseur { width: 14px; color: #ffd43b; visibility: hidden; animation: jeu-clignote .8s steps(2) infinite; }
+.gd-menu-item:hover:not(:disabled), .gd-menu-item:focus-visible { color: #fff3a3; outline: none; }
+.gd-menu-item:hover:not(:disabled) .gd-curseur, .gd-menu-item:focus-visible .gd-curseur { visibility: visible; }
+.gd-menu-item:disabled { color: #4a4560; cursor: not-allowed; }
+.gd-accueil .gd-scores { background: rgb(20 18 28 / 88%); border-color: #f8f9fa; box-shadow: 0 0 0 4px #14121c; }
+.gd-joueur { font-size: 11px; color: #8a93a3; text-shadow: 1px 1px 0 #000; }
+.gd-eclats::after { content: ''; }
+.gd-eclats { padding: 1px 7px; color: #14121c; background: #ffd43b; border: 2px dashed #e8590c; font-size: 13px; }

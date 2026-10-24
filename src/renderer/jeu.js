@@ -286,14 +286,14 @@ function fenetreChoix(nom) {
       h('span', { class: 'jeu-etiquette' }, h('b', {}, titre), h('small', {}, sous)));
     const dlg = dialogueJeu('jeu-choix-dlg', h('div', { class: 'jeu-choix' },
       h('div', { class: 'jeu-choix-titre' }, `Salut ${nom.split(' ')[0]} !`, h('small', {}, 'On fait quoi ?')),
-      h('div', { class: 'jeu-cadre' }, canvas, moitie('travail', 'TRAVAIL', 'Main courante'), moitie('jeu', 'JEU', 'La guilde')),
+      h('div', { class: 'jeu-cadre' }, canvas, moitie('travail', 'TRAVAIL', 'Main courante'), moitie('jeu', 'JEU', 'Workfall')),
       h('div', { class: 'jeu-choix-pied' },
         h('button', { class: 'jeu-lien', onclick: () => { choix = 'code'; dlg.close(); } }, 'Changer mon code secret'))));
     dlg.addEventListener('close', () => { stop(); resolve(choix); });
   });
 }
 
-// Écran du jeu : La Guilde (guilde-ui.js). Résout au retour.
+// Écran du jeu : Workfall (guilde-ui.js). Résout au retour.
 const ecranJeu = (nom) => window.Guilde.UI.ouvrir(nom);
 
 // Point d'entrée, appelé au clic sur un nom. Résout 'travail' (suite normale)

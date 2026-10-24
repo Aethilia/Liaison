@@ -1,6 +1,6 @@
 'use strict';
 
-// La Guilde — contenu du jeu : classes, héros (25 homunculus provisoires,
+// Workfall — contenu du jeu : classes, héros (25 homunculus provisoires,
 // en attendant les vrais personnages et leurs visuels), spécialisations,
 // améliorations de classe, objets, reliques, monstres, boss et événements.
 // Tout est décrit par des « effets » : stats et crochets appelés par le
@@ -123,7 +123,7 @@
   const flag = (k, v = true) => ({ debut(c, u) { u[k] = v; } });
 
   // ---------- Héros : 25 homunculus ----------
-  // palier : 1 (6 éclats), 2 (10), 3 (15). Stats au rang C.
+  // palier : 1 (6 tickets resto), 2 (10), 3 (15). Stats au rang C.
   // Ordres de grandeur de Guildrun (démo) : 575-1000 PV, 25-60 défense,
   // 20-46 d'attaque, 0,39-0,6 attaque/s, 50-110 de mana max.
   const ST = {
@@ -343,12 +343,12 @@
     RE('r11', 'c', 'Éclat de cristal', 'Tous : +7 magie', tous(E.stats({ mag: 7 }))),
     RE('r12', 'c', 'Plume', 'Tous : +7 % vitesse d\'attaque', tous(E.stats({}, { vit: 0.07 }))),
     RE('r13', 'c', 'Œil de lynx', 'Tous : +5 % critique', tous(E.stats({ crit: 5 }))),
-    RE('r14', 'c', 'Bourse', '+2 éclats par victoire', { run: { victoire: (r) => { r.eclats += 2; } } }),
-    RE('r15', 'c', 'Coffret', '+8 éclats tout de suite', { run: { gain: (r) => { r.eclats += 8; } } }),
+    RE('r14', 'c', 'Bourse', '+2 tickets resto par victoire', { run: { victoire: (r) => { r.eclats += 2; } } }),
+    RE('r15', 'c', 'Coffret', '+8 tickets resto tout de suite', { run: { gain: (r) => { r.eclats += 8; } } }),
     RE('r16', 'c', 'Sac de voyage', '+1 objet commun au hasard', { run: { gain: (r, R) => R.donnerObjet(r, 'c') } }),
-    RE('r17', 'r', 'Remise', 'Héros 1 éclat moins cher en boutique', { run: { remise: 1 } }),
+    RE('r17', 'r', 'Remise', 'Héros 1 ticket resto moins cher en boutique', { run: { remise: 1 } }),
     RE('r18', 'r', 'Dé pipé', 'Une relance gratuite par boutique', { run: { relanceGratuite: 1 } }),
-    RE('r19', 'r', 'Intérêts', 'Victoire : +1 éclat par tranche de 10 possédés (max 4)', { run: { victoire: (r) => { r.eclats += Math.min(4, Math.floor(r.eclats / 10)); } } }),
+    RE('r19', 'r', 'Intérêts', 'Victoire : +1 ticket resto par tranche de 10 possédés (max 4)', { run: { victoire: (r) => { r.eclats += Math.min(4, Math.floor(r.eclats / 10)); } } }),
     RE('r20', 'r', 'Marchand ami', 'Boutique : une offre de plus', { run: { offreBonus: 1 } }),
     RE('r21', 'r', 'Cor de guerre', 'Rush (6) : tous +25 % vitesse d\'attaque', tous(E.rush(6, {}, { vit: 0.25 }))),
     RE('r22', 'r', 'Totem', 'Stall (15) : tous récupèrent 25 % de PV', tous(E.stall(15, (c, u) => c.soin(null, u, c.s(u, 'pv') * 0.25)))),
@@ -369,7 +369,7 @@
     RE('r37', 'e', 'Diversité', '4 classes différentes ou plus : tous +10 % PV, attaque et magie', tous({ debut(c, u) { if (new Set(c.vivants(u.cote).map((x) => x.classes[0])).size >= 4) { c.buff(u, 'pv', { mul: 0.1 }); c.buff(u, 'atk', { mul: 0.1 }); c.buff(u, 'mag', { mul: 0.1 }); } } })),
     RE('r38', 'e', 'Bouclier de ligne', 'Héros sur la ligne de devant : +20 % PV', tous({ debut(c, u) { if (u.pos.l === Guilde.LIGNES_ALLIES[0] && u.cote === 'allies') c.buff(u, 'pv', { mul: 0.2 }); } })),
     RE('r39', 'e', 'Arrière-garde', 'Héros sur la ligne de derrière : +15 % dégâts', tous({ avantDegats(c, u, t, info) { if (u.pos.l === Guilde.LIGNES_ALLIES[1] && u.cote === 'allies') info.montant *= 1.15; } })),
-    RE('r40', 'e', 'Trésor', '+20 éclats tout de suite', { run: { gain: (r) => { r.eclats += 20; } } }),
+    RE('r40', 'e', 'Trésor', '+20 tickets resto tout de suite', { run: { gain: (r) => { r.eclats += 20; } } }),
     RE('r41', 'l', 'Cœur de la faille', 'Tous : +15 % à toutes les stats', tous(E.stats({}, { pv: 0.15, atk: 0.15, mag: 0.15, def: 0.15 }))),
     RE('r42', 'l', 'Trèfle', 'Tous : +12 % critique, +25 % dégâts critiques', tous(E.stats({ crit: 12, critdeg: 25 }))),
     RE('r43', 'l', 'Seconde chance', 'Le Rembobinage se recharge à chaque fin d\'acte', { run: { finActe: (r) => { r.rembobinage.dispo = true; } } }),
@@ -377,11 +377,11 @@
     RE('r45', 'l', 'Couronne', '+1 place en combat', { enchere: true, run: { gain: (r) => { r.places = Math.min(5, r.places + 1); } } }),
     RE('r46', 'l', 'Étendard royal', '+1 place en combat', { enchere: true, run: { gain: (r) => { r.places = Math.min(5, r.places + 1); } } }),
     // Kits de départ (uniques)
-    RE('k1', 'unique', 'Kit du soldat', '1 objet commun et 5 éclats', { kit: true, run: { gain: (r, R) => { R.donnerObjet(r, 'c'); r.eclats += 5; } } }),
+    RE('k1', 'unique', 'Kit du soldat', '1 objet commun et 5 tickets resto', { kit: true, run: { gain: (r, R) => { R.donnerObjet(r, 'c'); r.eclats += 5; } } }),
     RE('k2', 'unique', 'Kit du savant', '1 objet rare de mana ou de magie', { kit: true, run: { gain: (r, R) => R.donnerObjet(r, 'r', ['o11', 'o6']) } }),
-    RE('k3', 'unique', 'Bourse de départ', '12 éclats', { kit: true, run: { gain: (r) => { r.eclats += 12; } } }),
+    RE('k3', 'unique', 'Bourse de départ', '12 tickets resto', { kit: true, run: { gain: (r) => { r.eclats += 12; } } }),
     RE('k4', 'unique', 'Recrue', 'Un héros de palier 2 gratuit', { kit: true, run: { gain: (r, R) => R.donnerHeros(r, 2) } }),
-    RE('k5', 'unique', 'Trousse', 'Une relique commune et 3 éclats', { kit: true, run: { gain: (r, R) => { R.donnerRelique(r, 'c'); r.eclats += 3; } } }),
+    RE('k5', 'unique', 'Trousse', 'Une relique commune et 3 tickets resto', { kit: true, run: { gain: (r, R) => { R.donnerRelique(r, 'c'); r.eclats += 3; } } }),
     RE('k6', 'unique', 'Kit du vétéran', 'Votre premier héros passe au rang B', { kit: true, run: { gain: (r, R) => R.monterPremier(r) } }),
   ];
   G.relique = (id) => G.RELIQUES.find((x) => x.id === id);
@@ -451,35 +451,35 @@
   // choix : { txt, fn(r, R) → message } ; fixe : étage où il revient toujours.
   G.EVENEMENTS = [
     { id: 'e1', nom: 'Marchand ambulant', txt: 'Un marchand vous propose un objet rare à prix cassé.', choix: [
-      { txt: 'Acheter un objet rare (6 éclats)', cond: (r) => r.eclats >= 6, fn: (r, R) => { r.eclats -= 6; return `Vous obtenez ${R.donnerObjet(r, 'r').nom}.`; } },
+      { txt: 'Acheter un objet rare (6 tickets resto)', cond: (r) => r.eclats >= 6, fn: (r, R) => { r.eclats -= 6; return `Vous obtenez ${R.donnerObjet(r, 'r').nom}.`; } },
       { txt: 'Passer son chemin', fn: () => 'Le marchand hausse les épaules.' }] },
     { id: 'e2', nom: 'Fontaine de jouvence', fixe: 4, txt: 'Une eau claire qui fortifie.', choix: [
       { txt: 'Faire boire un héros (il monte d\'un rang)', heros: true, fn: (r, R, h) => R.monterRang(r, h) },
-      { txt: 'Remplir sa gourde (+5 éclats)', fn: (r) => { r.eclats += 5; return '+5 éclats.'; } }] },
+      { txt: 'Remplir sa gourde (+5 tickets resto)', fn: (r) => { r.eclats += 5; return '+5 tickets resto.'; } }] },
     { id: 'e3', nom: 'Coffre suspect', txt: 'Un coffre au milieu du chemin…', choix: [
-      { txt: 'L\'ouvrir', fn: (r, R) => (R.rng(r) < 0.6 ? `Une relique : ${R.donnerRelique(r, 'r').nom} !` : (r.eclats = Math.max(0, r.eclats - 5), 'Piège ! Vous perdez 5 éclats.')) },
+      { txt: 'L\'ouvrir', fn: (r, R) => (R.rng(r) < 0.6 ? `Une relique : ${R.donnerRelique(r, 'r').nom} !` : (r.eclats = Math.max(0, r.eclats - 5), 'Piège ! Vous perdez 5 tickets resto.')) },
       { txt: 'Ne pas y toucher', fn: () => 'Prudence est mère de sûreté.' }] },
-    { id: 'e4', nom: 'Recrue errante', txt: 'Un aventurier cherche une guilde.', choix: [
-      { txt: 'L\'engager', cond: (r, R) => R.placeLibre(r), fn: (r, R) => `${R.donnerHeros(r, 1).nom} rejoint la guilde.` },
-      { txt: 'Lui donner de quoi manger (+4 éclats de gratitude)', fn: (r) => { r.eclats += 4; return '+4 éclats.'; } }] },
+    { id: 'e4', nom: 'Recrue errante', txt: 'Un aventurier cherche du travail.', choix: [
+      { txt: 'L\'engager', cond: (r, R) => R.placeLibre(r), fn: (r, R) => `${R.donnerHeros(r, 1).nom} rejoint l\'équipe.` },
+      { txt: 'Lui donner de quoi manger (+4 tickets resto de gratitude)', fn: (r) => { r.eclats += 4; return '+4 tickets resto.'; } }] },
     { id: 'e5', nom: 'Forge abandonnée', txt: 'L\'enclume est encore chaude.', choix: [
       { txt: 'Améliorer un objet (rareté supérieure)', cond: (r) => r.objets.some((o) => o) || r.heros.some((h) => h.objets.length), fn: (r, R) => R.ameliorerObjet(r) },
-      { txt: 'Récupérer de la ferraille (+3 éclats)', fn: (r) => { r.eclats += 3; return '+3 éclats.'; } }] },
+      { txt: 'Récupérer de la ferraille (+3 tickets resto)', fn: (r) => { r.eclats += 3; return '+3 tickets resto.'; } }] },
     { id: 'e6', nom: 'Pacte obscur', txt: 'Une voix propose un marché…', choix: [
       { txt: 'Accepter (relique épique, prochain combat plus dur)', fn: (r, R) => { r.malediction = 1; return `Vous obtenez ${R.donnerRelique(r, 'e').nom}. Les ennemis seront plus forts au prochain combat.`; } },
       { txt: 'Refuser', fn: () => 'La voix se tait.' }] },
     { id: 'e7', nom: 'Mendiant', txt: 'Un vieil homme tend la main.', choix: [
-      { txt: 'Donner 5 éclats', cond: (r) => r.eclats >= 5, fn: (r, R) => { r.eclats -= 5; return `En remerciement : ${R.donnerRelique(r, 'c').nom}.`; } },
+      { txt: 'Donner 5 tickets resto', cond: (r) => r.eclats >= 5, fn: (r, R) => { r.eclats -= 5; return `En remerciement : ${R.donnerRelique(r, 'c').nom}.`; } },
       { txt: 'L\'ignorer', fn: () => 'Il disparaît dans la brume.' }] },
     { id: 'e8', nom: 'Terrain d\'entraînement', fixe: 9, txt: 'Un instructeur propose ses services.', choix: [
-      { txt: 'S\'entraîner (tous les héros +6 % PV et attaque)', fn: (r) => { for (const h of r.heros) h.entrainement = (h.entrainement || 0) + 1; return 'Toute la guilde progresse.'; } },
-      { txt: 'Vendre ses conseils (+6 éclats)', fn: (r) => { r.eclats += 6; return '+6 éclats.'; } }] },
+      { txt: 'S\'entraîner (tous les héros +6 % PV et attaque)', fn: (r) => { for (const h of r.heros) h.entrainement = (h.entrainement || 0) + 1; return 'Toute l\'équipe progresse.'; } },
+      { txt: 'Vendre ses conseils (+6 tickets resto)', fn: (r) => { r.eclats += 6; return '+6 tickets resto.'; } }] },
     { id: 'e9', nom: 'Puits aux souhaits', txt: 'On dit qu\'il exauce les vœux.', choix: [
-      { txt: 'Jeter 3 éclats', cond: (r) => r.eclats >= 3, fn: (r, R) => { r.eclats -= 3; if (R.rng(r) < 0.5) { r.eclats += 10; return 'Le puits vous rend 10 éclats !'; } return 'Plouf. Rien.'; } },
+      { txt: 'Jeter 3 tickets resto', cond: (r) => r.eclats >= 3, fn: (r, R) => { r.eclats -= 3; if (R.rng(r) < 0.5) { r.eclats += 10; return 'Le puits vous rend 10 tickets resto !'; } return 'Plouf. Rien.'; } },
       { txt: 'Continuer', fn: () => 'Rien ne se passe.' }] },
     { id: 'e10', nom: 'Bibliothèque oubliée', txt: 'Des traités de combat poussiéreux.', choix: [
       { txt: 'Changer la spécialisation d\'un héros (rang B ou plus)', heros: (h) => G.RANGS.indexOf(h.rang) >= 1, fn: (r, R, h) => R.oublierSpec(r, h) },
-      { txt: 'Revendre un livre (+4 éclats)', fn: (r) => { r.eclats += 4; return '+4 éclats.'; } }] },
+      { txt: 'Revendre un livre (+4 tickets resto)', fn: (r) => { r.eclats += 4; return '+4 tickets resto.'; } }] },
   ];
 
   if (typeof module !== 'undefined' && module.exports) module.exports = G;

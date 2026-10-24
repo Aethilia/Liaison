@@ -1,6 +1,6 @@
 'use strict';
 
-// La Guilde — moteur de combat automatique sur plateau hexagonal.
+// Workfall — moteur de combat automatique sur plateau hexagonal.
 // Inspiré du fonctionnement de Guildrun : placement avant le combat, puis
 // tout se joue seul (ciblage du plus proche, mana par impulsions de 2 s,
 // compétence quand la jauge est pleine, statuts, Rush / Stall / Renfort).

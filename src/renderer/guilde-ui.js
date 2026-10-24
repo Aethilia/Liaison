@@ -1,7 +1,7 @@
 'use strict';
 
 /* global h, call, api, toast */
-// La Guilde — interface : accueil, départ, préparation (placement sur le
+// Workfall — interface : accueil, départ, préparation (placement sur le
 // plateau hexagonal), combat animé, boutique, carrefours, événements, feu de
 // camp, récompenses, enchères, fin de partie. Les homunculus sont des jetons
 // neutres numérotés en attendant les vrais visuels.
@@ -59,21 +59,21 @@
       h('div', { class: 'gd-carte-haut' }, jeton(def, { rang }), h('div', {}, h('b', {}, def.nom), h('small', { style: { color: couleurClasse(def.classes[0]) } }, nomClasse(def.classes[0])))),
       h('div', { class: 'gd-carte-stats' }, `PV ${def.stats.pv} · Att ${def.stats.atk} · Mag ${def.stats.mag} · Portée ${def.stats.portee}`),
       h('div', { class: 'gd-carte-txt' }, h('b', {}, def.comp.nom), ` : ${def.comp.desc}`),
-      prix != null ? h('div', { class: `gd-prix${promo ? ' promo' : ''}` }, promo ? `-25 % · ${prix} ◆` : `${prix} ◆`) : null);
+      prix != null ? h('div', { class: `gd-prix${promo ? ' promo' : ''}` }, promo ? `-25 % · ${prix} TR` : `${prix} TR`) : null);
   }
   function carteObjet(id, { prix = null, promo = false, onclick, desactive = false } = {}) {
     const o = G.objet(id);
     return h('button', { class: 'gd-carte petite', disabled: desactive, onclick },
       h('div', { class: 'gd-carte-haut' }, h('b', {}, o.nom), pastille(o.rarete)),
       h('div', { class: 'gd-carte-txt' }, o.desc),
-      prix != null ? h('div', { class: `gd-prix${promo ? ' promo' : ''}` }, promo ? `-25 % · ${prix} ◆` : `${prix} ◆`) : null);
+      prix != null ? h('div', { class: `gd-prix${promo ? ' promo' : ''}` }, promo ? `-25 % · ${prix} TR` : `${prix} TR`) : null);
   }
   function carteRelique(id, { prix = null, promo = false, onclick, desactive = false, choisi = false } = {}) {
     const x = G.relique(id);
     return h('button', { class: `gd-carte petite${choisi ? ' choisi' : ''}`, disabled: desactive, onclick },
       h('div', { class: 'gd-carte-haut' }, h('b', {}, x.nom), pastille(x.rarete)),
       h('div', { class: 'gd-carte-txt' }, x.desc),
-      prix != null ? h('div', { class: `gd-prix${promo ? ' promo' : ''}` }, promo ? `-25 % · ${prix} ◆` : `${prix} ◆`) : null);
+      prix != null ? h('div', { class: `gd-prix${promo ? ' promo' : ''}` }, promo ? `-25 % · ${prix} TR` : `${prix} TR`) : null);
   }
 
   const bouton = (txt, onclick, cls = '') => h('button', { class: `jeu-btn gd-btn ${cls}`, onclick }, txt);
@@ -102,10 +102,10 @@
   function cadre(contenu, { sansEntete = false } = {}) {
     const r = S.r;
     const entete = sansEntete || !r ? null : h('div', { class: 'gd-entete' },
-      h('b', { class: 'gd-logo' }, 'LA GUILDE'),
+      h('b', { class: 'gd-logo' }, 'WORKFALL'),
       h('span', { class: 'gd-etage' }, `${R.titreEtage(r)}${S.combat ? ' · Combat' : NOM_ECRAN[r.ecran.type] ? ` · ${NOM_ECRAN[r.ecran.type]}` : ''}`),
-      h('span', { class: 'gd-eclats', title: 'Éclats' }, `◆ ${r.eclats}`),
-      h('span', { class: `gd-rembob${r.rembobinage.dispo ? ' ok' : ''}`, title: r.rembobinage.dispo ? `Rembobinage d'urgence prêt (${r.rembobinage.reserve} éclats en réserve) : la première défaite ne termine pas la partie.` : 'Rembobinage d\'urgence utilisé (rechargeable au feu de camp).' }, `⟲ ${r.rembobinage.dispo ? r.rembobinage.reserve : '—'}`),
+      h('span', { class: 'gd-eclats', title: 'Tickets resto' }, `${r.eclats} TR`),
+      h('span', { class: `gd-rembob${r.rembobinage.dispo ? ' ok' : ''}`, title: r.rembobinage.dispo ? `Rembobinage d'urgence prêt (${r.rembobinage.reserve} tickets resto en réserve) : la première défaite ne termine pas la partie.` : 'Rembobinage d\'urgence utilisé (rechargeable au feu de camp).' }, `⟲ ${r.rembobinage.dispo ? r.rembobinage.reserve : '—'}`),
       h('span', { class: 'gd-reliques' }, r.reliques.map((id) => { const x = G.relique(id); return h('i', { style: { '--c': RARETES[x.rarete][1] }, title: `${x.nom} : ${x.desc}` }, x.nom.slice(0, 1)); }),
         r.reliqueTemp ? h('i', { class: 'temp', title: `Ce combat : ${G.relique(r.reliqueTemp).nom}` }, '✦') : null),
       h('span', { class: 'spacer' }),
@@ -178,7 +178,7 @@
       hr.objets.map((id, i) => { const o = G.objet(id); return h('button', { class: 'gd-objet', style: { '--c': RARETES[o.rarete][1] }, title: `${o.desc}\nCliquer pour retirer`, onclick: () => { R.desequiper(r, hr, i); sauver(); rendre(); } }, `${o.nom} ✕`); }),
       h('div', { class: 'gd-fiche-actions' },
         hr.pos ? bouton('En réserve', () => { hr.pos = null; sauver(); rendre(); }, 'petit') : null,
-        vente ? bouton(`Vendre +${R.prixVente(hr)} ◆`, () => { R.vendreHeros(r, hr); S.sel = null; sauver(); rendre(); }, 'petit rouge') : null));
+        vente ? bouton(`Vendre +${R.prixVente(hr)} TR`, () => { R.vendreHeros(r, hr); S.sel = null; sauver(); rendre(); }, 'petit rouge') : null));
   }
 
   // ---------- Choix en attente (spécialisation / amélioration) ----------
@@ -231,33 +231,173 @@
         h('td', { class: 'gd-date' }, new Date(s.date).toLocaleDateString('fr-FR')))))));
   }
 
+  // ---------- Accueil : scène pixel art animée ----------
+  // Police 5×7 pour le logo.
+  const POLICE = {
+    W: ['1...1', '1...1', '1...1', '1.1.1', '1.1.1', '11.11', '1...1'],
+    O: ['.111.', '1...1', '1...1', '1...1', '1...1', '1...1', '.111.'],
+    R: ['1111.', '1...1', '1...1', '1111.', '1.1..', '1..1.', '1...1'],
+    K: ['1...1', '1..1.', '1.1..', '11...', '1.1..', '1..1.', '1...1'],
+    F: ['11111', '1....', '1....', '1111.', '1....', '1....', '1....'],
+    A: ['.111.', '1...1', '1...1', '11111', '1...1', '1...1', '1...1'],
+    L: ['1....', '1....', '1....', '1....', '1....', '1....', '11111'],
+  };
+  const DEGRADE_LOGO = ['#fff9db', '#fff3a3', '#ffe066', '#fcc419', '#fab005', '#f59f00', '#e8590c'];
+
+  // Les lettres tombent une à une puis rebondissent (« fall »).
+  function dessinerLogo(ctx, t) {
+    const mot = 'WORKFALL';
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    [...mot].forEach((ch, i) => {
+      const t0 = 250 + i * 140;
+      const dt = Math.max(0, (t - t0) / 1000);
+      let y = -12 + 0.5 * 160 * dt * dt;
+      if (y > 0) {
+        // rebond amorti
+        const tc = Math.sqrt(24 / 160);
+        const reste = dt - tc;
+        const v = 160 * tc * 0.35;
+        y = Math.min(0, -(v * reste - 0.5 * 160 * reste * reste));
+        if (reste > (2 * v) / 160) y = 0;
+      }
+      const x0 = 2 + i * 7;
+      const y0 = 2 + Math.round(y);
+      // tranche 3D sous chaque lettre, puis contour sombre
+      POLICE[ch].forEach((ligne, j) => [...ligne].forEach((p, k) => {
+        if (p !== '1') return;
+        ctx.fillStyle = '#7048e8';
+        ctx.fillRect(x0 + k, y0 + j + 1, 1, 1);
+        ctx.fillStyle = '#3b1d7a';
+        ctx.fillRect(x0 + k, y0 + j + 2, 1, 1);
+      }));
+      POLICE[ch].forEach((ligne, j) => [...ligne].forEach((p, k) => {
+        if (p !== '1') return;
+        const scintille = Math.floor(t / 90) % 40 === (i * 5 + j) % 40;
+        ctx.fillStyle = scintille ? '#ffffff' : DEGRADE_LOGO[j];
+        ctx.fillRect(x0 + k, y0 + j, 1, 1);
+      }));
+    });
+  }
+
+  // Décor : nuit sur le site, la Faille s'ouvre dans le ciel, papiers et
+  // tickets resto tombent, l'équipe marche en bas.
+  const FOND = { etoiles: [], chutes: [] };
+  for (let i = 0; i < 70; i++) FOND.etoiles.push([(i * 97) % 320, (i * 53) % 95, i % 7]);
+  for (let i = 0; i < 26; i++) FOND.chutes.push({ x: 150 + ((i * 37) % 120) - 40, y: -((i * 29) % 180), v: 8 + (i % 5) * 3, a: i * 0.7, ticket: i % 3 === 0 });
+  function dessinerFond(ctx, t) {
+    const px = (x, y, w, hh, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, hh); };
+    ['#0b0a1a', '#100e24', '#15122e', '#1b1638', '#211a44', '#2a1f52', '#33245c'].forEach((c, i) => px(0, i * 18, 320, 18, c));
+    px(0, 126, 320, 54, '#33245c');
+    for (const [x, y, k] of FOND.etoiles) px(x, y, 1, 1, (Math.floor(t / 400) + k) % 7 === 0 ? '#ffffff' : '#6b6585');
+    // La Faille : fissure lumineuse qui pulse
+    const p = Math.sin(t / 380);
+    const fx = 272;
+    const fente = [[0, 2], [6, 3], [12, 5], [18, 4], [24, 7], [30, 6], [36, 9], [42, 7], [48, 10], [54, 8], [60, 6], [66, 4], [72, 2]];
+    for (const [dy, l] of fente) {
+      const dx = Math.sin(dy / 9) * 6;
+      px(fx + dx - l - 3 - p, 8 + dy, (l + 3) * 2 + 2 * p, 6, '#3b1d7a');
+      px(fx + dx - l - 1, 8 + dy, (l + 1) * 2, 6, '#7048e8');
+      px(fx + dx - l / 2, 8 + dy, l, 6, '#d0bfff');
+      px(fx + dx - 1, 8 + dy, 2, 6, '#ffffff');
+    }
+    // éclairs autour
+    for (let i = 0; i < 10; i++) {
+      const a = t / 900 + i * 0.63;
+      px(fx + Math.cos(a) * (22 + (i % 3) * 6), 44 + Math.sin(a * 1.3) * 34, 1, 1, i % 2 ? '#d0bfff' : '#ffffff');
+    }
+    // Immeubles et entrepôt
+    const bat = [[0, 120, 34, 60], [30, 104, 26, 76], [52, 116, 40, 64], [88, 96, 22, 84], [106, 112, 50, 68], [250, 108, 30, 72], [276, 92, 24, 88], [296, 118, 24, 62]];
+    for (const [x, y, w, hh] of bat) {
+      px(x, y, w, hh, '#14121c');
+      for (let wy = y + 5; wy < 160; wy += 7) {
+        for (let wx = x + 3; wx < x + w - 3; wx += 6) {
+          const allume = ((wx * 13 + wy * 7 + Math.floor(t / 2500)) % 11) < 3;
+          px(wx, wy, 3, 3, allume ? '#ffd43b' : '#24203a');
+        }
+      }
+    }
+    // entrepôt au centre avec porte roulante et néon
+    px(150, 120, 92, 40, '#1d1a2b');
+    px(146, 114, 100, 7, '#2b2838');
+    for (let i = 0; i < 6; i++) px(172, 128 + i * 5, 46, 4, i % 2 ? '#2b2838' : '#3a3456');
+    const neon = Math.floor(t / 1400) % 9 === 0 ? '#5f3dc4' : '#b197fc';
+    px(160, 117, 72, 1, neon);
+    // sol
+    px(0, 160, 320, 20, '#14121c');
+    for (let x = (-(t / 60) % 16); x < 320; x += 16) px(x, 168, 8, 1, '#3a3456');
+    // Papiers et tickets resto qui tombent de la Faille
+    for (const c of FOND.chutes) {
+      const y = ((c.y + (t / 1000) * c.v) % 200) - 10;
+      const x = c.x + Math.sin(t / 700 + c.a) * 6;
+      if (c.ticket) { px(x, y, 5, 3, '#ffd43b'); px(x + 1, y + 1, 3, 1, '#e8590c'); }
+      else { px(x, y, 3, 4, '#f8f9fa'); px(x + 1, y + 1, 1, 1, '#adb5bd'); }
+    }
+    // L'équipe qui marche
+    if (typeof HEROS !== 'undefined' && typeof sprite === 'function') {
+      const equipe = [HEROS.chevalier, HEROS.archere, HEROS.mage, HEROS.pretre];
+      const base = (t / 45) % 380 - 60;
+      equipe.forEach((spr, i) => {
+        const pas = Math.floor(t / 180 + i) % 2;
+        sprite(ctx, spr, Math.round(base - i * 13), 148 - pas);
+      });
+    }
+  }
+
+  function animerCanvas(canvas, dessin, cle, debut = performance.now()) {
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const boucle = (t) => {
+      if (!S || !canvas.isConnected) return;
+      dessin(ctx, t - debut);
+      S[cle] = requestAnimationFrame(boucle);
+    };
+    S[cle] = requestAnimationFrame(boucle);
+  }
+
   function ecranAccueil() {
     const p = S.profil;
-    let diff = Math.min(p.diffMax, S.diffChoisie || p.diffMax);
+    const diff = Math.min(p.diffMax, S.diffChoisie || p.diffMax);
+    const panneau = S.panneauAccueil || null;
+    const fond = h('canvas', { class: 'gd-fond', width: 320, height: 180 });
+    const logo = h('canvas', { class: 'gd-logo-pixel', width: 58, height: 13 });
+    const item = (txt, onclick, { actif = true, sous = '' } = {}) => h('button', { class: 'gd-menu-item', disabled: !actif, onclick }, h('span', { class: 'gd-curseur' }, '▶'), h('span', {}, txt, sous ? h('small', {}, sous) : null));
     const choixDiff = h('div', { class: 'gd-diffs' }, Array.from({ length: 8 }, (_, i) => i + 1).map((d) => h('button', {
       class: `gd-diff${d === diff ? ' on' : ''}`, disabled: d > p.diffMax, title: d > p.diffMax ? 'Gagnez une partie au niveau précédent pour débloquer' : `Difficulté ${d} : ennemis +${(d - 1) * 12} %`,
       onclick: () => { S.diffChoisie = d; rendre(); },
     }, d)));
-    const scores = tableauClassement(S.scores || []);
-    cadre(h('div', { class: 'gd-accueil' },
-      h('div', { class: 'jeu-ecran-titre' }, 'LA GUILDE', h('small', {}, `Joueur : ${S.nom}`)),
-      p.partie ? bouton(`Continuer (${R.titreEtage(p.partie)})`, () => { S.r = p.partie; S.sel = null; rendre(); }) : null,
-      h('div', { class: 'gd-nouvelle' }, h('span', {}, 'Difficulté'), choixDiff,
-        bouton('Nouvelle partie', () => {
-          if (p.partie && !window.confirm('Abandonner la partie en cours ?')) return;
-          S.r = R.nouvellePartie(S.nom, diff);
-          p.partie = S.r;
-          S.sel = null;
-          sauver();
-          rendre();
-        })),
-      scores,
-      h('details', { class: 'gd-regles' }, h('summary', {}, 'Comment ça marche ?'),
-        h('p', {}, 'Monte ta guilde et referme la Faille : 2 actes de 6 étages, un boss à la fin de chacun, puis le mode Endless.'),
-        h('p', {}, 'Avant chaque combat, place tes héros sur les deux lignes du bas. Le combat se joue tout seul : chacun frappe l\'ennemi le plus proche, la mana se recharge toutes les 2 secondes et la compétence part quand la jauge est pleine.'),
-        h('p', {}, 'Entre les combats : boutique (héros, objets, reliques contre des éclats ◆), carrefours (événement, feu de camp ou combat défi). Un héros acheté en double monte de rang : B = spécialisation (3 au choix), A et S = amélioration de classe.'),
-        h('p', {}, 'Le rembobinage d\'urgence ⟲ garde 5 éclats par victoire et sauve la première défaite. Rush (X) : actif les X premières secondes. Stall (X) : se déclenche une fois après X secondes. Renfort : marche même depuis la réserve.')),
-      bouton('◀ Retour', fermer, 'gris')), { sansEntete: true });
+    const nouvelle = () => {
+      if (p.partie && !window.confirm('Abandonner la partie en cours ?')) return;
+      S.r = R.nouvellePartie(S.nom, diff);
+      p.partie = S.r;
+      S.sel = null;
+      S.panneauAccueil = null;
+      sauver();
+      rendre();
+    };
+    const basculer = (nom) => { S.panneauAccueil = panneau === nom ? null : nom; rendre(); };
+    const contenuPanneau = panneau === 'classement' ? tableauClassement(S.scores || [])
+      : panneau === 'regles' ? h('div', { class: 'gd-scores gd-regles' },
+        h('div', { class: 'gd-titre-bloc' }, 'Comment jouer'),
+        h('p', {}, 'Une Faille s\'est ouverte au-dessus du site : referme-la avec ton équipe. 2 actes de 6 étages, un boss au bout de chacun, puis le mode Endless.'),
+        h('p', {}, 'Avant chaque combat, place tes héros sur les deux lignes du bas. Le combat se joue tout seul : chacun frappe l\'ennemi le plus proche, la mana se recharge (toutes les 2 s et à chaque coup) et la compétence part quand la jauge est pleine.'),
+        h('p', {}, 'Entre les combats : boutique (héros, objets, reliques payés en tickets resto), carrefours (événement, feu de camp ou combat défi). Un héros acheté en double monte de rang : B = spécialisation, A et S = amélioration de classe.'),
+        h('p', {}, 'Le rembobinage d\'urgence ⟲ garde 10 tickets resto par victoire et sauve la première défaite. Rush (X) : actif les X premières secondes. Stall (X) : une fois après X secondes. Renfort : marche depuis la réserve.'))
+        : null;
+    cadre(h('div', { class: 'gd-accueil' }, fond,
+      h('div', { class: 'gd-accueil-contenu' },
+        logo,
+        h('div', { class: 'gd-accroche' }, 'Referme la Faille avant la fin du service'),
+        h('div', { class: 'gd-menu' },
+          p.partie ? item('Continuer', () => { S.r = p.partie; S.sel = null; S.panneauAccueil = null; rendre(); }, { sous: R.titreEtage(p.partie) }) : null,
+          h('div', { class: 'gd-menu-ligne' }, item('Nouvelle partie', nouvelle), choixDiff),
+          item('Classement', () => basculer('classement'), { sous: S.scores && S.scores.length ? `${classement(S.scores)[0].joueur} en tête` : '' }),
+          item('Comment jouer', () => basculer('regles')),
+          item('Retour au travail', fermer)),
+        contenuPanneau,
+        h('div', { class: 'gd-joueur' }, `Joueur : ${S.nom}`))), { sansEntete: true });
+    animerCanvas(fond, dessinerFond, 'animFond');
+    S.logoT0 = S.logoT0 || performance.now(); // le logo ne retombe qu'à l'ouverture
+    animerCanvas(logo, dessinerLogo, 'animLogo', S.logoT0);
   }
 
   function ecranDepart() {
@@ -409,7 +549,7 @@
     const msg = (m) => { if (m) toast(m); sauver(); rendre(); };
     cadre(h('div', { class: 'gd-boutique' },
       h('div', { class: 'gd-bandeau' }, r.message ? h('span', { class: 'gd-msg' }, r.message) : null, h('span', { class: 'spacer' }),
-        bouton(`Relancer (${R.prixRelance(r)} ◆)`, () => { if (!R.relancer(r)) toast('Pas assez d\'éclats.'); msg(); }, 'petit gris'),
+        bouton(`Relancer (${R.prixRelance(r)} TR)`, () => { if (!R.relancer(r)) toast('Pas assez de tickets resto.'); msg(); }, 'petit gris'),
         bouton(e.retour === 'combat' ? 'Au combat ▶' : 'Continuer ▶', () => { r.message = ''; R.quitterBoutique(r); S.sel = null; sauver(); rendre(); })),
       h('div', { class: 'gd-etals' },
         h('div', { class: 'gd-cartes' }, e.offres.heros.map((o, i) => (o.vendu ? h('div', { class: 'gd-carte vendu' }, 'Vendu') : carteHeros(o.id, { prix: R.prixOffre(r, 'heros', o), promo: o.promo, desactive: r.eclats < R.prixOffre(r, 'heros', o), onclick: () => msg(R.acheterHeros(r, i)) })))),
@@ -464,7 +604,7 @@
   function ecranFeu() {
     const r = S.r;
     cadre(h('div', { class: 'gd-centre' },
-      h('span', { class: 'gd-noeud-ic grand feu' }, '♨'), h('h2', {}, 'Feu de camp'), h('p', { class: 'gd-recit' }, 'La guilde reprend son souffle. Une seule action :'),
+      h('span', { class: 'gd-noeud-ic grand feu' }, '♨'), h('h2', {}, 'Feu de camp'), h('p', { class: 'gd-recit' }, 'L\'équipe reprend son souffle. Une seule action :'),
       h('div', { class: 'gd-choix' }, R.FEU.map((o) => {
         const ok = !o.cond || o.cond(r);
         return bouton(`${o.nom} — ${o.desc}`, () => {
@@ -526,6 +666,8 @@
   function rendre() {
     if (!S) return;
     cancelAnimationFrame(S.anim);
+    cancelAnimationFrame(S.animFond);
+    cancelAnimationFrame(S.animLogo);
     if (!S.r) return ecranAccueil();
     const r = S.r;
     if (r.enAttente.length && !r.fini) return choixEnAttente();

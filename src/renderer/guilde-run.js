@@ -1,6 +1,6 @@
 'use strict';
 
-// La Guilde — déroulé d'une partie (« run ») : départ, combats, boutique,
+// Workfall — déroulé d'une partie (« run ») : départ, combats, boutique,
 // carrefours (événement / feu de camp / combat défi), rangs C → B → A → S,
 // spécialisations, améliorations, enchères de fin d'acte, rembobinage
 // d'urgence, boss, mode Endless et score. L'état est un simple objet JSON
@@ -40,7 +40,7 @@
     return r;
   };
 
-  // Départ : un héros au choix, un kit, quelques éclats et une première boutique.
+  // Départ : un héros au choix, un kit, quelques tickets resto et une première boutique.
   R.ECLATS_DEPART = 15; // comme Guildrun
   R.ECLATS_PAR_SURVIVANT = 2;
   R.REMBOBINAGE_PAR_VICTOIRE = 10;
@@ -107,7 +107,7 @@
   // Monte d'un rang (doublon, feu de camp, fontaine…).
   R.monterRang = (r, h) => {
     const ri = G.RANGS.indexOf(h.rang);
-    if (ri >= 3) { r.eclats += 3; return `${G.heros(h.id).nom} est déjà au rang S : +3 éclats.`; }
+    if (ri >= 3) { r.eclats += 3; return `${G.heros(h.id).nom} est déjà au rang S : +3 tickets resto.`; }
     h.rang = G.RANGS[ri + 1];
     if (ri + 1 === 1) R.proposerSpec(r, h);
     else R.proposerAmelioration(r, h);
@@ -311,7 +311,7 @@
   };
 
   // ---------- Après le combat ----------
-  // survivants : héros encore debout (2 éclats chacun, comme Guildrun).
+  // survivants : héros encore debout (2 tickets resto chacun, comme Guildrun).
   R.resultatCombat = (r, gagne, survivants = R.enCombat(r).length) => {
     const type = r.combat.type;
     r.reliqueTemp = null;
@@ -323,7 +323,7 @@
       r.eclats += gain;
       for (const id of r.reliques) { const x = G.relique(id); if (x.run && x.run.victoire) x.run.victoire(r, R); }
       if (r.rembobinage.dispo && type !== 'endless') r.rembobinage.reserve += R.REMBOBINAGE_PAR_VICTOIRE;
-      r.message = `Victoire ! +${gain} éclats.`;
+      r.message = `Victoire ! +${gain} tickets resto.`;
       if (type === 'boss' && r.etage === R.ETAGES_PAR_ACTE) return R.recompenseRelique(r, ['r', 'e'], 'finActe1');
       if (type === 'boss') { r.gagne = true; r.ecran = { type: 'victoireFinale' }; return r; }
       if (type === 'defi') return R.recompenseRelique(r, ['r', 'e'], 'suite');
@@ -335,7 +335,7 @@
       const rendu = r.rembobinage.reserve;
       r.eclats += rendu;
       r.rembobinage.reserve = 0;
-      r.message = `Défaite… Le rembobinage d'urgence s'active : +${rendu} éclats, la partie continue.`;
+      r.message = `Défaite… Le rembobinage d'urgence s'active : +${rendu} tickets resto, la partie continue.`;
       if (type === 'boss') { r.ecran = { type: 'preparation' }; return r; }
       if (type === 'defi') return R.etageSuivant(r);
       return R.ouvrirBoutique(r);
@@ -402,20 +402,20 @@
     const o = r.ecran.offres.heros[i];
     if (!o || o.vendu) return 'Déjà acheté.';
     const prix = R.prixOffre(r, 'heros', o);
-    if (r.eclats < prix) return 'Pas assez d\'éclats.';
+    if (r.eclats < prix) return 'Pas assez de tickets resto.';
     const double = r.heros.find((h) => h.id === o.id && h.rang !== 'S');
-    if (!double && !R.placeLibre(r)) return 'Guilde complète (6 héros) : vendez-en un d\'abord.';
+    if (!double && !R.placeLibre(r)) return 'Équipe complète (6 héros) : vendez-en un d\'abord.';
     r.eclats -= prix;
     o.vendu = true;
     if (double) return R.monterRang(r, double);
     R.ajouterHeros(r, o.id);
-    return `${G.heros(o.id).nom} rejoint la guilde.`;
+    return `${G.heros(o.id).nom} rejoint l\'équipe.`;
   };
   R.acheterObjet = (r, i) => {
     const o = r.ecran.offres.objets[i];
     if (!o || o.vendu) return 'Déjà acheté.';
     const prix = R.prixOffre(r, 'objets', o);
-    if (r.eclats < prix) return 'Pas assez d\'éclats.';
+    if (r.eclats < prix) return 'Pas assez de tickets resto.';
     if (r.objets.length >= R.MAX_INVENTAIRE) return 'Inventaire plein.';
     r.eclats -= prix;
     o.vendu = true;
@@ -426,7 +426,7 @@
     const o = r.ecran.offres.reliques[i];
     if (!o || o.vendu) return 'Déjà achetée.';
     const prix = R.prixOffre(r, 'reliques', o);
-    if (r.eclats < prix) return 'Pas assez d\'éclats.';
+    if (r.eclats < prix) return 'Pas assez de tickets resto.';
     r.eclats -= prix;
     o.vendu = true;
     R.donnerReliqueId(r, o.id);
@@ -507,8 +507,8 @@
   R.acheterLot = (r, i) => {
     const lot = r.ecran.lots[i];
     if (!lot || lot.vendu) return 'Déjà adjugé.';
-    if (r.eclats < lot.prix) return 'Pas assez d\'éclats.';
-    if (lot.type === 'heros' && !R.placeLibre(r)) return 'Guilde complète.';
+    if (r.eclats < lot.prix) return 'Pas assez de tickets resto.';
+    if (lot.type === 'heros' && !R.placeLibre(r)) return 'Équipe complète.';
     if (lot.type === 'objet' && r.objets.length >= R.MAX_INVENTAIRE) return 'Inventaire plein.';
     r.eclats -= lot.prix;
     lot.vendu = true;
