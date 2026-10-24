@@ -15,21 +15,33 @@ const PATTERNS = {
 
 // Renvoie la version la plus récente disponible pour ce type d'installation
 // ({ version, file }), ou null si le poste est déjà à jour.
-function findUpdate(dataDir, currentVersion, kind = 'installation') {
-  const dir = path.join(dataDir, UPDATE_DIR);
-  let names;
+// Le dossier peut s'appeler « mises-a-jour », « Mises à jour », « mises a jour »…
+const estDossierMaj = (nom) => nom.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s_]+/g, '-') === UPDATE_DIR;
+
+function dossiersMaj(dataDir) {
   try {
-    names = fs.readdirSync(dir);
+    return fs.readdirSync(dataDir, { withFileTypes: true }).filter((e) => e.isDirectory() && estDossierMaj(e.name)).map((e) => path.join(dataDir, e.name));
   } catch {
-    return null;
+    return [];
   }
+}
+
+function findUpdate(dataDir, currentVersion, kind = 'installation') {
   let best = null;
-  for (const name of names) {
-    const m = PATTERNS[kind].exec(name);
-    if (!m) continue;
-    const version = `${Number(m[1])}.${Number(m[2])}.${Number(m[3])}`;
-    if (compareVersions(version, currentVersion) <= 0) continue;
-    if (!best || compareVersions(version, best.version) > 0) best = { version, file: path.join(dir, name) };
+  for (const dir of dossiersMaj(dataDir)) {
+    let names;
+    try {
+      names = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const m = PATTERNS[kind].exec(name);
+      if (!m) continue;
+      const version = `${Number(m[1])}.${Number(m[2])}.${Number(m[3])}`;
+      if (compareVersions(version, currentVersion) <= 0) continue;
+      if (!best || compareVersions(version, best.version) > 0) best = { version, file: path.join(dir, name) };
+    }
   }
   return best;
 }

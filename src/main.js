@@ -475,10 +475,12 @@ const PORTABLE_EXE = process.env.PORTABLE_EXECUTABLE_FILE || null;
 const updateKind = () => (PORTABLE_EXE ? 'portable' : 'installation');
 
 // Cherche la version la plus récente dans le dossier mises-a-jour de tous les
-// sites connus du poste (site actif d'abord).
+// sites connus du poste (site actif d'abord) et dans celui du dossier qui les
+// contient (dossier commun au-dessus de CTVO et CPTP).
 function findAnyUpdate() {
   let best = null;
-  const dirs = [config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)];
+  const sites = [config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)].filter(Boolean);
+  const dirs = [...sites, ...sites.map((d) => path.dirname(d))];
   for (const dir of [...new Set(dirs)]) {
     let u = null;
     try {

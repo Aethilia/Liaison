@@ -99,7 +99,9 @@ Excel mensuel (**Exporter le mois**) en garde aussi une copie au format habituel
    Si elle est trouvée en cours d'utilisation, un bandeau « **Nouvelle version
    disponible** » propose **Installer** (vérification toutes les 30 minutes).
    L'installateur peut être déposé dans le dossier `mises-a-jour` de
-   n'importe quel site connu du poste (CTVO ou CPTP).
+   n'importe quel site connu du poste (CTVO ou CPTP), ou — plus simple, à
+   partir de la 1.10.3 — une seule fois dans le dossier `mises-a-jour` du
+   dossier commun qui contient CTVO et CPTP (« Mises à jour » marche aussi).
 
 Les données ne sont jamais touchées par une mise à jour. Les postes encore en
 1.0.0 doivent installer la 1.1.0 une fois à la main (elle apporte cette

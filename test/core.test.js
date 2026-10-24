@@ -150,6 +150,11 @@ test('mises à jour : détection de la version la plus récente dans le dossier 
   assert.equal(findUpdate(dir, '1.0.0').version, '1.10.0');
   assert.equal(findUpdate(dir, '1.10.0'), null);
   assert.equal(findUpdate(dir, '1.0.0', 'portable').version, '1.3.0');
+  // Dossier nommé à la main « Mises à jour » : reconnu aussi.
+  const autre = fs.mkdtempSync(path.join(os.tmpdir(), 'liaison-maj-'));
+  fs.mkdirSync(path.join(autre, 'Mises à jour'));
+  fs.writeFileSync(path.join(autre, 'Mises à jour', 'Liaison-Installation-2.0.0.exe'), '');
+  assert.equal(findUpdate(autre, '1.10.2').version, '2.0.0');
 });
 
 test('absents au-delà des 4 cases : reportés dans les N.B. puis relus', async () => {
