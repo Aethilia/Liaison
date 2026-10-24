@@ -107,7 +107,7 @@
     planSimList: (mois) => ok((plan.sims || []).filter((x) => x.mois === mois)),
     planSimSave: (sim, par) => { plan.sims = plan.sims || []; const x = { ...sim, id: sim.id || `s${Date.now().toString(36)}`, majPar: par || '' }; plan.sims = plan.sims.filter((y) => y.id !== x.id).concat(x); return ok(x); },
     planSimDelete: (id) => { plan.sims = (plan.sims || []).filter((y) => y.id !== id); return ok(true); },
-    planAppliquer: (list) => { let poses = 0; let ignores = 0; for (const c of list) { const l = lundi(c.date); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.cases[c.agentId] = s.cases[c.agentId] || {}; if (s.cases[c.agentId][c.date]) ignores++; else { s.cases[c.agentId][c.date] = { code: c.code, texte: '' }; poses++; } } return ok({ poses, ignores }); },
+    planAppliquer: (list) => { let poses = 0; let ignores = 0; for (const c of list) { const l = lundi(c.date); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.cases[c.agentId] = s.cases[c.agentId] || {}; if (c.hsReg != null) { s.cases[c.agentId][c.date] = { code: '', texte: '', ...(s.cases[c.agentId][c.date] || {}), hsReg: c.hsReg }; poses++; } else if (s.cases[c.agentId][c.date]) ignores++; else { s.cases[c.agentId][c.date] = { code: c.code, texte: '' }; poses++; } } return ok({ poses, ignores }); },
     planCodes: () => ok(plan.codes || []),
     planRoles: () => ok(plan.rolesCouleurs || {}),
     planSaveRoles: (c) => { plan.rolesCouleurs = c; return ok(c); },

@@ -303,3 +303,10 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .pop-reg { align-items: center; }
 .pop-reg .pop-hs-input { width: 42px; }
 .pop-reg .spacer { flex: 1; }
+/* Simulation : HS automatiques modifiables dans le détail d'un jour */
+.sim-pop-hs { align-items: center; }
+.sim-pop-champ { display: inline-flex; align-items: center; gap: 1px; color: var(--c); font-weight: 800; }
+.sim-pop-champ input.sim-pop-reg { width: 30px; padding: 1px 3px; font: inherit; font-size: 12px; text-align: center; color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 35%, #fff); border-radius: 5px; background: #fff; }
+.sim-pop-hs.modif input.sim-pop-reg { background: color-mix(in srgb, var(--c) 12%, #fff); border-color: var(--c); }
+.sim-pop-mini { border: 1px solid #e2e8f0; background: #fff; color: #64748b; font: inherit; font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 5px; cursor: pointer; line-height: 17px; }
+.sim-pop-mini:hover { color: #1e293b; border-color: #94a3b8; }

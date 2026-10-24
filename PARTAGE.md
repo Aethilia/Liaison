@@ -102,6 +102,9 @@ Excel mensuel (**Exporter le mois**) en garde aussi une copie au format habituel
    n'importe quel site connu du poste (CTVO ou CPTP), ou — plus simple, à
    partir de la 1.10.3 — une seule fois dans le dossier `mises-a-jour` du
    dossier commun qui contient CTVO et CPTP (« Mises à jour » marche aussi).
+   Depuis la 1.10.4, c'est ce dossier que l'appli crée et ouvre (bouton
+   *Dossier des mises à jour*) ; une fois tous les postes en 1.10.3 ou plus,
+   les dossiers `mises-a-jour` de CTVO et CPTP peuvent être supprimés.
 
 Les données ne sont jamais touchées par une mise à jour. Les postes encore en
 1.0.0 doivent installer la 1.1.0 une fois à la main (elle apporte cette

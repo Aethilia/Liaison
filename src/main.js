@@ -14,7 +14,7 @@ const { Externes } = require('./core/externes');
 const { Importants } = require('./core/importants');
 const { lirePlanningExcel } = require('./core/planning-import');
 const { Planning } = require('./core/planning');
-const { UPDATE_DIR, findUpdate } = require('./core/update');
+const { UPDATE_DIR, findUpdate, dossiersMaj } = require('./core/update');
 
 // Interface en français (heures sur 24 h dans les champs horaires).
 app.commandLine.appendSwitch('lang', 'fr-FR');
@@ -491,8 +491,15 @@ function findAnyUpdate() {
   return best;
 }
 
+// Dossier conseillé : celui du dossier principal (au-dessus de CTVO / CPTP),
+// sous le nom qu'il a déjà (« mises-a-jour », « Mises à jour »…).
+function dossierMajPrincipal() {
+  const principal = path.dirname(config.dataDir);
+  return dossiersMaj(principal)[0] || path.join(principal, UPDATE_DIR);
+}
+
 handle('update:check', () => {
-  const dir = path.join(config.dataDir, UPDATE_DIR);
+  const dir = dossierMajPrincipal();
   try {
     fs.mkdirSync(dir, { recursive: true });
   } catch { /* dossier en lecture seule : on vérifie quand même */ }
@@ -525,7 +532,7 @@ handle('update:install', () => {
   return update.version;
 });
 handle('update:openDir', () => {
-  const dir = path.join(config.dataDir, UPDATE_DIR);
+  const dir = dossierMajPrincipal();
   fs.mkdirSync(dir, { recursive: true });
   return shell.openPath(dir);
 });

@@ -37,16 +37,28 @@ function travailleReel(a, d, val) {
 }
 
 // Heures supp d'un jour posé dans la simulation (+ ponctuelles déjà saisies au planning).
-function hsSimJour(a, d, pose, val) {
+// HS automatiques d'un jour posé (avant correction).
+function regSim(a, d) {
+  const out = hsVide();
+  const j = M.parseISODate(d).getDay();
+  if (M.ferie(d)) out.rouge += HS_FERIE;
+  else if (j === 0) out.rouge += HS_DIMANCHE;
+  else if (j === 6) out.bleu += 7;
+  else if (['matin', 'nuit'].includes(equipeEff(a))) out.vert += 1;
+  return out;
+}
+// Correction de ces HS : celle de la simulation, sinon celle du planning.
+function regCorrige(a, d, val, sim = simCourante()) {
+  const s = sim && ((sim.hsReg || {})[a.id] || {})[d];
+  if (s != null) return s;
+  return val && val.hsReg != null ? val.hsReg : null;
+}
+function hsSimJour(a, d, pose, val, sim) {
   const out = hsVide();
   if (pose) {
-    const j = M.parseISODate(d).getDay();
-    if (M.ferie(d)) out.rouge += HS_FERIE;
-    else if (j === 0) out.rouge += HS_DIMANCHE;
-    else if (j === 6) out.bleu += 7;
-    else if (['matin', 'nuit'].includes(equipeEff(a))) out.vert += 1;
-    // HS automatiques corrigées au planning pour ce jour : elles priment.
-    if (val && val.hsReg != null) Object.assign(out, corrigerReg(out, val, d));
+    Object.assign(out, regSim(a, d));
+    const n = regCorrige(a, d, val, sim);
+    if (n != null) Object.assign(out, corrigerReg(out, { hsReg: n }, d));
   }
   if (simState.inclurePonct && val && val.hs) out[hsType(val.hsType || typeHsDefaut(d)).id] += val.hs;
   return out;
@@ -58,7 +70,7 @@ function compteurAgent(a, sim, jours) {
   let nb = 0;
   for (const d of jours) {
     if (poses.has(d)) nb += 1;
-    const hj = hsSimJour(a, d, poses.has(d), (simState.reel[a.id] || {})[d]);
+    const hj = hsSimJour(a, d, poses.has(d), (simState.reel[a.id] || {})[d], sim);
     for (const k of Object.keys(t)) t[k] += hj[k];
   }
   const hs = t.bleu + t.rouge + t.vert;
@@ -210,6 +222,7 @@ async function vueSimulation(head, { reload = true } = {}) {
   const parService = simState.equipe !== 'total';
   const visibles = parService ? agents.filter((a) => equipeEff(a) === simState.equipe) : agents;
   const nomsVisibles = simState.noms || parService;
+  simState.visibles = visibles;
   const choixService = h('div', { class: 'seg sim-seg' }, [...PLAN_EQUIPES.filter((e) => ['matin', 'apresmidi', 'nuit'].includes(e.id)).map((e) => [e.id, e.label, e.couleur()]), ['total', 'Total', '#1e293b']].map(([id, label, c]) => h('button', {
     class: simState.equipe === id ? 'on' : '', style: { '--c': c },
     onclick: () => {
@@ -300,6 +313,7 @@ async function vueSimulation(head, { reload = true } = {}) {
       return h('div', {
         class: `sim-case${jour === 0 || jour === 6 ? ' we' : ''}${ferie ? ' ferie' : ''}${avecPinceau ? ' pose' : ''}${pinceau ? ' cible' : ''}`,
         title: `${presents.map((a) => a.nom).join(', ') || 'Personne'}${absentReel ? `\n${pinceau.nom} : ${absentReel} au planning` : ''}`,
+        'data-date': d,
         onclick: (e) => { if (pinceau) basculer(pinceau.id, d); else detailJour(e.currentTarget, sim, d, visibles); },
       },
       h('div', { class: 'sim-date' }, h('b', {}, Number(d.slice(8))), ferie ? h('span', { class: 'sim-ferie' }, 'Férié') : null,
@@ -340,13 +354,20 @@ function fermerDetailJour() {
   if (simPop) simPop.remove();
   simPop = null;
 }
+// Après une correction : la vue est redessinée, la fenêtre rouverte sur le même jour.
+async function rouvrirDetail(d) {
+  await renderPlanning({ reload: false });
+  const cel = document.querySelector(`.sim-case[data-date="${d}"]`);
+  const sim = simCourante();
+  if (cel && sim) detailJour(cel, sim, d, simState.visibles || []);
+}
 function detailJour(cellule, sim, d, visibles) {
   fermerDetailJour();
   const presents = visibles.filter((a) => ((sim.jours || {})[a.id] || []).includes(d));
   const titre = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(M.parseISODate(d));
   const groupes = PLAN_EQUIPES.map((eq) => ({ eq, liste: presents.filter((a) => (a.equipe === 'responsables' ? eq.id === 'responsables' : equipeEff(a) === eq.id)) })).filter((g) => g.liste.length);
   const parRole = [...ROLES.map((x) => x.id), ''].map((rid) => ({ r: roleInfo(rid) || { id: 'Sans rôle', court: '?', couleur: '#94a3b8' }, n: presents.filter((a) => (roleJour(sim, a, d) || '') === rid).length })).filter((x) => x.n);
-  const hsTotal = presents.reduce((t, a) => { const hj = hsSimJour(a, d, true, (simState.reel[a.id] || {})[d]); return t + hj.bleu + hj.rouge + hj.vert; }, 0);
+  const hsTotal = presents.reduce((t, a) => { const hj = hsSimJour(a, d, true, (simState.reel[a.id] || {})[d], sim); return t + hj.bleu + hj.rouge + hj.vert; }, 0);
   simPop = h('div', { class: 'plan-pop sim-pop', role: 'dialog', onclick: (e) => e.stopPropagation() },
     h('div', { class: 'pop-titre' }, h('b', {}, titre.replace(/^./, (c) => c.toUpperCase())), M.ferie(d) ? h('span', { class: 'sim-ferie' }, M.ferie(d)) : null,
       h('span', { class: 'muted' }, ` · ${plural(presents.length, 'présent')}${hsTotal ? ` · ${fmtHs(hsTotal).replace('+', '')} d'HS` : ''}`)),
@@ -355,13 +376,42 @@ function detailJour(cellule, sim, d, visibles) {
       h('div', { class: 'sim-equipe', style: { '--eq': g.eq.couleur() } }, h('span', { class: 'eq-pastille' }), `${g.eq.label} (${g.liste.length})`),
       g.liste.map((a) => {
         const role = roleJour(sim, a, d);
-        const hj = hsSimJour(a, d, true, (simState.reel[a.id] || {})[d]);
+        const hj = hsSimJour(a, d, true, (simState.reel[a.id] || {})[d], sim);
         const v = (simState.reel[a.id] || {})[d];
+        const auto = regSim(a, d);
+        const autoTot = HS_TYPES.reduce((t, x) => t + auto[x.id], 0);
+        const corrige = regCorrige(a, d, v, sim);
+        const autoType = HS_TYPES.find((x) => auto[x.id]) || hsType(typeHsDefaut(d));
+        const ponct = simState.inclurePonct && v && v.hs ? v.hs : 0;
+        // Change les HS automatiques de cet agent ce jour-là (null = calcul).
+        const corriger = (n) => {
+          const parJour = { ...((sim.hsReg || {})[a.id] || {}) };
+          if (n == null || Math.abs(n - autoTot) < 0.001) delete parJour[d];
+          else parJour[d] = n;
+          sim.hsReg = { ...(sim.hsReg || {}), [a.id]: parJour };
+          enregistrerSim();
+          rouvrirDetail(d);
+        };
+        const champ = h('input', {
+          type: 'text', class: 'sim-pop-reg', value: String(corrige != null ? corrige : autoTot).replace('.', ','), maxLength: 5, inputMode: 'decimal',
+          style: { '--c': autoType.couleur }, title: `HS automatiques ce jour (calcul : ${fmtHs(autoTot)} ${autoType.label.toLowerCase()}) · 0 pour les retirer`,
+          onchange: (e) => {
+            const x = e.target.value.trim().replace(',', '.');
+            const n = x === '' ? null : Number(x);
+            if (n != null && !(Number.isFinite(n) && n >= 0 && n <= 24)) { toast('HS : un nombre d\'heures, ex. 0, 1 ou 0,5.'); return; }
+            corriger(n);
+          },
+          onkeydown: (e) => { if (e.key === 'Enter') e.target.blur(); },
+        });
         const c = v && planCode(v.code);
         return h('div', { class: 'sim-pop-ligne' },
           multiJour(sim, a, d) ? h('i', { class: 'sim-role multi', style: { '--fond': fondRoles(a) }, title: titreRoles(a) }) : h('i', { class: 'sim-role', style: { '--c': role ? roleInfo(role).couleur : '#cbd5e1' }, title: role || 'Sans rôle' }),
           h('span', { class: 'sim-pop-nom' }, a.nom, c && c.absence ? h('small', { class: 'sim-pop-abs' }, ` ${c.label} au planning`) : null),
-          h('span', { class: 'sim-pop-hs' }, HS_TYPES.filter((t) => hj[t.id]).map((t) => h('span', { style: { color: t.couleur } }, fmtHs(hj[t.id])))),
+          h('span', { class: `sim-pop-hs${corrige != null ? ' modif' : ''}` },
+            h('label', { class: 'sim-pop-champ', style: { '--c': autoType.couleur } }, '+', champ, 'h'),
+            autoTot && (corrige == null || corrige > 0) ? h('button', { class: 'sim-pop-mini', title: 'Retirer les HS automatiques de ce jour', onclick: () => corriger(0) }, '0') : null,
+            corrige != null ? h('button', { class: 'sim-pop-mini', title: `Revenir au calcul (${fmtHs(autoTot)})`, onclick: () => corriger(null) }, 'auto') : null,
+            ponct ? h('span', { style: { color: hsType(v.hsType || typeHsDefaut(d)).couleur }, title: 'HS ponctuelles du planning' }, fmtHs(ponct)) : null),
           h('button', { class: 'o-btn rm', title: 'Retirer ce jour', onclick: () => { fermerDetailJour(); basculer(a.id, d, { retirer: true }); } }, icon('x', 13)));
       })))
       : h('p', { class: 'muted' }, 'Personne ce jour-là. Cliquer sur un agent à gauche puis sur ce jour pour l\'y poser.'));
@@ -401,13 +451,23 @@ async function appliquerSimulation(sim, agents, jours) {
       }
     }
   }
+  // HS automatiques corrigées dans le scénario → reportées sur la case du planning.
+  let corrections = 0;
+  for (const [agentId, parJour] of Object.entries(sim.hsReg || {})) {
+    for (const [date, n] of Object.entries(parJour)) {
+      if (!((sim.jours || {})[agentId] || []).includes(date)) continue;
+      changements.push({ agentId, date, hsReg: n });
+      corrections += 1;
+    }
+  }
   if (!changements.length) {
     toast(conflits ? `Rien à appliquer automatiquement (${plural(conflits, 'case')} déjà remplie(s) à revoir à la main).` : 'Le planning correspond déjà à ce scénario.');
     return;
   }
   const t = changements.filter((c) => c.code === 'T').length;
-  const r = changements.length - t;
-  if (await ask('Appliquer au planning ?', `${plural(t, 'jour')} travaillé(s) en plus → « T »\n${plural(r, 'jour')} non travaillé(s) → « R »${conflits ? `\n\n${plural(conflits, 'case')} déjà remplie(s) ne sera pas modifiée.` : ''}\n\nSeules les cases vides du planning sont remplies.`,
+  const r = changements.filter((c) => c.code === 'R').length;
+  const lignes = [t ? `${plural(t, 'jour')} travaillé(s) en plus → « T »` : '', r ? `${plural(r, 'jour')} non travaillé(s) → « R »` : '', corrections ? `${plural(corrections, 'correction')} d'HS automatiques` : ''].filter(Boolean).join('\n');
+  if (await ask('Appliquer au planning ?', `${lignes}${conflits ? `\n\n${plural(conflits, 'case')} déjà remplie(s) ne sera pas modifiée.` : ''}${t || r ? '\n\nSeules les cases vides du planning sont remplies.' : ''}`,
     [{ label: 'Annuler', value: 'no' }, { label: 'Appliquer', value: 'yes', cls: 'primary' }]) !== 'yes') return;
   try {
     const res = await call(api.planAppliquer(changements, S.user));

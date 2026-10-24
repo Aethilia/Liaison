@@ -46,4 +46,4 @@ function findUpdate(dataDir, currentVersion, kind = 'installation') {
   return best;
 }
 
-module.exports = { UPDATE_DIR, compareVersions, findUpdate };
+module.exports = { UPDATE_DIR, compareVersions, findUpdate, dossiersMaj };

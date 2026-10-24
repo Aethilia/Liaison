@@ -116,7 +116,10 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   - *HS auto modifiables* : ligne « HS auto » dans la palette d'une case
     (calcul rappelé à côté) ; on change le nombre ou « Retirer » (0), « Auto »
     revient au calcul. Point cerclé dans la case (barré si retirées) ; la
-    synthèse et la simulation en tiennent compte.
+    synthèse et la simulation en tiennent compte. Dans la **simulation**,
+    le détail d'un jour (clic sur le jour) permet la même chose par agent
+    (champ HS, « 0 », « auto ») ; « Appliquer au planning » reporte ces
+    corrections sur les cases.
   - Jours fériés calculés automatiquement (colonne rouge « Férié »).
 - **Couleurs et repères** : chaque semaine a ses **repères** (textes colorés,
   à droite de la grille, ex. « Congé de naissance du 14/10 au 14/11 » en

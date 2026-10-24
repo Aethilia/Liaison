@@ -576,6 +576,11 @@ test('planning : simulations (scénarios, rôles, application au planning)', () 
   assert.equal(p.loadSemaine(lundi).cases[a.id][lundi].hsReg, 0);
   p.setCase(a.id, lundi, { hsReg: '' }, 'Test');
   assert.equal((p.loadSemaine(lundi).cases[a.id] || {})[lundi], undefined);
+  const sim = p.saveSimulation({ mois: '2026-11', nom: 'S', jours: { [a.id]: ['2026-11-03', '2026-11-04'] }, hsReg: { [a.id]: { '2026-11-03': 0, '2026-11-04': 'x', '2026-11-05': 2 } } }, 'Test');
+  assert.deepEqual(sim.hsReg, { [a.id]: { '2026-11-03': 0 } });
+  p.appliquerCases([{ agentId: a.id, date: '2026-11-03', hsReg: 0 }], 'Test');
+  assert.equal(p.loadSemaine('2026-11-03').cases[a.id]['2026-11-03'].hsReg, 0);
+  p.deleteSimulation(sim.id);
   p.saveRolesCouleurs({ Pelliste: '#AA0000', Chauffeur: 'rouge' });
   assert.deepEqual(p.loadRolesCouleurs(), { Pelliste: '#aa0000' });
   p.vider();

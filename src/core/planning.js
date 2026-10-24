@@ -326,10 +326,16 @@ class Planning {
       const garde = Object.fromEntries(Object.entries(parJour || {}).filter(([d, r]) => (jours[ag] || []).includes(d) && typeof r === 'string' && r.trim()).map(([d, r]) => [d, r.trim().slice(0, 30)]));
       if (Object.keys(garde).length) roles[ag] = garde;
     }
+    // HS automatiques d'un jour posé, corrigées dans la simulation (0 = retirées).
+    const hsReg = {};
+    for (const [ag, parJour] of Object.entries(sim.hsReg || {})) {
+      const garde = Object.fromEntries(Object.entries(parJour || {}).filter(([d, n]) => (jours[ag] || []).includes(d) && Number.isFinite(Number(n)) && n !== null && n !== '' && Number(n) >= 0 && Number(n) <= 24).map(([d, n]) => [d, Math.round(Number(n) * 100) / 100]));
+      if (Object.keys(garde).length) hsReg[ag] = garde;
+    }
     const reports = {};
     for (const [ag, h] of Object.entries(sim.reports || {})) if (Number.isFinite(Number(h)) && Number(h) !== 0) reports[ag] = Math.round(Number(h) * 100) / 100;
     const out = {
-      id, mois: sim.mois, nom: String(sim.nom || 'Scénario').trim().slice(0, 40) || 'Scénario', jours, roles, reports,
+      id, mois: sim.mois, nom: String(sim.nom || 'Scénario').trim().slice(0, 40) || 'Scénario', jours, roles, reports, hsReg,
       creeLe: sim.creeLe || new Date().toISOString(), majLe: new Date().toISOString(), majPar: by || '',
     };
     return this.writeJson(path.join(this.dossierSim(), `${id}.json`), out);
@@ -342,11 +348,12 @@ class Planning {
   }
 
   // Report d'une simulation dans le planning : [{ agentId, date, code }],
-  // posé seulement sur les cases encore vides (rien n'est écrasé).
+  // posé seulement sur les cases encore vides (rien n'est écrasé) ;
+  // [{ agentId, date, hsReg }] : HS automatiques corrigées, ajoutées à la case.
   appliquerCases(changements, by) {
     const parSemaine = new Map();
     for (const c of changements || []) {
-      if (!ISO.test(c.date) || !c.agentId || !c.code) continue;
+      if (!ISO.test(c.date) || !c.agentId || (!c.code && c.hsReg == null)) continue;
       const l = lundiDe(c.date);
       if (!parSemaine.has(l)) parSemaine.set(l, []);
       parSemaine.get(l).push(c);
@@ -357,6 +364,12 @@ class Planning {
       const sem = this.loadSemaine(l);
       for (const c of liste) {
         const ag = sem.cases[c.agentId] || {};
+        if (c.hsReg != null) {
+          const v = nettoyerCase({ ...(ag[c.date] || {}), hsReg: c.hsReg });
+          if (v) sem.cases[c.agentId] = { ...ag, [c.date]: v };
+          poses += 1;
+          continue;
+        }
         if (ag[c.date]) { ignores += 1; continue; }
         sem.cases[c.agentId] = { ...ag, [c.date]: { code: String(c.code).slice(0, 5), texte: '' } };
         poses += 1;
