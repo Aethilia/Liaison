@@ -134,8 +134,13 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   MATIN / AM / NUIT). Il compte alors dans « Agents absents » de ce service
   et suit ses règles d'heures supp. Changement ponctuel : « Service ce jour »
   dans la palette de sa case (petite étiquette dans la case).
-- **Rôles** : sous le nom de chaque agent (onglet *Agents*), un clic fait
-  défiler Pelliste / Chauffeur / Agent de quai.
+- **Rôles** : sous le nom de chaque agent (onglet *Agents*), un clic ouvre
+  le choix des rôles : Pelliste (violet), Chauffeur (orange), Agent de quai
+  (turquoise). Un agent peut en avoir plusieurs (★ = son rôle habituel) ; sa
+  couleur devient alors un dégradé de ses rôles. Pastille de couleur à côté
+  du nom dans la semaine, la synthèse et la simulation ; dans la simulation,
+  chaque jour montre la couleur du rôle tenu ce jour-là, et seuls les rôles
+  de l'agent sont proposés quand on le pose.
 - **Simulation** (onglet du planning) : brouillon d'un mois pour organiser les
   jours en surveillant la limite de **35h d'HS par mois** (toutes HS
   confondues ; report possible pour les responsables). Agents à gauche avec

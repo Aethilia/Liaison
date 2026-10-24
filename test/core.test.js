@@ -563,6 +563,9 @@ test('planning : simulations (scénarios, rôles, application au planning)', () 
   const p = new Planning(tmp());
   const [a] = p.saveAgents([{ nom: 'Agent Un', equipe: 'apresmidi', role: 'Chauffeur' }]);
   assert.equal(p.loadAgents()[0].role, 'Chauffeur');
+  const [b] = p.saveAgents([{ nom: 'Agent Deux', equipe: 'matin', role: 'Pelliste', roles: ['Pelliste', 'Chauffeur', 'Pelliste', ''] }]);
+  assert.equal(b.role, 'Pelliste');
+  assert.deepEqual(p.loadAgents()[0].roles, ['Pelliste', 'Chauffeur']);
   const s = p.saveSimulation({ mois: '2026-11', nom: 'A', jours: { [a.id]: ['2026-11-07', '2026-11-07', '2026-12-01', '2026-11-09'] }, roles: { [a.id]: { '2026-11-07': 'Pelliste', '2026-11-20': 'Pelliste' } }, reports: {} }, 'PC');
   assert.deepEqual(s.jours[a.id], ['2026-11-07', '2026-11-09']); // doublon et autre mois retirés
   assert.deepEqual(s.roles[a.id], { '2026-11-07': 'Pelliste' }); // rôle d'un jour non posé retiré

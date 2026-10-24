@@ -106,9 +106,11 @@ class Planning {
       const ag = { id: a.id && /^[a-z0-9-]+$/i.test(a.id) ? a.id : newId(), nom, equipe: EQUIPES.includes(a.equipe) ? a.equipe : 'autres' };
       // Responsable : service de rattachement (matin, après-midi ou nuit).
       if (ag.equipe === 'responsables' && ['matin', 'apresmidi', 'nuit'].includes(a.service)) ag.service = a.service;
-      // Rôle habituel (pelliste, chauffeur, agent de quai…).
-      const role = String(a.role || '').trim().slice(0, 30);
-      if (role) ag.role = role;
+      // Rôles (pelliste, chauffeur, agent de quai…) : un agent peut en avoir
+      // plusieurs ; le premier est son rôle habituel (role).
+      const roles = [...new Set([a.role, ...(Array.isArray(a.roles) ? a.roles : [])].map((r) => String(r || '').trim().slice(0, 30)).filter(Boolean))].slice(0, 6);
+      if (roles.length) ag.role = roles[0];
+      if (roles.length > 1) ag.roles = roles;
       // Arrivée / départ (facultatifs) : l'agent ne compte qu'entre ces dates.
       if (ISO.test(a.arrivee || '')) ag.arrivee = a.arrivee;
       if (ISO.test(a.depart || '') && !(ag.arrivee && a.depart < ag.arrivee)) ag.depart = a.depart;

@@ -23,7 +23,51 @@ const ROLES = [
   { id: 'Agent de quai', court: 'Q', couleur: '#3fb8c9' },
 ];
 const roleInfo = (r) => ROLES.find((x) => x.id === r) || (r ? { id: r, court: r.slice(0, 1).toUpperCase(), couleur: '#94a3b8' } : null);
-const roleSuivant = (r) => { const i = ROLES.findIndex((x) => x.id === r); return i === ROLES.length - 1 ? undefined : ROLES[i + 1].id; };
+// Rôles d'un agent, l'habituel en premier (un agent peut en tenir plusieurs).
+const rolesDe = (a) => (a.roles && a.roles.length ? a.roles : a.role ? [a.role] : []);
+// Couleur d'un agent selon ses rôles (violet pelliste, orange chauffeur,
+// turquoise agent de quai) ; plusieurs rôles → dégradé « arc-en-ciel ».
+function fondRoles(a) {
+  const c = rolesDe(a).map((r) => roleInfo(r).couleur);
+  return c.length > 1 ? `linear-gradient(110deg, ${c.map((x, i) => `${x} ${Math.round((i / (c.length - 1)) * 100)}%`).join(', ')})` : c[0] || '';
+}
+const titreRoles = (a) => (rolesDe(a).length > 1 ? `${rolesDe(a).join(', ')} (habituel : ${a.role})` : rolesDe(a)[0] || '');
+const pastillesRoles = (a) => (rolesDe(a).length ? h('i', { class: `sim-role${rolesDe(a).length > 1 ? ' multi' : ''}`, style: { '--fond': fondRoles(a) }, title: titreRoles(a) }) : null);
+function setRoles(a, roles) {
+  a.role = roles[0] || undefined;
+  a.roles = roles.length > 1 ? roles : undefined;
+}
+// Petit menu des rôles d'un agent (onglet Agents) : cocher / décocher, ★ = habituel.
+let rolesPop = null;
+function menuRoles(bouton, a, enregistrer) {
+  if (rolesPop) rolesPop.remove();
+  const liste = rolesDe(a);
+  rolesPop = h('div', { class: 'plan-pop roles-pop', role: 'dialog' },
+    h('div', { class: 'pop-titre' }, h('b', {}, a.nom), h('span', { class: 'muted' }, ' · rôles')),
+    ROLES.map((x) => {
+      const on = liste.includes(x.id);
+      const habituel = liste[0] === x.id;
+      return h('div', { class: `roles-ligne${on ? ' on' : ''}`, style: { '--c': x.couleur } },
+        h('button', { class: 'roles-coche', onclick: () => {
+          setRoles(a, on ? liste.filter((r) => r !== x.id) : [...liste, x.id]);
+          rolesPop.remove(); rolesPop = null; enregistrer();
+        } }, h('i', {}, on ? icon('check', 12) : null), h('i', { class: 'sim-role', style: { '--c': x.couleur } }), x.id),
+        on && liste.length > 1 ? h('button', { class: `roles-hab${habituel ? ' on' : ''}`, title: habituel ? 'Rôle habituel' : 'En faire le rôle habituel', disabled: habituel, onclick: () => {
+          setRoles(a, [x.id, ...liste.filter((r) => r !== x.id)]);
+          rolesPop.remove(); rolesPop = null; enregistrer();
+        } }, habituel ? '★ habituel' : '☆') : null);
+    }));
+  document.body.append(rolesPop);
+  const r = bouton.getBoundingClientRect();
+  rolesPop.style.width = '230px';
+  rolesPop.style.left = `${Math.max(8, Math.min(window.innerWidth - 238, r.left))}px`;
+  rolesPop.style.top = `${r.bottom + 4 + rolesPop.offsetHeight < window.innerHeight ? r.bottom + 4 : r.top - rolesPop.offsetHeight - 4}px`;
+  setTimeout(() => document.addEventListener('mousedown', function dehors(e) {
+    if (!rolesPop || rolesPop.contains(e.target)) return;
+    rolesPop.remove(); rolesPop = null;
+    document.removeEventListener('mousedown', dehors);
+  }), 0);
+}
 
 // Codes du planning. `absence` : l'agent n'est pas là (compte dans « Agents absents »).
 // `signale` : l'agent est là mais apparaît aussi dans « Agents absents » (retard).
@@ -226,7 +270,7 @@ function vueSemaine(head) {
     for (const a of agents) {
       const svcResp = a.equipe === 'responsables' && a.service && PLAN_EQUIPES.find((x) => x.id === a.service);
       lignes.push(h('tr', { class: 'plan-agent', style: { '--eq': eq.couleur() } },
-        h('th', { class: 'c-agent', title: svcResp ? `Responsable · ${svcResp.label}` : '' }, a.nom, svcResp ? h('small', { class: 'ag-resp-svc', style: { '--c': svcResp.couleur() } }, svcResp.label) : null),
+        h('th', { class: 'c-agent', title: svcResp ? `Responsable · ${svcResp.label}` : '' }, a.nom, pastillesRoles(a), svcResp ? h('small', { class: 'ag-resp-svc', style: { '--c': svcResp.couleur() } }, svcResp.label) : null),
         jours.map((d) => (presentLe(a, d)
           ? caseAgent(a, d, valeurCase(a, d, (sem.cases[a.id] || {})[d]), { we: estWeekEnd(d), auj: d === auj, nuit: eq.id === 'nuit' })
           : h('td', { class: 'plan-case hors', title: a.arrivee && d < a.arrivee ? `${a.nom} arrive le ${fmtCourt(a.arrivee)}` : `${a.nom} est parti le ${fmtCourt(a.depart)}` })))));
@@ -536,7 +580,7 @@ async function vueSynthese(head) {
         PLAN_CODES.filter((c) => s.codes[c.code]).map((c) => h('i', { style: { flex: s.codes[c.code], background: c.couleur }, title: `${c.label} : ${s.codes[c.code]}` })),
         h('i', { class: 'vide', style: { flex: Math.max(0, nbJoursAgent - s.travailles - Object.values(s.codes).reduce((x, n) => x + n, 0)) } }));
       lignes.push(h('tr', { class: 'syn-agent', onclick: () => detailAgent(a, cases[a.id] || {}, debut, fin) },
-        h('th', { title: datesAgent(a) }, a.nom, datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
+        h('th', { title: datesAgent(a) }, a.nom, pastillesRoles(a), datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
         h('td', { class: 'num' }, h('b', {}, s.travailles)),
         celluleHs(s),
         codesUtiles.map((c) => h('td', { class: 'num' }, s.codes[c.code] ? h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, s.codes[c.code]) : h('span', { class: 'muted' }, '·'))),
@@ -623,7 +667,7 @@ function vueAgents() {
           };
           return h('div', { class: 'ag-ligne' },
             h('span', { class: 'ag-nom', title: datesAgent(a) }, a.nom,
-              a.equipe !== 'responsables' ? h('button', { class: `ag-role${a.role ? ' defini' : ''}`, title: 'Rôle habituel (cliquer pour changer)', onclick: () => { a.role = roleSuivant(a.role); enregistrer(); } }, a.role || '+ rôle') : null,
+              a.equipe !== 'responsables' ? h('button', { class: `ag-role${a.role ? ' defini' : ''}`, title: rolesDe(a).length > 1 ? `Rôles : ${rolesDe(a).join(', ')} (habituel : ${a.role}) · cliquer pour changer` : 'Rôle(s) de l\'agent (cliquer pour changer)', onclick: (e) => menuRoles(e.currentTarget, a, enregistrer) }, rolesDe(a).length ? h('span', { class: 'ag-role-pill', style: { '--fond': fondRoles(a) } }, rolesDe(a).join(' · ')) : '+ rôle') : null,
               datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
             a.equipe === 'responsables'
               ? h('select', { title: 'Service du responsable (ou « Changer d\'équipe »)', class: 'ag-service', onchange: (e) => {
