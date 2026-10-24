@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('api', {
   planSetReperes: call('plan:setReperes'),
   planEntre: call('plan:entre'),
   planCodes: call('plan:codes'),
+  planRoles: call('plan:roles'),
+  planSaveRoles: call('plan:saveRoles'),
   planSimList: call('plan:simList'),
   planSimSave: call('plan:simSave'),
   planSimDelete: call('plan:simDelete'),

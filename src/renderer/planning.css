@@ -286,3 +286,12 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .sim-legende-roles { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 4px; font-weight: 700; color: #475569; }
 .sim-legende-roles .sim-role { margin: 0 5px 0 0; }
 .sim-role.multi { width: 20px; border-radius: 5px; }
+/* Couleurs des rôles : petit onglet discret en bas à droite */
+.roles-couleurs-btn { position: fixed; right: 14px; bottom: 34px; z-index: 30; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e2e8f0; background: #fff; color: #94a3b8; font: inherit; font-size: 11px; font-weight: 700; padding: 3px 9px 3px 6px; border-radius: 999px; cursor: pointer; opacity: .7; box-shadow: 0 1px 4px rgb(15 23 42 / 8%); }
+.roles-couleurs-btn:hover { opacity: 1; color: #1e293b; }
+.roles-couleurs-apercu { display: inline-flex; }
+.roles-couleurs-apercu i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid #fff; margin-left: -3px; }
+.roles-couleurs-apercu i:first-child { margin-left: 0; }
+.roles-couleur { padding: 4px 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.roles-couleur span { flex: 1; }
+.roles-couleur input[type=color] { width: 28px; height: 22px; padding: 0; border: 1px solid #e2e8f0; border-radius: 6px; background: none; cursor: pointer; }

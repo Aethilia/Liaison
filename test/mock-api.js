@@ -109,6 +109,8 @@
     planSimDelete: (id) => { plan.sims = (plan.sims || []).filter((y) => y.id !== id); return ok(true); },
     planAppliquer: (list) => { let poses = 0; let ignores = 0; for (const c of list) { const l = lundi(c.date); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.cases[c.agentId] = s.cases[c.agentId] || {}; if (s.cases[c.agentId][c.date]) ignores++; else { s.cases[c.agentId][c.date] = { code: c.code, texte: '' }; poses++; } } return ok({ poses, ignores }); },
     planCodes: () => ok(plan.codes || []),
+    planRoles: () => ok(plan.rolesCouleurs || {}),
+    planSaveRoles: (c) => { plan.rolesCouleurs = c; return ok(c); },
     planSaveCodes: (c) => { plan.codes = c; return ok(c); },
     planSetReperes: (d, rep) => { const l = lundi(d); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.reperes = rep; return ok({ lundi: l, ...s }); },
     planImportChoisir: () => ok(window.__planImport ? window.__planImport.apercu : null),

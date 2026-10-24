@@ -57,6 +57,15 @@ function nettoyerReperes(list) {
   return out;
 }
 
+function nettoyerCouleursRoles(c) {
+  const out = {};
+  for (const [k, v] of Object.entries(c && typeof c === 'object' ? c : {})) {
+    const role = String(k).trim().slice(0, 30);
+    if (role && /^#[0-9a-f]{6}$/i.test(String(v))) out[role] = String(v).toLowerCase();
+  }
+  return out;
+}
+
 function nettoyerCodes(list) {
   const out = [];
   for (const x of Array.isArray(list) ? list : []) {
@@ -129,6 +138,15 @@ class Planning {
 
   saveCodes(codes) {
     return this.writeJson(path.join(this.dir, 'codes.json'), { codes: nettoyerCodes(codes) }).codes;
+  }
+
+  // ---- Couleurs des rôles (choisies par le site) : { Pelliste: '#8e6cef', … } ----
+  loadRolesCouleurs() {
+    return nettoyerCouleursRoles(this.readJson(path.join(this.dir, 'roles.json'), { couleurs: {} }).couleurs);
+  }
+
+  saveRolesCouleurs(couleurs) {
+    return this.writeJson(path.join(this.dir, 'roles.json'), { couleurs: nettoyerCouleursRoles(couleurs) }).couleurs;
   }
 
   // ---- Semaines ----

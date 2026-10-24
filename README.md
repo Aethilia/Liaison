@@ -140,7 +140,9 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   couleur devient alors un dégradé de ses rôles. Pastille de couleur à côté
   du nom dans la semaine, la synthèse et la simulation ; dans la simulation,
   chaque jour montre la couleur du rôle tenu ce jour-là, et seuls les rôles
-  de l'agent sont proposés quand on le pose.
+  de l'agent sont proposés quand on le pose. Les couleurs se changent via le
+  petit bouton « Couleurs » en bas à droite du planning (pour tout le site,
+  « défaut » pour revenir à la couleur d'origine).
 - **Simulation** (onglet du planning) : brouillon d'un mois pour organiser les
   jours en surveillant la limite de **35h d'HS par mois** (toutes HS
   confondues ; report possible pour les responsables). Agents à gauche avec

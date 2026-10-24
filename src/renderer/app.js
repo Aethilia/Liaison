@@ -2928,6 +2928,7 @@ async function loadSiteData() {
   S.agentsPlanning = false;
   planState.agents = await safe(api.planAgents(), []);
   planState.codes = await safe(api.planCodes(), []);
+  majRolesCouleurs(await safe(api.planRoles(), {}));
   majPlanCodes();
   await rafraichirAgentsAbsents();
   S.ncTypes = await safe(api.loadNcTypes(), []);

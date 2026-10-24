@@ -22,6 +22,12 @@ const ROLES = [
   { id: 'Chauffeur', court: 'C', couleur: '#f28c38' },
   { id: 'Agent de quai', court: 'Q', couleur: '#3fb8c9' },
 ];
+// Couleurs choisies par le site (petit bouton palette en bas à droite du planning).
+const ROLES_DEFAUT = Object.fromEntries(ROLES.map((x) => [x.id, x.couleur]));
+function majRolesCouleurs(c) {
+  planState.rolesCouleurs = c || {};
+  for (const x of ROLES) x.couleur = planState.rolesCouleurs[x.id] || ROLES_DEFAUT[x.id];
+}
 const roleInfo = (r) => ROLES.find((x) => x.id === r) || (r ? { id: r, court: r.slice(0, 1).toUpperCase(), couleur: '#94a3b8' } : null);
 // Rôles d'un agent, l'habituel en premier (un agent peut en tenir plusieurs).
 const rolesDe = (a) => (a.roles && a.roles.length ? a.roles : a.role ? [a.role] : []);
@@ -111,7 +117,7 @@ function lireHs(t) {
 }
 const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-const planState = { vue: 'semaine', date: null, agents: [], codes: [], semaine: null, mois: null, loadedAt: 0 };
+const planState = { vue: 'semaine', date: null, agents: [], codes: [], rolesCouleurs: {}, semaine: null, mois: null, loadedAt: 0 };
 majPlanCodes();
 
 const isoAjout = (iso, n) => M.addDays(iso, n);
@@ -196,6 +202,7 @@ async function loadPlanAgents() {
     planState.agents = [];
   }
   planState.codes = await call(api.planCodes()).catch(() => planState.codes);
+  majRolesCouleurs(await call(api.planRoles()).catch(() => planState.rolesCouleurs));
   majPlanCodes();
   majPlanEquipes();
   return planState.agents;
@@ -232,7 +239,47 @@ async function renderPlanning({ reload = true } = {}) {
   else if (planState.vue === 'codes') corps = vueCodes();
   else if (planState.vue === 'simulation') corps = await vueSimulation(head, { reload });
   else corps = vueAgents();
-  root.replaceChildren(head, corps);
+  root.replaceChildren(head, corps, boutonCouleursRoles());
+}
+
+// Petit onglet discret en bas à droite : couleur de chaque rôle (pour tout le site).
+function boutonCouleursRoles() {
+  return h('button', { class: 'roles-couleurs-btn', title: 'Couleurs des rôles', onclick: (e) => menuCouleursRoles(e.currentTarget) },
+    h('span', { class: 'roles-couleurs-apercu' }, ROLES.map((x) => h('i', { style: { background: x.couleur } }))), 'Couleurs');
+}
+function menuCouleursRoles(bouton) {
+  if (rolesPop) rolesPop.remove();
+  const enregistrer = async (c) => {
+    try {
+      majRolesCouleurs(await call(api.planSaveRoles(c)));
+    } catch (err) {
+      toast(`Non enregistré : ${err.message}`);
+    }
+    await renderPlanning({ reload: false });
+    const b = document.querySelector('.roles-couleurs-btn');
+    if (b) menuCouleursRoles(b);
+  };
+  rolesPop = h('div', { class: 'plan-pop roles-pop roles-couleurs-pop', role: 'dialog' },
+    h('div', { class: 'pop-titre' }, h('b', {}, 'Couleurs des rôles'), h('span', { class: 'muted' }, ' · pour tout le site')),
+    ROLES.map((x) => h('label', { class: 'roles-ligne on roles-couleur' },
+      h('input', { type: 'color', value: x.couleur, onchange: (e) => enregistrer({ ...planState.rolesCouleurs, [x.id]: e.target.value }) }),
+      h('span', {}, x.id),
+      planState.rolesCouleurs[x.id] ? h('button', { class: 'roles-hab', title: 'Couleur d\'origine', onclick: (e) => {
+        e.preventDefault();
+        const c = { ...planState.rolesCouleurs };
+        delete c[x.id];
+        enregistrer(c);
+      } }, 'défaut') : null)));
+  document.body.append(rolesPop);
+  const r = bouton.getBoundingClientRect();
+  rolesPop.style.width = '240px';
+  rolesPop.style.left = `${Math.max(8, r.right - 240)}px`;
+  rolesPop.style.top = `${Math.max(8, r.top - rolesPop.offsetHeight - 6)}px`;
+  setTimeout(() => document.addEventListener('mousedown', function dehors(e) {
+    if (!rolesPop || rolesPop.contains(e.target)) return;
+    rolesPop.remove(); rolesPop = null;
+    document.removeEventListener('mousedown', dehors);
+  }), 0);
 }
 
 /* ---------- Vue semaine ---------- */
@@ -308,7 +355,9 @@ function carteReperes(lundi, sem) {
     } catch (err) {
       toast(`Non enregistré : ${err.message}`);
     }
-    renderPlanning({ reload: false });
+    await renderPlanning({ reload: false });
+    const b = document.querySelector('.roles-couleurs-btn');
+    if (b) menuCouleursRoles(b);
   };
   let couleur = PLAN_COULEURS.find((c) => !reperes.some((x) => x.couleur === c)) || PLAN_COULEURS[0];
   const texte = h('input', { type: 'text', placeholder: 'Ex. Formation incendie mardi 13H-16H', maxLength: 120 });
@@ -451,7 +500,9 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
     } catch (err) {
       toast(`Non enregistré : ${err.message}`);
     }
-    renderPlanning({ reload: false });
+    await renderPlanning({ reload: false });
+    const b = document.querySelector('.roles-couleurs-btn');
+    if (b) menuCouleursRoles(b);
   };
   // Couleur de la case (renvoie à un repère de la semaine) : appliquée tout de
   // suite si la case a déjà un contenu, sinon avec le code choisi ensuite.
@@ -834,7 +885,9 @@ function vueCodes() {
     } catch (err) {
       toast(`Non enregistré : ${err.message}`);
     }
-    renderPlanning({ reload: false });
+    await renderPlanning({ reload: false });
+    const b = document.querySelector('.roles-couleurs-btn');
+    if (b) menuCouleursRoles(b);
   };
   // Modifie (ou crée) l'entrée du site pour ce code.
   const modifier = (c, champ, valeur) => {
