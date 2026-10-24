@@ -597,3 +597,31 @@ test('planning : simulations (scénarios, rôles, application au planning)', () 
   p.deleteSimulation(s.id);
   assert.equal(p.listSimulations('2026-11').length, 0);
 });
+
+test('jeu caché : joueurs reconnus par empreinte, code secret chiffré', () => {
+  const { Jeu, estJoueur, empreinte, normNom } = require('../src/core/jeu');
+  assert.equal(normNom('  Élodie   DUPONT-Test '), 'elodie dupont test');
+  assert.equal(empreinte('Élodie Dupont'), empreinte('elodie  dupont'));
+  assert.equal(estJoueur('Joueur Essai'), false);
+  process.env.LIAISON_JEU_JOUEURS = 'Joueur Essai';
+  try {
+    const a = tmp();
+    const b = tmp();
+    const j = new Jeu([a, b]);
+    assert.deepEqual(j.statut('Quelqu\'un'), { joueur: false });
+    assert.deepEqual(j.statut('joueur essai'), { joueur: true, code: false });
+    assert.throws(() => j.definir('Quelqu\'un', '1234'));
+    assert.throws(() => j.definir('Joueur Essai', '12'));
+    j.definir('Joueur Essai', 'tigre42');
+    assert.equal(j.verifier('Joueur Essai', 'tigre42'), true);
+    assert.equal(j.verifier('Joueur Essai', 'mauvais'), false);
+    const brut = fs.readFileSync(path.join(a, 'jeu', 'codes.json'), 'utf8');
+    assert.ok(!brut.includes('tigre42') && !/joueur/i.test(brut));
+    assert.equal(new Jeu([b]).verifier('Joueur Essai', 'tigre42'), true);
+    assert.throws(() => j.definir('Joueur Essai', 'nouveau1', 'faux'));
+    j.definir('Joueur Essai', 'nouveau1', 'tigre42');
+    assert.equal(j.verifier('Joueur Essai', 'nouveau1'), true);
+  } finally {
+    delete process.env.LIAISON_JEU_JOUEURS;
+  }
+});

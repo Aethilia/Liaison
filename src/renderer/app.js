@@ -307,6 +307,8 @@ async function chooseUser(u) {
   } else {
     S.role = 'responsable';
   }
+  // Deux responsables ont un accès caché (code secret puis « Travail » ou « Jeu »).
+  if (await accesJeu(u.nom) !== 'travail') return;
   S.user = u.nom;
   S.userEntry = u;
   // Intro fun : réglage relu à neuf (autre poste, autre site du poste).

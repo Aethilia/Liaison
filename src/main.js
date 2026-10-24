@@ -15,6 +15,7 @@ const { Importants } = require('./core/importants');
 const { lirePlanningExcel } = require('./core/planning-import');
 const { Planning } = require('./core/planning');
 const { UPDATE_DIR, findUpdate, dossiersMaj } = require('./core/update');
+const { Jeu } = require('./core/jeu');
 
 // Interface en français (heures sur 24 h dans les champs horaires).
 app.commandLine.appendSwitch('lang', 'fr-FR');
@@ -305,6 +306,12 @@ const funDir = (dataDir) => {
 const memeNom = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 // Intro fun d'un responsable : relue à neuf dans tous les sites du poste.
 // `cle` : 'fun' (intro au choix du nom) ou 'farce' (écran bleu au choix du site).
+// Jeu caché : codes dans le dossier principal (au-dessus des sites).
+const jeu = () => new Jeu([config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)].filter(Boolean).map((d) => path.dirname(d)));
+handle('jeu:statut', (nom) => jeu().statut(nom));
+handle('jeu:verifier', (nom, code) => jeu().verifier(nom, code));
+handle('jeu:definir', (nom, code, ancien) => jeu().definir(nom, code, ancien));
+
 handle('fun:find', (nom, cle = 'fun') => {
   if (!['fun', 'farce', 'clic', 'caca', 'bonhomme'].includes(cle)) throw new Error('Réglage inconnu.');
   const dirs = [config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)];

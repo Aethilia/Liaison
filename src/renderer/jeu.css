@@ -1,0 +1,67 @@
+/* Accès caché au jeu : fenêtres rétro pixel art */
+
+.jeu-dialog {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #f8f9fa;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace;
+}
+.jeu-dialog { max-width: none; max-height: none; width: fit-content; margin: auto; overflow: visible; box-shadow: none; border-radius: 0; }
+.jeu-dialog::backdrop { background: rgb(10 8 20 / 72%); }
+
+/* Cadre « boîte de dialogue de jeu » : bord pixelisé en escalier */
+.jeu-code-corps, .jeu-choix {
+  background: #1d1a2b;
+  border: 4px solid #f8f9fa;
+  box-shadow: 0 0 0 4px #14121c, 8px 8px 0 4px rgb(0 0 0 / 35%);
+  image-rendering: pixelated;
+}
+
+/* --- Code secret --- */
+.jeu-code-corps { width: 320px; padding: 22px 24px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.jeu-code-corps h2 { margin: 2px 0 0; font-size: 17px; letter-spacing: .08em; text-transform: uppercase; color: #fff3a3; text-shadow: 2px 2px 0 #7048e8; }
+.jeu-sous { margin: -4px 0 4px; font-size: 12px; color: #b197fc; }
+.jeu-code { width: 100%; box-sizing: border-box; padding: 9px 10px; font: inherit; font-size: 18px; letter-spacing: .35em; text-align: center; color: #fff; background: #14121c; border: 3px solid #5f3dc4; outline: none; }
+.jeu-code::placeholder { letter-spacing: .04em; font-size: 14px; color: #6b6585; }
+.jeu-code:focus { border-color: #b197fc; box-shadow: 0 0 0 3px rgb(177 151 252 / 25%); }
+.jeu-code.secoue { animation: jeu-secoue .3s steps(4); border-color: #ff7a6b; }
+@keyframes jeu-secoue { 25% { transform: translateX(-6px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-3px); } }
+.jeu-msg { min-height: 16px; margin: 0; font-size: 12px; color: #ff7a6b; }
+
+/* Cadenas dessiné en blocs */
+.jeu-cadenas { position: relative; width: 36px; height: 40px; }
+.jeu-cadenas i { position: absolute; left: 8px; top: 0; width: 20px; height: 20px; box-sizing: border-box; border: 5px solid #f7c948; border-bottom: 0; }
+.jeu-cadenas b { position: absolute; left: 0; bottom: 0; width: 36px; height: 24px; background: #f7c948; box-shadow: inset 0 -5px 0 #c99a1c; }
+.jeu-cadenas b::after { content: ''; position: absolute; left: 15px; top: 7px; width: 6px; height: 9px; background: #14121c; }
+
+.jeu-btn { margin-top: 4px; padding: 9px 22px; font: inherit; font-size: 14px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #14121c; background: #f7c948; border: 0; box-shadow: inset -4px -4px 0 #c99a1c, 0 0 0 3px #14121c; cursor: pointer; }
+.jeu-btn:hover { background: #fff3a3; }
+.jeu-btn:active { box-shadow: inset 4px 4px 0 #c99a1c, 0 0 0 3px #14121c; }
+.jeu-lien { border: 0; background: none; padding: 4px; font: inherit; font-size: 11.5px; color: #8a93a3; cursor: pointer; text-decoration: underline dotted; }
+.jeu-lien:hover { color: #f8f9fa; }
+
+/* --- Fenêtre de choix --- */
+.jeu-choix { padding: 16px 18px 10px; }
+.jeu-choix-titre { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; font-size: 18px; font-weight: 800; letter-spacing: .06em; color: #fff3a3; text-shadow: 2px 2px 0 #7048e8; }
+.jeu-choix-titre small { font-size: 12px; font-weight: 600; color: #b197fc; text-shadow: none; }
+.jeu-cadre { position: relative; width: min(768px, 86vw); aspect-ratio: 192 / 108; border: 4px solid #14121c; }
+.jeu-scene { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.jeu-moitie { position: absolute; top: 0; bottom: 0; width: 50%; border: 0; padding: 0; background: transparent; cursor: pointer; display: flex; align-items: flex-end; justify-content: center; transition: background .12s steps(2); }
+.jeu-moitie.travail { left: 0; }
+.jeu-moitie.jeu { right: 0; }
+.jeu-moitie:hover, .jeu-moitie:focus-visible { background: rgb(255 255 255 / 10%); outline: 4px solid #f7c948; outline-offset: -4px; }
+.jeu-etiquette { margin-bottom: 14px; padding: 6px 14px 5px; display: flex; flex-direction: column; align-items: center; background: #14121c; border: 3px solid #f8f9fa; box-shadow: 4px 4px 0 rgb(0 0 0 / 40%); }
+.jeu-etiquette b { font-size: 18px; letter-spacing: .18em; color: #fff; }
+.jeu-etiquette small { font-size: 10.5px; color: #8a93a3; letter-spacing: .05em; }
+.jeu-moitie:hover .jeu-etiquette { transform: translateY(-3px); border-color: #f7c948; }
+.jeu-moitie:hover .jeu-etiquette b { color: #fff3a3; }
+.jeu-choix-pied { display: flex; justify-content: center; margin-top: 8px; }
+
+/* --- Écran du jeu --- */
+.jeu-ecran { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #14121c; color: #f8f9fa; font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace; }
+.jeu-ecran-titre { display: flex; flex-direction: column; align-items: center; font-size: 34px; font-weight: 900; letter-spacing: .2em; color: #fff3a3; text-shadow: 4px 4px 0 #7048e8; }
+.jeu-ecran-titre small { font-size: 12px; letter-spacing: .08em; color: #8a93a3; text-shadow: none; }
+.jeu-scene.grand { width: min(384px, 60vw); height: auto; aspect-ratio: 96 / 108; border: 4px solid #f8f9fa; box-shadow: 0 0 0 4px #2b2838; }
+.jeu-ecran-txt { margin: 0; font-size: 13px; color: #b197fc; animation: jeu-clignote 1.2s steps(2) infinite; }
+@keyframes jeu-clignote { 50% { opacity: .35; } }
