@@ -170,6 +170,15 @@ Onglet **Planning**, un par site (dossier `planning/`), partagé entre les poste
   par mois, enregistrés et partagés ; « Partir du planning réel » ;
   « Appliquer au planning » pose « T » (jour travaillé en plus) ou « R »
   (jour non travaillé) sur les cases vides seulement.
+- **Dimanche ponctuel** : onglet *Agents*, « Dimanches ouverts du … au … »
+  (fin facultative) ; matin 6h-12h et nuit 20h30-2h30, 6h rouges. Tout agent
+  peut avoir un **service ce jour** (palette de la case) : un agent de
+  l'après-midi posé le dimanche matin ou la nuit compte dans ce service. Dans
+  la semaine, la colonne du dimanche ouvert compte qui tient chaque service.
+  Dans la simulation, le pinceau a un choix « Service : Auto / Matin / APM /
+  Nuit » (Auto = service affiché, sinon le matin pour l'après-midi le
+  dimanche) ; le détail d'un jour permet de le changer par agent, et
+  « Appliquer au planning » reporte « T » avec le service.
 - **Arrivée / départ** (icône horloge d'un agent, onglet *Agents*) : en dehors
   de ces dates l'agent n'apparaît pas (cases hachurées), ne compte pas dans
   l'effectif de l'équipe ni dans la synthèse. Après son départ il n'est plus

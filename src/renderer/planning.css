@@ -336,3 +336,12 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .sim-svc-ligne > b { min-width: 14px; font-size: 12px; font-weight: 900; color: var(--c); }
 .sim-svc-roles { display: flex; gap: 2px; margin-left: auto; }
 .sim-svc-roles span { min-width: 15px; padding: 0 3px; border-radius: 4px; font-size: 10px; font-weight: 800; line-height: 15px; text-align: center; color: #fff; background: var(--r); }
+/* Dimanche ponctuel */
+.plan-grille thead th.dim-ouvert { background: #9a4f12; }
+.j-ouvert { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #ffd8a8; }
+.dim-reglage .card-body { gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 14px; }
+.dim-reglage input[type=date] { padding: 3px 6px; }
+.sim-case.dim-ouvert { background: #fff4e6; }
+.sim-case.dim-ferme { opacity: .55; }
+.sim-ouvert { font-size: 9.5px; font-weight: 800; color: #e8590c; text-transform: uppercase; }
+.sim-pop-svc { font-size: 11px; padding: 1px 2px; border-radius: 5px; border: 1px solid #dbe1ea; }

@@ -1,7 +1,7 @@
 'use strict';
 
 /* global S, M, h, icon, call, api, ask, toast, promptText, plural, planState, PLAN_EQUIPES, planCode, presentLe, presentEntre,
-   equipeEff, jourNormal, hsType, hsVide, typeHsDefaut, corrigerReg, HS_TYPES, fmtHs, HS_FERIE, HS_DIMANCHE, renderPlanning, planSemCache, ROLES, roleInfo, rolesDe, pastillesRoles, fondRoles, titreRoles */
+   equipeEff, serviceHabituel, dimancheOuvert, jourNormal, hsType, hsVide, typeHsDefaut, corrigerReg, HS_TYPES, fmtHs, HS_FERIE, HS_DIMANCHE, renderPlanning, planSemCache, ROLES, roleInfo, rolesDe, pastillesRoles, fondRoles, titreRoles */
 // Onglet « Simulation » du planning : un brouillon du mois pour organiser les
 // jours travaillés en gardant un œil sur la limite d'heures supp (35h par mois,
 // toutes HS confondues ; report possible pour les responsables). On choisit un
@@ -38,13 +38,16 @@ function travailleReel(a, d, val) {
 
 // Heures supp d'un jour posé dans la simulation (+ ponctuelles déjà saisies au planning).
 // HS automatiques d'un jour posé (avant correction).
-function regSim(a, d) {
+// Service tenu un jour dans la simulation : choisi au pinceau (dimanche,
+// renfort…), sinon celui du planning réel, sinon le service habituel.
+const svcJour = (sim, a, d) => ((sim && sim.services) || {})[a.id]?.[d] || equipeEff(a, (simState.reel[a.id] || {})[d]);
+function regSim(a, d, sim = simCourante()) {
   const out = hsVide();
   const j = M.parseISODate(d).getDay();
   if (M.ferie(d)) out.rouge += HS_FERIE;
   else if (j === 0) out.rouge += HS_DIMANCHE;
   else if (j === 6) out.bleu += 7;
-  else if (['matin', 'nuit'].includes(equipeEff(a))) out.vert += 1;
+  else if (['matin', 'nuit'].includes(svcJour(sim, a, d))) out.vert += 1;
   return out;
 }
 // Correction de ces HS : celle de la simulation, sinon celle du planning.
@@ -56,7 +59,7 @@ function regCorrige(a, d, val, sim = simCourante()) {
 function hsSimJour(a, d, pose, val, sim) {
   const out = hsVide();
   if (pose) {
-    Object.assign(out, regSim(a, d));
+    Object.assign(out, regSim(a, d, sim));
     const n = regCorrige(a, d, val, sim);
     if (n != null) Object.assign(out, corrigerReg(out, { hsReg: n }, d));
   }
@@ -131,25 +134,42 @@ function remplirDepuisReel(sim) {
 
 // Clic sur un jour avec le pinceau : ajoute l'agent (avec le rôle choisi),
 // change son rôle s'il y est déjà avec un autre, sinon le retire.
+// Service voulu pour un jour posé : celui choisi au pinceau, sinon le service
+// affiché (vue Matin / Nuit…), sinon le matin pour un agent d'après-midi le
+// dimanche (pas d'après-midi le dimanche), sinon son service habituel.
+function serviceVoulu(a, d) {
+  if (simState.pinceau === a.id && simState.svcPinceau) return simState.svcPinceau;
+  if (simState.equipe !== 'total') return simState.equipe;
+  const hab = serviceHabituel(a);
+  return M.parseISODate(d).getDay() === 0 && hab === 'apresmidi' ? 'matin' : hab;
+}
 function basculer(agentId, d, { retirer = false } = {}) {
   const sim = simCourante();
   if (!sim) return;
   const a = planState.agents.find((x) => x.id === agentId);
   const liste = new Set(sim.jours[agentId] || []);
   const roles = { ...((sim.roles || {})[agentId] || {}) };
+  const services = { ...((sim.services || {})[agentId] || {}) };
   const voulu = (!retirer && simState.pinceau === agentId && simState.rolePinceau) || (a && a.role) || '';
-  if (liste.has(d) && !retirer && voulu && roleJour(sim, a, d) !== voulu) {
-    if (voulu === (a && a.role)) delete roles[d];
-    else roles[d] = voulu;
+  const svc = serviceVoulu(a, d);
+  const poserService = () => { if (svc && svc !== equipeEff(a, (simState.reel[a.id] || {})[d])) services[d] = svc; else delete services[d]; };
+  const changeRole = voulu && roleJour(sim, a, d) !== voulu;
+  const changeSvc = svc && svcJour(sim, a, d) !== svc;
+  if (liste.has(d) && !retirer && (changeRole || changeSvc)) {
+    if (changeRole) { if (voulu === (a && a.role)) delete roles[d]; else roles[d] = voulu; }
+    if (changeSvc) poserService();
   } else if (liste.has(d)) {
     liste.delete(d);
     delete roles[d];
+    delete services[d];
   } else {
     liste.add(d);
     if (voulu && voulu !== (a && a.role)) roles[d] = voulu;
+    poserService();
   }
   sim.jours[agentId] = [...liste].sort();
   sim.roles = { ...(sim.roles || {}), [agentId]: roles };
+  sim.services = { ...(sim.services || {}), [agentId]: services };
   enregistrerSim();
   renderPlanning({ reload: false });
 }
@@ -221,7 +241,8 @@ async function vueSimulation(head, { reload = true } = {}) {
   const agents = agentsSim(jours[0], jours[jours.length - 1]);
   // Vue par service (matin, après-midi, nuit, responsables rattachés compris) ou totale.
   const parService = simState.equipe !== 'total';
-  const visibles = parService ? agents.filter((a) => equipeEff(a) === simState.equipe) : agents;
+  // Vue d'un service : ses agents, plus ceux qui viennent le renforcer un jour (dimanche…).
+  const visibles = parService ? agents.filter((a) => serviceHabituel(a) === simState.equipe || ((sim.jours || {})[a.id] || []).some((d) => svcJour(sim, a, d) === simState.equipe)) : agents;
   simState.visibles = visibles;
   const choixService = h('div', { class: 'seg sim-seg' }, [...PLAN_EQUIPES.filter((e) => ['matin', 'apresmidi', 'nuit'].includes(e.id)).map((e) => [e.id, e.label, e.couleur()]), ['total', 'Total', '#1e293b']].map(([id, label, c]) => h('button', {
     class: simState.equipe === id ? 'on' : '', style: { '--c': c },
@@ -302,22 +323,23 @@ async function vueSimulation(head, { reload = true } = {}) {
     ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((j) => h('div', { class: 'sim-j' }, j)),
     cellules.map((d) => {
       if (!d) return h('div', { class: 'sim-vide' });
-      const presents = visibles.filter((a) => ((sim.jours || {})[a.id] || []).includes(d));
+      const presents = visibles.filter((a) => ((sim.jours || {})[a.id] || []).includes(d) && (!parService || svcJour(sim, a, d) === simState.equipe));
       const jour = M.parseISODate(d).getDay();
       const ferie = M.ferie(d);
       const parEquipe = PLAN_EQUIPES.map((e) => ({ e, n: presents.filter((a) => a.equipe === e.id).length })).filter((x) => x.n);
-      const parSvc = parService ? [] : servicesDuJour(presents, d);
+      const parSvc = parService ? [] : servicesDuJour(presents, d, sim);
       const parRole = [...ROLES.map((x) => x.id), ''].map((rid) => ({ r: roleInfo(rid), n: presents.filter((a) => (roleJour(sim, a, d) || '') === rid).length })).filter((x) => x.n && x.r);
       const avecPinceau = pinceau && presents.includes(pinceau);
       const absentReel = pinceau && (() => { const v = (simState.reel[pinceau.id] || {})[d]; const c = v && planCode(v.code); return c && c.absence ? c.label : ''; })();
       return h('div', {
-        class: `sim-case${jour === 0 || jour === 6 ? ' we' : ''}${ferie ? ' ferie' : ''}${avecPinceau ? ' pose' : ''}${pinceau ? ' cible' : ''}`,
+        class: `sim-case${jour === 0 || jour === 6 ? ' we' : ''}${ferie ? ' ferie' : ''}${avecPinceau ? ' pose' : ''}${pinceau ? ' cible' : ''}${jour === 0 ? (dimancheOuvert(d) ? ' dim-ouvert' : ' dim-ferme') : ''}`,
         'data-date': d,
         onmouseenter: (e) => survolJour(e.currentTarget, sim, d, presents, absentReel),
         onmouseleave: cacherSurvol,
         onclick: (e) => { if (pinceau) basculer(pinceau.id, d); else detailJour(e.currentTarget, sim, d, visibles); },
       },
       h('div', { class: 'sim-date' }, h('b', {}, Number(d.slice(8))), ferie ? h('span', { class: 'sim-ferie' }, 'Férié') : null,
+        jour === 0 && dimancheOuvert(d) ? h('span', { class: 'sim-ouvert', title: 'Dimanche ouvert : matin 6h-12h, nuit 20h30-2h30 (6h rouges)' }, 'ouvert') : null,
         absentReel ? h('span', { class: 'sim-alerte', title: `${absentReel} au planning` }, '!') : null,
         h('span', { class: 'sim-total' }, presents.length || '')),
       // Seulement les rôles (qui est là : au survol).
@@ -348,6 +370,11 @@ async function vueSimulation(head, { reload = true } = {}) {
             class: `sim-role-btn${(simState.rolePinceau || pinceau.role) === x.id ? ' on' : ''}`, style: { '--c': x.couleur }, title: x.id === pinceau.role ? 'Rôle habituel' : 'Rôle pour les jours posés maintenant',
             onclick: (e) => { e.stopPropagation(); simState.rolePinceau = x.id; renderPlanning({ reload: false }); },
           }, x.id, x.id === pinceau.role ? ' ·' : ''))) : null,
+          pinceau ? h('span', { class: 'sim-roles-choix' }, 'Service :', [['', 'Auto'], ['matin', 'Matin'], ['apresmidi', 'APM'], ['nuit', 'Nuit']].map(([id, label]) => h('button', {
+            class: `sim-role-btn${(simState.svcPinceau || '') === id ? ' on' : ''}`, style: { '--c': id ? (PLAN_EQUIPES.find((e) => e.id === id) || { couleur: () => '#64748b' }).couleur() : '#64748b' },
+            title: id ? `Les jours posés maintenant : ${label}` : 'Auto : service affiché, sinon habituel (le dimanche, un agent d\'après-midi passe au matin)',
+            onclick: (e) => { e.stopPropagation(); simState.svcPinceau = id || null; renderPlanning({ reload: false }); },
+          }, label))) : null,
           h('span', { class: 'hint' }, pinceau ? `${pinceau.nom} : cliquer sur les jours pour l'ajouter, changer son rôle ou le retirer · Échap ou clic droit pour lâcher` : 'Cliquer sur un agent à gauche, puis sur les jours')),
         h('div', { class: 'card-body' }, cal,
           h('p', { class: 'muted sim-legende' }, h('span', { class: 'sim-legende-roles' }, ROLES.map((x) => h('span', {}, h('i', { class: 'sim-role', style: { '--c': x.couleur } }), x.id))), `HS d'un jour posé : matin et nuit +1h verte en semaine · samedi +7h bleues · dimanche ${HS_DIMANCHE}h rouges · férié ${HS_FERIE}h rouges. Total HS du scénario : ${fmtHs(total.reduce((a, c) => a + c.hs, 0)).replace('+', '')}`)))));
@@ -356,8 +383,8 @@ async function vueSimulation(head, { reload = true } = {}) {
 const sansRole = (presents, sim, d) => presents.filter((a) => !roleJour(sim, a, d)).length;
 // Présents d'un jour regroupés par service (un responsable compte dans le
 // service qu'il tient ce jour-là).
-function servicesDuJour(presents, d) {
-  const svcDe = (a) => equipeEff(a, (simState.reel[a.id] || {})[d]);
+function servicesDuJour(presents, d, sim = simCourante()) {
+  const svcDe = (a) => svcJour(sim, a, d);
   return PLAN_EQUIPES.filter((e) => e.id !== 'responsables').map((eq) => ({
     eq: { ...eq, court: eq.id === 'apresmidi' ? 'APM' : eq.label.slice(0, 5) },
     liste: presents.filter((a) => (svcDe(a) === eq.id) || (eq.id === 'autres' && !['matin', 'apresmidi', 'nuit'].includes(svcDe(a)))),
@@ -388,7 +415,7 @@ function survolJour(cellule, sim, d, presents, absentReel) {
     const noms = (liste) => h('div', { class: 'sim-survol-noms' }, liste.map((a) => h('span', { style: { '--eq': couleurChip(sim, a, d) }, title: multiJour(sim, a, d) ? titreRoles(a) : roleJour(sim, a, d) }, a.nom, multiJour(sim, a, d) ? h('i', { class: 'sim-role multi', style: { '--fond': fondRoles(a) } }) : null)));
     // Vue Total : d'abord par service, puis par rôle (nom à la couleur du rôle).
     const corps = simState.equipe === 'total'
-      ? servicesDuJour(presents, d).map((g) => h('div', { class: 'sim-survol-groupe', style: { '--c': g.eq.couleur() } },
+      ? servicesDuJour(presents, d, sim).map((g) => h('div', { class: 'sim-survol-groupe', style: { '--c': g.eq.couleur() } },
         h('div', { class: 'sim-survol-role' }, h('i', {}), g.eq.label, h('small', {}, g.liste.length)),
         noms(g.liste.slice().sort((a, b) => (roleJour(sim, a, d) || 'zz').localeCompare(roleJour(sim, b, d) || 'zz')))))
       : groupes.map((g) => h('div', { class: 'sim-survol-groupe', style: { '--c': g.r.couleur } },
@@ -425,9 +452,9 @@ async function rouvrirDetail(d) {
 function detailJour(cellule, sim, d, visibles) {
   fermerDetailJour();
   cacherSurvol();
-  const presents = visibles.filter((a) => ((sim.jours || {})[a.id] || []).includes(d));
+  const presents = visibles.filter((a) => ((sim.jours || {})[a.id] || []).includes(d) && (simState.equipe === 'total' || svcJour(sim, a, d) === simState.equipe));
   const titre = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(M.parseISODate(d));
-  const groupes = PLAN_EQUIPES.map((eq) => ({ eq, liste: presents.filter((a) => (a.equipe === 'responsables' ? eq.id === 'responsables' : equipeEff(a) === eq.id)) })).filter((g) => g.liste.length);
+  const groupes = PLAN_EQUIPES.map((eq) => ({ eq, liste: presents.filter((a) => (a.equipe === 'responsables' && !(sim.services || {})[a.id]?.[d] ? eq.id === 'responsables' : svcJour(sim, a, d) === eq.id)) })).filter((g) => g.liste.length);
   const parRole = [...ROLES.map((x) => x.id), ''].map((rid) => ({ r: roleInfo(rid) || { id: 'Sans rôle', court: '?', couleur: '#94a3b8' }, n: presents.filter((a) => (roleJour(sim, a, d) || '') === rid).length })).filter((x) => x.n);
   const hsTotal = presents.reduce((t, a) => { const hj = hsSimJour(a, d, true, (simState.reel[a.id] || {})[d], sim); return t + hj.bleu + hj.rouge + hj.vert; }, 0);
   simPop = h('div', { class: 'plan-pop sim-pop', role: 'dialog', onclick: (e) => e.stopPropagation() },
@@ -440,7 +467,7 @@ function detailJour(cellule, sim, d, visibles) {
         const role = roleJour(sim, a, d);
         const hj = hsSimJour(a, d, true, (simState.reel[a.id] || {})[d], sim);
         const v = (simState.reel[a.id] || {})[d];
-        const auto = regSim(a, d);
+        const auto = regSim(a, d, sim);
         const autoTot = HS_TYPES.reduce((t, x) => t + auto[x.id], 0);
         const corrige = regCorrige(a, d, v, sim);
         const autoType = HS_TYPES.find((x) => auto[x.id]) || hsType(typeHsDefaut(d));
@@ -469,6 +496,14 @@ function detailJour(cellule, sim, d, visibles) {
         return h('div', { class: 'sim-pop-ligne' },
           multiJour(sim, a, d) ? h('i', { class: 'sim-role multi', style: { '--fond': fondRoles(a) }, title: titreRoles(a) }) : h('i', { class: 'sim-role', style: { '--c': role ? roleInfo(role).couleur : '#cbd5e1' }, title: role || 'Sans rôle' }),
           h('span', { class: 'sim-pop-nom' }, a.nom, c && c.absence ? h('small', { class: 'sim-pop-abs' }, ` ${c.label} au planning`) : null),
+          // Service tenu ce jour (renfort du dimanche, remplacement…).
+          h('select', { class: 'sim-pop-svc', title: 'Service ce jour', onchange: (e) => {
+            const parJour = { ...((sim.services || {})[a.id] || {}) };
+            if (e.target.value === equipeEff(a, v)) delete parJour[d]; else parJour[d] = e.target.value;
+            sim.services = { ...(sim.services || {}), [a.id]: parJour };
+            enregistrerSim();
+            rouvrirDetail(d);
+          } }, [['matin', 'Matin'], ['apresmidi', 'APM'], ['nuit', 'Nuit']].map(([id, l]) => h('option', { value: id, selected: svcJour(sim, a, d) === id }, l))),
           h('span', { class: `sim-pop-hs${corrige != null ? ' modif' : ''}` },
             h('label', { class: 'sim-pop-champ', style: { '--c': autoType.couleur } }, '+', champ, 'h'),
             autoTot && (corrige == null || corrige > 0) ? h('button', { class: 'sim-pop-mini', title: 'Retirer les HS automatiques de ce jour', onclick: () => corriger(0) }, '0') : null,
@@ -504,9 +539,13 @@ async function appliquerSimulation(sim, agents, jours) {
       const val = (simState.reel[a.id] || {})[d];
       const vide = !val || (!val.code && !val.texte && !val.hs);
       const reel = travailleReel(a, d, val);
+      // Service tenu ce jour s'il diffère de celui du planning (dimanche, renfort).
+      const svc = poses.has(d) && svcJour(sim, a, d) !== equipeEff(a, val) ? svcJour(sim, a, d) : null;
       if (poses.has(d) && !reel) {
-        if (vide) changements.push({ agentId: a.id, date: d, code: 'T' });
+        if (vide) changements.push({ agentId: a.id, date: d, code: 'T', ...(svc || M.parseISODate(d).getDay() === 0 ? { service: svcJour(sim, a, d) } : {}) });
         else conflits += 1;
+      } else if (poses.has(d) && svc) {
+        changements.push({ agentId: a.id, date: d, service: svc });
       } else if (!poses.has(d) && reel) {
         if (vide) changements.push({ agentId: a.id, date: d, code: 'R' });
         else conflits += 1;
@@ -528,7 +567,8 @@ async function appliquerSimulation(sim, agents, jours) {
   }
   const t = changements.filter((c) => c.code === 'T').length;
   const r = changements.filter((c) => c.code === 'R').length;
-  const lignes = [t ? `${plural(t, 'jour')} travaillé(s) en plus → « T »` : '', r ? `${plural(r, 'jour')} non travaillé(s) → « R »` : '', corrections ? `${plural(corrections, 'correction')} d'HS automatiques` : ''].filter(Boolean).join('\n');
+  const sv = changements.filter((c) => !c.code && c.service).length;
+  const lignes = [t ? `${plural(t, 'jour')} travaillé(s) en plus → « T »` : '', r ? `${plural(r, 'jour')} non travaillé(s) → « R »` : '', sv ? `${plural(sv, 'changement')} de service (dimanche, renfort)` : '', corrections ? `${plural(corrections, 'correction')} d'HS automatiques` : ''].filter(Boolean).join('\n');
   if (await ask('Appliquer au planning ?', `${lignes}${conflits ? `\n\n${plural(conflits, 'case')} déjà remplie(s) ne sera pas modifiée.` : ''}${t || r ? '\n\nSeules les cases vides du planning sont remplies.' : ''}`,
     [{ label: 'Annuler', value: 'no' }, { label: 'Appliquer', value: 'yes', cls: 'primary' }]) !== 'yes') return;
   try {

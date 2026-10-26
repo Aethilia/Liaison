@@ -60,6 +60,13 @@ function nettoyerReperes(list) {
   return out;
 }
 
+function nettoyerConfig(c) {
+  const d = (c && c.dimanches) || {};
+  const debut = ISO.test(d.debut || '') ? d.debut : '';
+  const fin = ISO.test(d.fin || '') && (!debut || d.fin >= debut) ? d.fin : '';
+  return { dimanches: { debut, fin } };
+}
+
 function nettoyerCouleursRoles(c) {
   const out = {};
   for (const [k, v] of Object.entries(c && typeof c === 'object' ? c : {})) {
@@ -137,6 +144,15 @@ class Planning {
   // de base de l'application (R, CP, MAL…).
   loadCodes() {
     return nettoyerCodes(this.readJson(path.join(this.dir, 'codes.json'), { codes: [] }).codes);
+  }
+
+  // Réglages du planning : ouverture ponctuelle du dimanche (période).
+  loadConfig() {
+    return nettoyerConfig(this.readJson(path.join(this.dir, 'config.json'), {}));
+  }
+
+  saveConfig(cfg) {
+    return this.writeJson(path.join(this.dir, 'config.json'), nettoyerConfig(cfg));
   }
 
   saveCodes(codes) {
@@ -332,10 +348,16 @@ class Planning {
       const garde = Object.fromEntries(Object.entries(parJour || {}).filter(([d, n]) => (jours[ag] || []).includes(d) && Number.isFinite(Number(n)) && n !== null && n !== '' && Number(n) >= 0 && Number(n) <= 24).map(([d, n]) => [d, Math.round(Number(n) * 100) / 100]));
       if (Object.keys(garde).length) hsReg[ag] = garde;
     }
+    // Service tenu un jour posé, quand il diffère du service habituel (dimanche…).
+    const services = {};
+    for (const [ag, parJour] of Object.entries(sim.services || {})) {
+      const garde = Object.fromEntries(Object.entries(parJour || {}).filter(([d, s]) => (jours[ag] || []).includes(d) && ['matin', 'apresmidi', 'nuit'].includes(s)));
+      if (Object.keys(garde).length) services[ag] = garde;
+    }
     const reports = {};
     for (const [ag, h] of Object.entries(sim.reports || {})) if (Number.isFinite(Number(h)) && Number(h) !== 0) reports[ag] = Math.round(Number(h) * 100) / 100;
     const out = {
-      id, mois: sim.mois, nom: String(sim.nom || 'Scénario').trim().slice(0, 40) || 'Scénario', jours, roles, reports, hsReg,
+      id, mois: sim.mois, nom: String(sim.nom || 'Scénario').trim().slice(0, 40) || 'Scénario', jours, roles, services, reports, hsReg,
       creeLe: sim.creeLe || new Date().toISOString(), majLe: new Date().toISOString(), majPar: by || '',
     };
     return this.writeJson(path.join(this.dossierSim(), `${id}.json`), out);
@@ -353,7 +375,7 @@ class Planning {
   appliquerCases(changements, by) {
     const parSemaine = new Map();
     for (const c of changements || []) {
-      if (!ISO.test(c.date) || !c.agentId || (!c.code && c.hsReg == null)) continue;
+      if (!ISO.test(c.date) || !c.agentId || (!c.code && c.hsReg == null && !c.service)) continue;
       const l = lundiDe(c.date);
       if (!parSemaine.has(l)) parSemaine.set(l, []);
       parSemaine.get(l).push(c);
@@ -364,14 +386,15 @@ class Planning {
       const sem = this.loadSemaine(l);
       for (const c of liste) {
         const ag = sem.cases[c.agentId] || {};
-        if (c.hsReg != null) {
-          const v = nettoyerCase({ ...(ag[c.date] || {}), hsReg: c.hsReg });
+        // HS automatiques corrigées ou service du jour seuls : ajoutés à la case.
+        if (!c.code) {
+          const v = nettoyerCase({ ...(ag[c.date] || {}), ...(c.hsReg != null ? { hsReg: c.hsReg } : {}), ...(c.service ? { service: c.service } : {}) });
           if (v) sem.cases[c.agentId] = { ...ag, [c.date]: v };
           poses += 1;
           continue;
         }
         if (ag[c.date]) { ignores += 1; continue; }
-        sem.cases[c.agentId] = { ...ag, [c.date]: { code: String(c.code).slice(0, 5), texte: '' } };
+        sem.cases[c.agentId] = { ...ag, [c.date]: nettoyerCase({ code: String(c.code).slice(0, 5), texte: '', service: c.service }) };
         poses += 1;
       }
       this.enregistrer(sem, by);

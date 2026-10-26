@@ -2930,6 +2930,7 @@ async function loadSiteData() {
   S.agentsPlanning = false;
   planState.agents = await safe(api.planAgents(), []);
   planState.codes = await safe(api.planCodes(), []);
+  planState.config = await safe(api.planConfig(), planState.config);
   majRolesCouleurs(await safe(api.planRoles(), {}));
   majPlanCodes();
   await rafraichirAgentsAbsents();

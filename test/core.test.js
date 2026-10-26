@@ -581,6 +581,15 @@ test('planning : simulations (scénarios, rôles, application au planning)', () 
   p.appliquerCases([{ agentId: a.id, date: '2026-11-03', hsReg: 0 }], 'Test');
   assert.equal(p.loadSemaine('2026-11-03').cases[a.id]['2026-11-03'].hsReg, 0);
   p.deleteSimulation(sim.id);
+  // Dimanche ponctuel : service du jour reporté, réglage de la période.
+  const s2 = p.saveSimulation({ mois: '2026-11', nom: 'D', jours: { [a.id]: ['2026-11-01'] }, services: { [a.id]: { '2026-11-01': 'nuit', '2026-11-02': 'matin' } } }, 'Test');
+  assert.deepEqual(s2.services, { [a.id]: { '2026-11-01': 'nuit' } });
+  p.deleteSimulation(s2.id);
+  p.appliquerCases([{ agentId: a.id, date: '2026-11-08', code: 'T', service: 'matin' }], 'Test');
+  assert.deepEqual(p.loadSemaine('2026-11-08').cases[a.id]['2026-11-08'], { code: 'T', texte: '', service: 'matin' });
+  assert.deepEqual(p.loadConfig(), { dimanches: { debut: '', fin: '' } });
+  p.saveConfig({ dimanches: { debut: '2026-10-26', fin: 'x' } });
+  assert.deepEqual(p.loadConfig(), { dimanches: { debut: '2026-10-26', fin: '' } });
   p.saveRolesCouleurs({ Pelliste: '#AA0000', Chauffeur: 'rouge' });
   assert.deepEqual(p.loadRolesCouleurs(), { Pelliste: '#aa0000' });
   p.vider();

@@ -117,7 +117,7 @@ function lireHs(t) {
 }
 const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-const planState = { vue: 'semaine', date: null, agents: [], codes: [], rolesCouleurs: {}, semaine: null, mois: null, loadedAt: 0 };
+const planState = { vue: 'semaine', date: null, agents: [], codes: [], config: { dimanches: { debut: '', fin: '' } }, rolesCouleurs: {}, semaine: null, mois: null, loadedAt: 0 };
 majPlanCodes();
 
 const isoAjout = (iso, n) => M.addDays(iso, n);
@@ -127,7 +127,15 @@ const isoAjout = (iso, n) => M.addDays(iso, n);
 const HS_SAMEDI_APM = 7;
 // Équipe « effective » : un responsable compte dans le service auquel il est rattaché.
 // Un changement ponctuel (« service ce jour » dans la case) prime.
-const equipeEff = (a, val) => (a && a.equipe === 'responsables' ? (val && val.service) || a.service || a.equipe : a && a.equipe);
+// Un changement ponctuel (« service ce jour » dans la case) prime, pour tous
+// (ex. un agent de l'après-midi qui fait le dimanche matin ou la nuit).
+const serviceHabituel = (a) => (a && a.equipe === 'responsables' ? a.service || a.equipe : a && a.equipe);
+const equipeEff = (a, val) => (val && val.service) || serviceHabituel(a);
+// Ouverture ponctuelle du dimanche (matin 6h-12h, nuit 20h30-2h30) sur une période.
+const dimancheOuvert = (d) => {
+  const p = (planState.config && planState.config.dimanches) || {};
+  return M.parseISODate(d).getDay() === 0 && !!p.debut && d >= p.debut && (!p.fin || d <= p.fin);
+};
 const samediHs = (a, d, val) => a && equipeEff(a, val) === 'apresmidi' && M.SERVICES.some((x) => x.id === 'apresmidi') && M.parseISODate(d).getDay() === 6;
 // Jour férié travaillé (case vide) : 7h rouges pour tout le monde (CTVO).
 const HS_FERIE = 7;
@@ -220,6 +228,7 @@ async function loadPlanAgents() {
     planState.agents = [];
   }
   planState.codes = await call(api.planCodes()).catch(() => planState.codes);
+  planState.config = await call(api.planConfig()).catch(() => planState.config);
   majRolesCouleurs(await call(api.planRoles()).catch(() => planState.rolesCouleurs));
   majPlanCodes();
   majPlanEquipes();
@@ -316,8 +325,8 @@ function vueSemaine(head) {
 
   const colonnes = h('colgroup', {}, h('col', { class: 'c-agent' }), jours.map(() => h('col')));
   const entete = h('thead', {}, h('tr', {}, h('th', { class: 'c-agent' }, 'Agent'),
-    jours.map((d, i) => h('th', { class: `${estWeekEnd(d) ? 'we' : ''}${d === auj ? ' auj' : ''}${M.ferie(d) ? ' ferie' : ''}`, title: M.ferie(d) || '' },
-      h('div', { class: 'j-nom' }, M.ferie(d) ? 'Férié' : JOURS_COURTS[i]), h('div', { class: 'j-date' }, fmtJour(d))))));
+    jours.map((d, i) => h('th', { class: `${estWeekEnd(d) ? 'we' : ''}${d === auj ? ' auj' : ''}${M.ferie(d) ? ' ferie' : ''}${dimancheOuvert(d) ? ' dim-ouvert' : ''}`, title: M.ferie(d) || (dimancheOuvert(d) ? 'Dimanche ouvert : matin 6h-12h, nuit 20h30-2h30 (6h rouges)' : '') },
+      h('div', { class: 'j-nom' }, M.ferie(d) ? 'Férié' : JOURS_COURTS[i]), h('div', { class: 'j-date' }, fmtJour(d)), dimancheOuvert(d) ? h('div', { class: 'j-ouvert' }, 'ouvert') : null))));
   const lignes = [];
   for (const eq of PLAN_EQUIPES) {
     const agents = planState.agents.filter((a) => a.equipe === eq.id && presentEntre(a, lundi, jours[6]));
@@ -326,6 +335,12 @@ function vueSemaine(head) {
     lignes.push(h('tr', { class: 'plan-equipe', style: { '--eq': eq.couleur() } },
       h('th', { class: 'c-agent' }, h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, ` ${eq.heures}`) : null),
       jours.map((d) => {
+        // Dimanche : on compte ceux qui tiennent ce service ce jour-là (toutes équipes).
+        if (M.parseISODate(d).getDay() === 0 && ['matin', 'apresmidi', 'nuit'].includes(eq.id)) {
+          const n = planState.agents.filter((a) => { const v = (sem.cases[a.id] || {})[d]; const c = v && planCode(v.code); return presentLe(a, d) && c && !c.absence && equipeEff(a, v) === eq.id; }).length;
+          return h('td', { class: `we${d === auj ? ' auj' : ''}`, title: dimancheOuvert(d) ? `${plural(n, 'agent')} au ${eq.label.toLowerCase()} ce dimanche` : 'Dimanche fermé' },
+            h('span', { class: `eq-compte${dimancheOuvert(d) && !n && eq.id !== 'apresmidi' ? ' manque' : ''}` }, dimancheOuvert(d) || n ? String(n) : '—'));
+        }
         const effectif = agents.filter((a) => presentLe(a, d));
         const absents = effectif.filter((a) => { const c = (sem.cases[a.id] || {})[d]; return c && planCode(c.code) && planCode(c.code).absence; }).length;
         const presents = effectif.length - absents;
@@ -459,7 +474,7 @@ function caseAgent(agent, date, val, { we, auj, nuit = false }) {
   });
   const couleurHs = val && val.hs ? (reglesHs() ? hsType(val.hsType || typeHsDefaut(date)).couleur : '#0b7285') : null;
   // Responsable qui change ponctuellement de service : petite étiquette.
-  const autreSvc = agent.equipe === 'responsables' && val && val.service && val.service !== agent.service && PLAN_EQUIPES.find((x) => x.id === val.service);
+  const autreSvc = val && val.service && val.service !== serviceHabituel(agent) && PLAN_EQUIPES.find((x) => x.id === val.service);
   if (autreSvc) td.append(h('span', { class: 'case-svc', style: { '--c': autreSvc.couleur() }, title: `Ce jour : ${autreSvc.label}` }, autreSvc.label));
   // Heures supp automatiques : un simple point de couleur (détail au survol).
   if (val && val.auto) {
@@ -578,15 +593,16 @@ function ouvrirPalette(td, agent, date, val, nuit = false) {
       class: `pop-code${val && val.code === c.code ? ' on' : ''}`, style: { '--c': c.couleur }, title: c.label, 'data-code': c.code, onclick: () => choisir(c.code),
     }, h('b', {}, c.code), h('span', {}, c.label)))),
     paletteCouleurs(),
-    agent.equipe !== 'responsables' ? null : h('div', { class: 'pop-hs-types' }, h('span', { class: 'muted' }, 'Service ce jour'),
+    !['matin', 'apresmidi', 'nuit'].includes(serviceHabituel(agent)) && agent.equipe !== 'responsables' ? null : h('div', { class: 'pop-hs-types' }, h('span', { class: 'muted' }, 'Service ce jour'),
       PLAN_EQUIPES.filter((x) => ['matin', 'apresmidi', 'nuit'].includes(x.id)).map((x) => h('button', {
-        class: `pop-hs-type${x.id === (serviceJour || agent.service) ? ' on' : ''}`, style: { '--c': x.couleur() },
-        title: x.id === agent.service ? 'Service habituel' : 'Changement ponctuel pour ce jour',
+        class: `pop-hs-type${x.id === (serviceJour || serviceHabituel(agent)) ? ' on' : ''}`, style: { '--c': x.couleur() },
+        title: x.id === serviceHabituel(agent) ? 'Service habituel' : 'Changement ponctuel pour ce jour (dimanche, remplacement…)',
         onclick: () => {
-          serviceJour = x.id === agent.service ? '' : x.id;
-          choisir((val && val.code) || '');
+          serviceJour = x.id === serviceHabituel(agent) ? '' : x.id;
+          // Dimanche : poser « T » si la case est vide, sinon on garde le code.
+          choisir((val && val.code) || (M.parseISODate(date).getDay() === 0 && serviceJour ? 'T' : ''));
         },
-      }, x.label, x.id === agent.service ? ' ·' : ''))),
+      }, x.label, x.id === serviceHabituel(agent) ? ' ·' : ''))),
     !reglesHs() ? null : h('div', { class: 'pop-hs-types' }, h('span', { class: 'muted' }, 'Type d\'h supp'), HS_TYPES.map((t) => h('button', {
       class: `pop-hs-type${t.id === typeHs ? ' on' : ''}`, style: { '--c': t.couleur }, title: t.detail,
       onclick: (e) => { typeHs = t.id; e.currentTarget.parentNode.querySelectorAll('.pop-hs-type').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); },
@@ -791,10 +807,30 @@ function vueAgents() {
         h('div', { class: 'row ag-ajout' }, nom, h('button', { class: 'btn small', onclick: ajouter }, icon('plus', 13), 'Ajouter'))));
   });
   return h('div', { class: 'plan-agents' },
+    reglageDimanche(),
     h('div', { class: 'row plan-info-ligne' }, h('p', { class: 'muted plan-info' }, icon('users', 14), ' Ces agents sont aussi ceux proposés dans « Agents absents » de la main courante.'), h('span', { class: 'spacer' }), boutonImport('btn small')),
     h('div', { class: 'ag-grille' }, groupes),
     anciensAgents(liste, enregistrer),
     liste.length ? h('div', { class: 'plan-vider' }, h('button', { class: 'lien-discret', onclick: viderPlanning }, 'Vider le planning…')) : null);
+}
+
+// Ouverture ponctuelle du dimanche : période (début, fin facultative).
+function reglageDimanche() {
+  const p = (planState.config && planState.config.dimanches) || { debut: '', fin: '' };
+  const enregistrer = async (champ, v) => {
+    try {
+      planState.config = await call(api.planSaveConfig({ ...planState.config, dimanches: { ...p, [champ]: v } }));
+    } catch (err) {
+      toast(`Non enregistré : ${err.message}`);
+    }
+    renderPlanning({ reload: false });
+  };
+  return h('div', { class: 'card dim-reglage' }, h('div', { class: 'card-body row' },
+    h('b', {}, 'Dimanches ouverts'), h('span', { class: 'muted' }, 'matin 6h-12h · nuit 20h30-2h30 (6h rouges)'),
+    h('span', { class: 'spacer' }),
+    h('label', {}, 'du ', h('input', { type: 'date', value: p.debut, onchange: (e) => enregistrer('debut', e.target.value) })),
+    h('label', {}, ' au ', h('input', { type: 'date', value: p.fin, onchange: (e) => enregistrer('fin', e.target.value) })),
+    h('span', { class: 'muted' }, p.debut ? (p.fin ? '' : '(sans fin)') : '(fermés)')));
 }
 
 // Agents partis : repliés en bas de l'onglet, leurs anciennes cases restent visibles.
