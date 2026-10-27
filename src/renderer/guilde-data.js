@@ -272,14 +272,34 @@
       SP('s25c', 'Renouveau', 'Stall (20) : les alliés récupèrent 25 % de PV', E.stall(20, (c, u) => { for (const a of c.alliesDe(u)) c.soin(u, a, c.s(a, 'pv') * 0.25); })),
     ]),
   ];
-  // Les 5 premiers persos de l'équipe (noms, compétences et spécialisations
-  // aux couleurs du site) ; les autres restent des homunculus pour l'instant.
+  // Les 25 persos de l'équipe : noms, compétences et spécialisations aux
+  // couleurs du site (les visuels arrivent au fur et à mesure).
   const PERSOS = {
     h1: { nom: 'Le Pelliste', comp: 'Coup de godet', specs: { s1a: ['Heures sup\'', null], s1b: ['Godet bouclier', '+20 défense ; le Coup de godet provoque les ennemis adjacents 2 s'], s1c: ['Café serré', null] } },
     h2: { nom: 'L\'Agent de quai', comp: 'Grand coup de balai', specs: { s2a: ['Récup\' de matériaux', null], s2b: ['Balai brûlant', 'Le coup de balai enflamme (30/s, 3 s)'], s2c: ['Grand ménage', 'Le coup de balai touche jusqu\'à 2 cases'] } },
     h3: { nom: 'Le Chef d\'équipe', comp: 'Briefing de prise de poste', specs: { s3a: ['Esprit d\'équipe', 'Le briefing donne aussi +15 % de vitesse d\'attaque'], s3b: ['Au téléphone', 'Renfort : toute l\'équipe +8 % attaque (même depuis la réserve)'], s3c: ['Débrief de mi-service', 'Stall (15) : refait le briefing et récupère 20 % de PV'] } },
     h4: { nom: 'Le Directeur', comp: 'Rupture conventionnelle', specs: { s4a: ['Chasseur de têtes', null], s4b: ['Négociateur', null], s4c: ['Restructuration', null] } },
     h5: { nom: 'Le Chauffeur PL', comp: 'Coup de klaxon', specs: { s5a: ['Pare-chocs', null], s5b: ['Radio CB', null], s5c: ['Semi en travers', null] } },
+    h6: { nom: 'Le Veilleur de nuit', comp: 'Ronde glaciale', specs: { s6a: ['Courant d\'air', null], s6b: ['Nuit polaire', '+25 magie, Ronde glaciale +50 %'], s6c: ['Couverture de survie', null] } },
+    h7: { nom: 'Le Responsable déchets dangereux', comp: 'Fût percé', specs: { s7a: ['Gants contaminés', null], s7b: ['Combinaison étanche', null], s7c: ['Douche de décontamination', null] } },
+    h8: { nom: 'Le Responsable sécurité', comp: 'Port des EPI obligatoire', specs: { s8a: ['Formateur SST', 'Port des EPI soigne aussi de 90'], s8b: ['Quart d\'heure sécurité', null], s8c: ['Zéro accident', null] } },
+    h9: { nom: 'Le Cariste', comp: 'Coup de fourches', specs: { s9a: ['Palette lâchée', 'Le coup de fourches touche aussi les ennemis autour (50 %)'], s9b: ['Plein gaz', null], s9c: ['Moteur en surchauffe', 'Le coup de fourches brûle la cible (40/s, 4 s)'] } },
+    h10: { nom: 'Le Soudeur', comp: 'Cordon de soudure', specs: { s10a: ['Point chaud', null], s10b: ['Arc électrique', null], s10c: ['Permis de feu', null] } },
+    h11: { nom: 'Le Secouriste', comp: 'Gestes qui sauvent', specs: { s11a: ['Brancardier', null], s11b: ['Défibrillateur', 'Après ses gestes qui sauvent, ses 3 attaques suivantes font +50 %'], s11c: ['PLS', 'Stall (10) : refait les gestes qui sauvent'] } },
+    h12: { nom: 'L\'Intérimaire', comp: 'Mission surprise', specs: { s12a: ['Premier jour', null], s12b: ['Trouble-fête', null], s12c: ['Fin de mission', null] } },
+    h13: { nom: 'Le Dératiseur', comp: 'Appâts empoisonnés', specs: { s13a: ['Raticide pro', null], s13b: ['Fumigation', 'Après les appâts : furtif 2 s'], s13c: ['Pièges chimiques', '+20 magie, les appâts font 160 % de la magie'] } },
+    h14: { nom: 'L\'Agent de tri', comp: 'Tri express', specs: { s14a: ['Cadence infernale', null], s14b: ['Réflexes de tapis', null], s14c: ['Tuteur', null] } },
+    h15: { nom: 'Le Commercial', comp: 'Offre irrésistible', specs: { s15a: ['Objectif dépassé', null], s15b: ['Contre-proposition', null], s15c: ['Grands comptes', null] } },
+    h16: { nom: 'Le Contrôleur qualité', comp: 'Non-conformité', specs: { s16a: ['Audit surprise', null], s16b: ['Rappel produit', '+20 % PV, Non-conformité étourdit 1 s'], s16c: ['Indicateurs', null] } },
+    h17: { nom: 'Le Grutier', comp: 'Charge suspendue', specs: { s17a: ['Vue d\'en haut', null], s17b: ['Vent d\'altitude', null], s17c: ['Double levage', 'Stall (15) : deux Charges suspendues gratuites'] } },
+    h18: { nom: 'Le Mécano', comp: 'Retour de flamme', specs: { s18a: ['Huile chaude', null], s18b: ['Moteur chaud', null], s18c: ['Explosion de carter', 'Retour de flamme : rayon +1'] } },
+    h19: { nom: 'L\'Électricien', comp: 'Court-circuit', specs: { s19a: ['Haute tension', 'Court-circuit étourdit 0,5 s'], s19b: ['Rallonge', null], s19c: ['Tableau électrique', null] } },
+    h20: { nom: 'Le Laveur haute pression', comp: 'Jet haute pression', specs: { s20a: ['Eau glacée', null], s20b: ['Lavage doux', 'Le jet soigne de 70 les alliés proches'], s20c: ['Grand nettoyage', 'Stall (15) : Jet haute pression gratuit'] } },
+    h21: { nom: 'L\'Informaticien', comp: 'Mise à jour forcée', specs: { s21a: ['Admin système', null], s21b: ['Récupération de données', 'Récupère 30 % des dégâts de la Mise à jour forcée'], s21c: ['Raccourci clavier', null] } },
+    h22: { nom: 'L\'Infirmière du travail', comp: 'Pansement express', specs: { s22a: ['Réanimation', null], s22b: ['Piqûre de rappel', 'Le pansement inflige aussi 150 % de la magie à l\'ennemi le plus proche'], s22c: ['Convalescence', 'Après un pansement, les alliés récupèrent 2 % de PV/s pendant 5 s'] } },
+    h23: { nom: 'La Secrétaire', comp: 'Parapheur blindé', specs: { s23a: ['Agenda optimisé', 'Les alliés protégés par le parapheur gagnent +15 % attaque 4 s'], s23b: ['Note de service', null], s23c: ['Plastifieuse', null] } },
+    h24: { nom: 'La Dame de la cantine', comp: 'Plat du jour', specs: { s24a: ['Rab', null], s24b: ['Menu équilibré', null], s24c: ['Service de midi', 'Rush (8) : Plat du jour double'] } },
+    h25: { nom: 'L\'Agent d\'entretien', comp: 'Coup de serpillière', specs: { s25a: ['Chariot de ménage', null], s25b: ['Produit désinfectant', 'Le coup de serpillière soigne +50 %'], s25c: ['Remise en état', null] } },
   };
   for (const [id, p] of Object.entries(PERSOS)) {
     const def = G.HEROS.find((x) => x.id === id);
