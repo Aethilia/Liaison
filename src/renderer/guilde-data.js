@@ -289,7 +289,7 @@
     h12: { nom: 'L\'Intérimaire', comp: 'Mission surprise', specs: { s12a: ['Premier jour', null], s12b: ['Trouble-fête', null], s12c: ['Fin de mission', null] } },
     h13: { nom: 'Le Syndicaliste', comp: 'Préavis de grève', specs: { s13a: ['Convergence des luttes', null], s13b: ['Fumigènes de manif', 'Après le préavis : furtif 2 s'], s13c: ['Discours enflammé', '+20 magie, les tracts font 160 % de la magie'] } },
     h14: { nom: 'L\'Agent de tri', comp: 'Tri express', specs: { s14a: ['Cadence infernale', null], s14b: ['Réflexes de tapis', null], s14c: ['Tuteur', null] } },
-    h15: { nom: 'L\'Arroseur', comp: 'Jet concentré', specs: { s15a: ['Tournée matinale', null], s15b: ['Retour d\'eau', null], s15c: ['Débouchage', null] } },
+    h15: { nom: 'La Chargée de comm', comp: 'Post viral', specs: { s15a: ['Community management', null], s15b: ['Droit de réponse', null], s15c: ['Campagne choc', null] } },
     h16: { nom: 'Le Contrôleur qualité', comp: 'Non-conformité', specs: { s16a: ['Audit surprise', null], s16b: ['Rappel produit', '+20 % PV, Non-conformité étourdit 1 s'], s16c: ['Indicateurs', null] } },
     h17: { nom: 'Le Balayeur', comp: 'Projection de gravillons', specs: { s17a: ['Grand boulevard', null], s17b: ['Tournée d\'hiver', null], s17c: ['Double passage', 'Stall (15) : deux projections de gravillons gratuites'] } },
     h18: { nom: 'Le Mécano', comp: 'Retour de flamme', specs: { s18a: ['Huile chaude', null], s18b: ['Moteur chaud', null], s18c: ['Explosion de carter', 'Retour de flamme : rayon +1'] } },
