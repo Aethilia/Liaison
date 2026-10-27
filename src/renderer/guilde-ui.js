@@ -11,7 +11,7 @@
   const R = G.Run;
   const UI = G.UI = {};
 
-  const W = 70; // largeur d'un hexagone
+  const W = 84; // largeur d'un hexagone
   const HX = W * 1.1547;
   const PAS_Y = HX * 0.75;
   const RARETES = { c: ['Commun', '#adb5bd'], r: ['Rare', '#4dabf7'], e: ['Épique', '#b197fc'], l: ['Légendaire', '#ffa94d'], unique: ['Départ', '#63e6be'] };
@@ -37,8 +37,36 @@
   const nomClasse = (cl) => (G.CLASSES[cl] || { nom: 'Monstre' }).nom;
   const pastille = (rarete, txt) => h('span', { class: 'gd-rar', style: { '--c': RARETES[rarete][1] } }, txt || RARETES[rarete][0]);
 
+  // Visuel animé (planche de sprites) : attente en boucle, attaque et
+  // compétence jouées une fois puis retour à l'attente.
+  const IMG = 'guilde-img/';
+  function animerSprite(el, anim, { boucle = false } = {}) {
+    const v = G.VISUELS[el.dataset.heros];
+    if (!v || !v[anim]) return;
+    const [fichier, n, duree] = v[anim];
+    const k = Number(el.dataset.echelle || 1);
+    el.style.backgroundImage = `url("${IMG}${fichier}")`;
+    el.style.backgroundSize = `${G.VISUEL_L * n * k}px ${G.VISUEL_H * k}px`;
+    el.style.setProperty('--fin', `${-G.VISUEL_L * n * k}px`);
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = `gd-sprite ${duree}ms steps(${n}) ${boucle ? 'infinite' : '1'}`;
+    clearTimeout(el._retour);
+    if (!boucle) el._retour = setTimeout(() => animerSprite(el, 'idle', { boucle: true }), duree);
+  }
+  function spriteHeros(id, echelle = 1) {
+    const el = h('div', { class: 'gd-sprite', 'data-heros': id, 'data-echelle': echelle, style: { width: `${G.VISUEL_L * echelle}px`, height: `${G.VISUEL_H * echelle}px` } });
+    animerSprite(el, 'idle', { boucle: true });
+    return el;
+  }
+
   function jeton(def, { rang = null, classes = null, petit = false, ennemi = false, boss = false } = {}) {
     const cl = classes || def.classes || ['monstre'];
+    if (!ennemi && def.id && G.VISUELS[def.id]) {
+      return h('div', { class: `gd-jeton avec-sprite${petit ? ' petit' : ''}`, style: { '--c': couleurClasse(cl[0]), '--c2': cl[1] ? couleurClasse(cl[1]) : 'transparent' } },
+        h('span', { class: 'gd-socle' }), spriteHeros(def.id, petit ? 1 : 2),
+        rang ? h('span', { class: `gd-rang r${rang}` }, rang) : null);
+    }
     return h('div', { class: `gd-jeton${petit ? ' petit' : ''}${ennemi ? ' ennemi' : ''}${boss ? ' boss' : ''}`, style: { '--c': ennemi ? '#e03131' : couleurClasse(cl[0]), '--c2': cl[1] ? couleurClasse(cl[1]) : 'transparent' } },
       h('span', { class: 'gd-num' }, ennemi ? (def.nom || '?').slice(0, 2).toUpperCase() : def.num),
       rang ? h('span', { class: `gd-rang r${rang}` }, rang) : null);
@@ -444,7 +472,8 @@
     const plat = plateau();
     const els = new Map();
     const fiche = (u) => {
-      const j = jeton(u.cote === 'allies' ? { num: u.num } : { nom: u.nom }, { classes: u.classes, ennemi: u.cote === 'ennemis', boss: u.boss, rang: u.cote === 'allies' ? (r.heros.find((x) => x.uid === u.ref) || {}).rang : null });
+      const heros = u.cote === 'allies' && r.heros.find((x) => x.uid === u.ref);
+      const j = jeton(u.cote === 'allies' ? { num: u.num, id: heros && heros.id } : { nom: u.nom }, { classes: u.classes, ennemi: u.cote === 'ennemis', boss: u.boss, rang: u.cote === 'allies' ? (r.heros.find((x) => x.uid === u.ref) || {}).rang : null });
       j.classList.add('gd-pose', 'gd-u');
       j.append(h('span', { class: 'gd-barres' }, h('i', { class: 'pv' }), h('i', { class: 'bouclier' }), h('i', { class: 'mana' })), h('span', { class: 'gd-statuts' }));
       j.title = u.nom;
@@ -493,7 +522,9 @@
           plat.append(b);
           setTimeout(() => b.remove(), f.type === 'lance' ? 1300 : 900);
         }
-        if (f.type === 'attaque') { j.classList.remove('frappe'); void j.offsetWidth; j.classList.add('frappe'); }
+        const sp = j.querySelector('.gd-sprite');
+        if (f.type === 'attaque') { if (sp) animerSprite(sp, 'attaque'); else { j.classList.remove('frappe'); void j.offsetWidth; j.classList.add('frappe'); } }
+        if (f.type === 'lance' && sp) animerSprite(sp, 'comp');
       }
       for (; logVu < c.journal.length; logVu++) {
         const e = c.journal[logVu];

@@ -781,3 +781,5 @@ dialog.ext-dialog { width: min(560px, 94vw); }
 .imp-valides { margin-top: 8px; font-size: 12px; color: #64748b; }
 .imp-valides summary { cursor: pointer; padding: 2px 8px; }
 #form.imp-liseré { box-shadow: inset 4px 0 0 #e03131; border-radius: 4px; }
+.jeu-joueurs-liste { display: flex; flex-wrap: wrap; gap: 6px 14px; max-height: 120px; overflow-y: auto; }
+.jeu-joueur { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; }

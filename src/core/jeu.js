@@ -18,6 +18,7 @@ const JOUEURS = new Set([]);
 // LIAISON_JEU_JOUEURS (noms séparés par des virgules) : essais uniquement.
 const joueursEssai = () => String(process.env.LIAISON_JEU_JOUEURS || '').split(',').map((x) => x.trim()).filter(Boolean).map(empreinte);
 const estJoueur = (nom) => !!normNom(nom) && (JOUEURS.has(empreinte(nom)) || joueursEssai().includes(empreinte(nom)));
+const MAX_JOUEURS = 10;
 
 const hacher = (code, sel) => crypto.pbkdf2Sync(String(code), sel, 60000, 32, 'sha256').toString('hex');
 const codeValide = (code) => typeof code === 'string' && code.length >= 4 && code.length <= 20;
@@ -37,6 +38,37 @@ class Jeu {
     }
   }
 
+  // Joueurs autorisés : ceux du programme, plus ceux cochés dans le menu
+  // discret (empreintes dans <dossier principal>/jeu/joueurs.json).
+  joueursFichier() {
+    for (const dir of this.dirs) {
+      try {
+        const l = JSON.parse(fs.readFileSync(path.join(dir, 'joueurs.json'), 'utf8')).joueurs;
+        if (Array.isArray(l)) return l.filter((x) => /^[0-9a-f]{64}$/.test(x));
+      } catch { /* suivant */ }
+    }
+    return [];
+  }
+
+  estJoueur(nom) {
+    return estJoueur(nom) || (!!normNom(nom) && this.joueursFichier().includes(empreinte(nom)));
+  }
+
+  // { nom: true/false } pour une liste de noms (menu discret).
+  joueursParmi(noms) {
+    return Object.fromEntries((noms || []).map((n) => [n, this.estJoueur(n)]));
+  }
+
+  autoriser(nom, oui) {
+    if (!normNom(nom)) throw new Error('Nom invalide.');
+    const e = empreinte(nom);
+    const l = this.joueursFichier().filter((x) => x !== e);
+    if (oui) l.push(e);
+    if (l.length > MAX_JOUEURS) throw new Error(`${MAX_JOUEURS} joueurs au plus.`);
+    this.ecrireJson('joueurs.json', { joueurs: l });
+    return this.estJoueur(nom);
+  }
+
   fiche(nom) {
     const cle = empreinte(nom);
     for (const dir of this.dirs) {
@@ -47,12 +79,12 @@ class Jeu {
   }
 
   statut(nom) {
-    if (!estJoueur(nom)) return { joueur: false };
+    if (!this.estJoueur(nom)) return { joueur: false };
     return { joueur: true, code: !!this.fiche(nom) };
   }
 
   verifier(nom, code) {
-    if (!estJoueur(nom)) return false;
+    if (!this.estJoueur(nom)) return false;
     const f = this.fiche(nom);
     if (!f) return false;
     const a = Buffer.from(hacher(code || '', f.sel), 'hex');
@@ -62,7 +94,7 @@ class Jeu {
 
   // Premier code : libre. Changement : l'ancien code est demandé.
   definir(nom, code, ancien) {
-    if (!estJoueur(nom)) throw new Error('Action impossible.');
+    if (!this.estJoueur(nom)) throw new Error('Action impossible.');
     if (!codeValide(code)) throw new Error('Le code doit faire de 4 à 20 caractères.');
     if (this.fiche(nom) && !this.verifier(nom, ancien)) throw new Error('Ancien code incorrect.');
     const sel = crypto.randomBytes(16).toString('hex');
@@ -111,11 +143,11 @@ Jeu.prototype.ecrireJson = function ecrireJson(nomFichier, data) {
   return data;
 };
 Jeu.prototype.profil = function profil(nom) {
-  if (!estJoueur(nom)) throw new Error('Action impossible.');
+  if (!this.estJoueur(nom)) throw new Error('Action impossible.');
   return this.lireJson(path.join('joueurs', `${empreinte(nom)}.json`), { partie: null, diffMax: 1 });
 };
 Jeu.prototype.sauverProfil = function sauverProfil(nom, p) {
-  if (!estJoueur(nom)) throw new Error('Action impossible.');
+  if (!this.estJoueur(nom)) throw new Error('Action impossible.');
   const s = JSON.stringify(p || {});
   if (s.length > 2e6) throw new Error('Sauvegarde trop volumineuse.');
   return this.ecrireJson(path.join('joueurs', `${empreinte(nom)}.json`), { partie: p.partie || null, diffMax: Math.min(8, Math.max(1, Number(p.diffMax) || 1)) });
@@ -125,7 +157,7 @@ Jeu.prototype.scores = function scores() {
   return Array.isArray(l) ? l : [];
 };
 Jeu.prototype.ajouterScore = function ajouterScore(nom, sc) {
-  if (!estJoueur(nom)) throw new Error('Action impossible.');
+  if (!this.estJoueur(nom)) throw new Error('Action impossible.');
   const l = this.scores();
   l.push({
     joueur: normNom(nom).split(' ')[0].replace(/^./, (c) => c.toUpperCase()),

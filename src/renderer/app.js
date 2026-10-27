@@ -2619,11 +2619,30 @@ const funPhotoUrl = (rel) => (rel ? call(api.readPhoto(rel)).catch(() => null) :
 
 // Fenêtre discrète « Diagnostic » : ouverte par le numéro de version, en bas à
 // droite de l'accueil. Réglage relu à neuf dans le site actif.
+// Menu discret : qui a l'accès caché (code secret au clic sur son nom).
+// Enregistré tout de suite, pour tous les sites (dossier principal).
+async function renderJoueursCaches() {
+  const box = $('#set-jeu-joueurs');
+  if (!box) return;
+  const noms = [...new Set(knownUsers().map((u) => u.nom))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const etat = await call(api.jeuJoueursParmi(noms)).catch(() => ({}));
+  box.replaceChildren(...noms.map((n) => h('label', { class: 'jeu-joueur' },
+    h('input', { type: 'checkbox', checked: !!etat[n], onchange: async (e) => {
+      try {
+        await call(api.jeuAutoriser(n, e.target.checked));
+      } catch (err) {
+        e.target.checked = !e.target.checked;
+        toast(err.message);
+      }
+    } }), n)));
+}
+
 async function openFunDialog() {
   try {
     S.site = await call(api.loadSite());
   } catch { /* garde la version en mémoire */ }
   const fun = (S.site && S.site.fun) || {};
+  renderJoueursCaches();
   $('#set-fun-user').replaceChildren(h('option', { value: '' }, 'Personne'),
     ...[...new Set([...S.users, fun.user].filter(Boolean))].map((u) => h('option', { value: u, selected: u === fun.user }, u)));
   $('#set-fun-ruban').value = fun.ruban || '';

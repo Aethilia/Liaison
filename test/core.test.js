@@ -637,6 +637,14 @@ test('jeu caché : joueurs reconnus par empreinte, code secret chiffré', () => 
     j.ajouterScore('Joueur Essai', { score: 900, etage: 7 });
     j.ajouterScore('Joueur Essai', { score: 1500, etage: 12, gagne: true });
     assert.deepEqual(j.scores().map((x) => [x.joueur, x.score]), [['Joueur', 900], ['Joueur', 1500]]);
+    // Joueurs ajoutés par le menu discret : empreintes seulement.
+    assert.equal(j.estJoueur('Autre Collègue'), false);
+    j.autoriser('Autre Collègue', true);
+    assert.equal(new Jeu([b]).estJoueur('autre  collegue'), true);
+    assert.deepEqual(j.joueursParmi(['Autre Collègue', 'Personne X']), { 'Autre Collègue': true, 'Personne X': false });
+    assert.ok(!fs.readFileSync(path.join(a, 'jeu', 'joueurs.json'), 'utf8').includes('Coll'));
+    j.autoriser('Autre Collègue', false);
+    assert.equal(j.estJoueur('Autre Collègue'), false);
   } finally {
     delete process.env.LIAISON_JEU_JOUEURS;
   }

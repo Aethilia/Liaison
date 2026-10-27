@@ -311,6 +311,8 @@ const memeNom = (a, b) => String(a || '').trim().toLowerCase() === String(b || '
 // Jeu caché : codes dans le dossier principal (au-dessus des sites).
 const jeu = () => new Jeu([config.dataDir, ...withSites(config).sites.map((x) => x.dataDir)].filter(Boolean).map((d) => path.dirname(d)));
 handle('jeu:statut', (nom) => jeu().statut(nom));
+handle('jeu:joueursParmi', (noms) => jeu().joueursParmi(noms));
+handle('jeu:autoriser', (nom, oui) => jeu().autoriser(nom, oui));
 handle('jeu:verifier', (nom, code) => jeu().verifier(nom, code));
 handle('jeu:definir', (nom, code, ancien) => jeu().definir(nom, code, ancien));
 handle('jeu:profil', (nom) => jeu().profil(nom));

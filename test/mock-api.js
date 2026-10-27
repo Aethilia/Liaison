@@ -108,6 +108,8 @@
     planSimSave: (sim, par) => { plan.sims = plan.sims || []; const x = { ...sim, id: sim.id || `s${Date.now().toString(36)}`, majPar: par || '' }; plan.sims = plan.sims.filter((y) => y.id !== x.id).concat(x); return ok(x); },
     planSimDelete: (id) => { plan.sims = (plan.sims || []).filter((y) => y.id !== id); return ok(true); },
     planAppliquer: (list) => { let poses = 0; let ignores = 0; for (const c of list) { const l = lundi(c.date); const s = plan.sem[l] = plan.sem[l] || { cases: {}, notes: '' }; s.cases[c.agentId] = s.cases[c.agentId] || {}; if (!c.code) { s.cases[c.agentId][c.date] = { code: '', texte: '', ...(s.cases[c.agentId][c.date] || {}), ...(c.hsReg != null ? { hsReg: c.hsReg } : {}), ...(c.service ? { service: c.service } : {}) }; poses++; } else if (s.cases[c.agentId][c.date]) ignores++; else { s.cases[c.agentId][c.date] = { code: c.code, texte: '', ...(c.service ? { service: c.service } : {}) }; poses++; } } return ok({ poses, ignores }); },
+    jeuJoueursParmi: (noms) => ok(Object.fromEntries(noms.map((n) => [n, n === 'Marie' || (plan.joueurs || []).includes(n)]))),
+    jeuAutoriser: (nom, oui) => { plan.joueurs = (plan.joueurs || []).filter((x) => x !== nom).concat(oui ? [nom] : []); return ok(oui); },
     jeuStatut: (nom) => ok(nom === 'Marie' ? { joueur: true, code: !!plan.jeuCode } : { joueur: false }),
     jeuVerifier: (nom, code) => ok(nom === 'Marie' && code === plan.jeuCode),
     jeuDefinir: (nom, code) => { plan.jeuCode = code; return ok(true); },

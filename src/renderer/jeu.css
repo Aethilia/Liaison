@@ -250,3 +250,17 @@
 .gd-joueur { font-size: 11px; color: #8a93a3; text-shadow: 1px 1px 0 #000; }
 .gd-eclats::after { content: ''; }
 .gd-eclats { padding: 1px 7px; color: #14121c; background: #ffd43b; border: 2px dashed #e8590c; font-size: 13px; }
+/* Persos dessinés (planches 84 × 64, affichées ×2, nettes) */
+@keyframes gd-sprite { from { background-position: 0 0; } to { background-position: var(--fin) 0; } }
+.gd-sprite { background-repeat: no-repeat; image-rendering: pixelated; pointer-events: none; }
+.gd-jeton.avec-sprite { width: 64px; height: 64px; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
+.gd-jeton.avec-sprite.petit { width: 44px; height: 44px; }
+.gd-jeton.avec-sprite .gd-socle { position: absolute; left: 8px; right: 8px; bottom: 2px; height: 12px; border-radius: 50%; background: color-mix(in srgb, var(--c) 55%, transparent); box-shadow: 0 0 0 2px var(--c2); }
+.gd-jeton.avec-sprite .gd-sprite { position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%); }
+.gd-jeton.avec-sprite.petit .gd-sprite { bottom: -6px; }
+.gd-jeton.avec-sprite .gd-rang { right: -6px; bottom: -4px; z-index: 1; }
+.gd-pose.avec-sprite { margin: 8px 10px; }
+.gd-u.avec-sprite .gd-barres { left: 4px; right: 4px; top: -22px; }
+.gd-u.avec-sprite .gd-statuts { left: 0; bottom: -8px; z-index: 1; }
+.gd-u.avec-sprite.mort .gd-sprite { transform: translateX(-50%) rotate(-90deg); }
+.gd-carte .gd-jeton.avec-sprite, .gd-fiche .gd-jeton.avec-sprite { margin: 10px 6px 4px; }

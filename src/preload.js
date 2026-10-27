@@ -77,6 +77,8 @@ contextBridge.exposeInMainWorld('api', {
   funReadSound: call('fun:readSound'),
   funFind: call('fun:find'),
   jeuStatut: call('jeu:statut'),
+  jeuJoueursParmi: call('jeu:joueursParmi'),
+  jeuAutoriser: call('jeu:autoriser'),
   jeuVerifier: call('jeu:verifier'),
   jeuDefinir: call('jeu:definir'),
   jeuProfil: call('jeu:profil'),

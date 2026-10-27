@@ -272,6 +272,34 @@
       SP('s25c', 'Renouveau', 'Stall (20) : les alliés récupèrent 25 % de PV', E.stall(20, (c, u) => { for (const a of c.alliesDe(u)) c.soin(u, a, c.s(a, 'pv') * 0.25); })),
     ]),
   ];
+  // Les 5 premiers persos de l'équipe (noms, compétences et spécialisations
+  // aux couleurs du site) ; les autres restent des homunculus pour l'instant.
+  const PERSOS = {
+    h1: { nom: 'Le Pelliste', comp: 'Coup de godet', specs: { s1a: ['Heures sup\'', null], s1b: ['Godet bouclier', '+20 défense ; le Coup de godet provoque les ennemis adjacents 2 s'], s1c: ['Café serré', null] } },
+    h2: { nom: 'L\'Agent de quai', comp: 'Grand coup de balai', specs: { s2a: ['Récup\' de matériaux', null], s2b: ['Balai brûlant', 'Le coup de balai enflamme (30/s, 3 s)'], s2c: ['Grand ménage', 'Le coup de balai touche jusqu\'à 2 cases'] } },
+    h3: { nom: 'Le Chef d\'équipe', comp: 'Briefing de prise de poste', specs: { s3a: ['Esprit d\'équipe', 'Le briefing donne aussi +15 % de vitesse d\'attaque'], s3b: ['Au téléphone', 'Renfort : toute l\'équipe +8 % attaque (même depuis la réserve)'], s3c: ['Débrief de mi-service', 'Stall (15) : refait le briefing et récupère 20 % de PV'] } },
+    h4: { nom: 'Le Directeur', comp: 'Rupture conventionnelle', specs: { s4a: ['Chasseur de têtes', null], s4b: ['Négociateur', null], s4c: ['Restructuration', null] } },
+    h5: { nom: 'Le Chauffeur PL', comp: 'Coup de klaxon', specs: { s5a: ['Pare-chocs', null], s5b: ['Radio CB', null], s5c: ['Semi en travers', null] } },
+  };
+  for (const [id, p] of Object.entries(PERSOS)) {
+    const def = G.HEROS.find((x) => x.id === id);
+    def.nom = p.nom;
+    def.comp = { ...def.comp, nom: p.comp };
+    def.specs = def.specs.map((sp) => (p.specs[sp.id] ? { ...sp, nom: p.specs[sp.id][0], desc: p.specs[sp.id][1] || sp.desc } : sp));
+  }
+
+  // Visuels (pixel art, 84 × 64 par image) : attente, attaque, compétence.
+  const VIS = (prefixe, comp, nComp) => ({ idle: [`${prefixe}_idle_spritesheet.png`, 4, 1040], attaque: [`${prefixe}_attaque_spritesheet.png`, 4, 540], comp: [`${prefixe}_${comp}_spritesheet.png`, nComp, 1200] });
+  G.VISUELS = {
+    h1: VIS('1_pelliste', 'coup_de_godet', 8),
+    h2: VIS('2_agent_quai', 'coup_de_balai', 8),
+    h3: VIS('3_chef', 'briefing', 7),
+    h4: VIS('4_directeur', 'rupture', 8),
+    h5: VIS('5_chauffeur', 'klaxon', 7),
+  };
+  G.VISUEL_L = 84;
+  G.VISUEL_H = 64;
+
   G.heros = (id) => G.HEROS.find((x) => x.id === id);
   G.PRIX_PALIER = { 1: 6, 2: 10, 3: 15 };
 
