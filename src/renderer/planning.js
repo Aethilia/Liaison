@@ -117,7 +117,7 @@ function lireHs(t) {
 }
 const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-const planState = { vue: 'semaine', date: null, agents: [], codes: [], config: { dimanches: { debut: '', fin: '' } }, rolesCouleurs: {}, semaine: null, mois: null, loadedAt: 0 };
+const planState = { dispo: (() => { try { return localStorage.getItem('liaison.planDispo') || 'agents'; } catch { return 'agents'; } })(), svcSemaine: null, vue: 'semaine', date: null, agents: [], codes: [], config: { dimanches: { debut: '', fin: '' } }, rolesCouleurs: {}, semaine: null, mois: null, loadedAt: 0 };
 majPlanCodes();
 
 const isoAjout = (iso, n) => M.addDays(iso, n);
@@ -322,6 +322,12 @@ function vueSemaine(head) {
     h('div', { class: 'plan-periode' }, `Semaine du ${fmtJour(lundi)} au ${fmtJour(jours[6])} ${M.parseISODate(jours[6]).getFullYear()}`),
     h('button', { class: 'btn', title: 'Semaine suivante', onclick: () => aller(7) }, icon('chevronRight', 16)),
     lundi === lundiDe(auj) ? null : h('button', { class: 'btn ghost', onclick: () => { planState.date = auj; renderPlanning(); } }, 'Cette semaine')].filter(Boolean));
+  // Disposition : agents en lignes (classique), ou jours en lignes et agents en
+  // colonnes, par service (les 3 sur la page, ou un bouton par service).
+  head.append(h('div', { class: 'seg plan-dispo', title: 'Disposition de la semaine' }, [['agents', 'Par agent'], ['page', '3 services'], ['onglets', 'Par service']].map(([id, l]) => h('button', {
+    class: planState.dispo === id ? 'on' : '', onclick: () => { planState.dispo = id; try { localStorage.setItem('liaison.planDispo', id); } catch { /* sans importance */ } renderPlanning({ reload: false }); },
+  }, l))));
+  if (planState.dispo === 'page' || planState.dispo === 'onglets') return vueSemaineServices(jours, sem, auj, lundi);
 
   const colonnes = h('colgroup', {}, h('col', { class: 'c-agent' }), jours.map(() => h('col')));
   const entete = h('thead', {}, h('tr', {}, h('th', { class: 'c-agent' }, 'Agent'),
@@ -378,6 +384,62 @@ function vueSemaine(head) {
         h('div', { class: 'card-body' }, notes))));
 }
 
+// Semaine « jours en lignes, agents en colonnes », un tableau par service.
+function grilleService(svc, jours, sem, auj) {
+  const eq = PLAN_EQUIPES.find((e) => e.id === svc);
+  const agents = planState.agents.filter((a) => (a.equipe === svc || (a.equipe === 'responsables' && a.service === svc)) && presentEntre(a, jours[0], jours[6]))
+    .sort((a, b) => (a.equipe === 'responsables') - (b.equipe === 'responsables'));
+  if (!agents.length) return null;
+  const entete = h('thead', {}, h('tr', {},
+    h('th', { class: 'c-jour' }, h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, eq.heures) : null),
+    agents.map((a) => h('th', { class: `c-nom${a.equipe === 'responsables' ? ' resp' : ''}`, title: a.equipe === 'responsables' ? `${a.nom} · responsable` : a.nom }, h('span', {}, a.nom), pastillesRoles(a))),
+    h('th', { class: 'c-compte' }, 'Présents')));
+  const lignes = jours.map((d, i) => {
+    const effectif = agents.filter((a) => presentLe(a, d));
+    const absents = effectif.filter((a) => { const c = (sem.cases[a.id] || {})[d]; return c && planCode(c.code) && planCode(c.code).absence; }).length;
+    const dimanche = M.parseISODate(d).getDay() === 0;
+    const nDim = dimanche ? planState.agents.filter((a) => { const v = (sem.cases[a.id] || {})[d]; const c = v && planCode(v.code); return presentLe(a, d) && c && !c.absence && equipeEff(a, v) === svc; }).length : 0;
+    return h('tr', { class: `${estWeekEnd(d) ? 'we' : ''}${d === auj ? ' auj' : ''}` },
+      h('th', { class: `c-jour${M.ferie(d) ? ' ferie' : ''}${dimancheOuvert(d) ? ' dim-ouvert' : ''}`, title: M.ferie(d) || '' },
+        h('b', {}, M.ferie(d) ? 'Férié' : JOURS_COURTS[i]), h('small', {}, fmtJour(d)), dimancheOuvert(d) ? h('i', { class: 'j-ouvert' }, 'ouvert') : null),
+      agents.map((a) => (presentLe(a, d)
+        ? caseAgent(a, d, valeurCase(a, d, (sem.cases[a.id] || {})[d]), { we: estWeekEnd(d), auj: d === auj, nuit: svc === 'nuit' })
+        : h('td', { class: 'plan-case hors' }))),
+      h('td', { class: 'c-compte' }, dimanche
+        ? h('span', { class: `eq-compte${dimancheOuvert(d) && !nDim && svc !== 'apresmidi' ? ' manque' : ''}` }, dimancheOuvert(d) || nDim ? String(nDim) : '—')
+        : h('span', { class: `eq-compte${absents ? ' manque' : ''}` }, `${effectif.length - absents}/${effectif.length}`)));
+  });
+  return h('div', { class: 'card plan-t-card', style: { '--eq': eq.couleur() } },
+    h('div', { class: 'plan-scroll' }, h('table', { class: 'plan-grille plan-t' }, entete, h('tbody', {}, lignes))));
+}
+
+function vueSemaineServices(jours, sem, auj, lundi) {
+  const services = PLAN_EQUIPES.filter((e) => ['matin', 'apresmidi', 'nuit'].includes(e.id) && M.SERVICES.some((x) => x.id === e.id)).map((e) => e.id);
+  if (!services.includes(planState.svcSemaine)) planState.svcSemaine = services[0];
+  const choix = planState.dispo === 'onglets' ? h('div', { class: 'plan-svc-choix' }, services.map((id) => {
+    const eq = PLAN_EQUIPES.find((e) => e.id === id);
+    return h('button', { class: `plan-svc-btn${planState.svcSemaine === id ? ' on' : ''}`, style: { '--c': eq.couleur() }, onclick: () => { planState.svcSemaine = id; renderPlanning({ reload: false }); } },
+      h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, eq.heures) : null);
+  })) : null;
+  const grilles = (planState.dispo === 'onglets' ? [planState.svcSemaine] : services).map((id) => grilleService(id, jours, sem, auj)).filter(Boolean);
+  const notes = h('textarea', { class: 'plan-notes-txt', rows: 4, placeholder: 'Notes de la semaine (formations, travaux, remplacements…)' });
+  notes.value = sem.notes || '';
+  notes.addEventListener('change', async () => {
+    try {
+      planState.semaine = await call(api.planSetNotes(lundi, notes.value, S.user));
+      toast('Notes enregistrées.');
+    } catch (err) {
+      toast(`Non enregistré : ${err.message}`);
+    }
+  });
+  return h('div', { class: 'plan-semaine' },
+    h('div', { class: 'plan-t-col' }, choix, grilles,
+      h('div', { class: 'plan-legende' }, PLAN_CODES.map((c) => h('span', { class: 'leg' }, h('i', { style: { background: c.couleur } }, c.code), c.label)), h('span', { class: 'leg muted' }, 'Case vide = travaille normalement'))),
+    h('div', { class: 'plan-cote' }, carteReperes(lundi, sem),
+      h('div', { class: 'card plan-notes' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('note', 16)), 'Notes de la semaine'),
+        h('div', { class: 'card-body' }, notes))));
+}
+
 // Repères de la semaine : textes colorés, la couleur se retrouve sur les cases
 // concernées (choisie dans la palette d'une case). Changent d'une semaine à l'autre.
 function carteReperes(lundi, sem) {
@@ -388,9 +450,7 @@ function carteReperes(lundi, sem) {
     } catch (err) {
       toast(`Non enregistré : ${err.message}`);
     }
-    await renderPlanning({ reload: false });
-    const b = document.querySelector('.roles-couleurs-btn');
-    if (b) menuCouleursRoles(b);
+    renderPlanning({ reload: false });
   };
   let couleur = PLAN_COULEURS.find((c) => !reperes.some((x) => x.couleur === c)) || PLAN_COULEURS[0];
   const texte = h('input', { type: 'text', placeholder: 'Ex. Formation incendie mardi 13H-16H', maxLength: 120 });

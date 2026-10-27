@@ -345,3 +345,31 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .sim-case.dim-ferme { opacity: .55; }
 .sim-ouvert { font-size: 9.5px; font-weight: 800; color: #e8590c; text-transform: uppercase; }
 .sim-pop-svc { font-size: 11px; padding: 1px 2px; border-radius: 5px; border: 1px solid #dbe1ea; }
+/* Semaine par service : jours en lignes, agents en colonnes */
+.plan-t-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; flex: 1; }
+.plan-t-card { border-top: 4px solid var(--eq); overflow: hidden; }
+.plan-grille.plan-t { table-layout: fixed; width: 100%; }
+.plan-grille.plan-t thead th { padding: 7px 3px; font-size: 11px; vertical-align: bottom; }
+.plan-grille.plan-t thead th.c-jour { width: 104px; text-align: left; padding-left: 12px; background: var(--eq); font-size: 13px; }
+.plan-grille.plan-t thead th.c-jour small { display: block; font-size: 10px; opacity: .85; font-weight: 600; }
+.plan-grille.plan-t thead th.c-jour .eq-pastille { background: #fff; }
+.plan-grille.plan-t thead th.c-nom span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-grille.plan-t thead th.c-nom.resp { background: #134e4a; }
+.plan-grille.plan-t thead th.c-compte { width: 64px; }
+.plan-grille.plan-t tbody th.c-jour { position: sticky; left: 0; z-index: 1; background: #f8fafc; text-align: left; padding: 4px 10px; border-bottom: 1px solid #eef1f5; white-space: nowrap; }
+.plan-grille.plan-t tbody th.c-jour b { font-size: 13px; margin-right: 6px; }
+.plan-grille.plan-t tbody th.c-jour small { font-size: 11px; color: #64748b; }
+.plan-grille.plan-t tbody tr.we th.c-jour { background: #eef1f6; }
+.plan-grille.plan-t tbody tr.auj th.c-jour { background: #fff4e6; box-shadow: inset 3px 0 0 #e8590c; }
+.plan-grille.plan-t tbody th.c-jour.ferie b { color: #b42318; }
+.plan-grille.plan-t tbody th.c-jour .j-ouvert { margin-left: 6px; color: #e8590c; font-style: normal; }
+.plan-grille.plan-t td.c-compte { text-align: center; background: #f8fafc; border-bottom: 1px solid #eef1f5; }
+.plan-grille.plan-t .plan-case { height: 38px; }
+.plan-dispo { margin-left: 8px; }
+.plan-svc-choix { display: flex; gap: 8px; }
+.plan-svc-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border: 2px solid color-mix(in srgb, var(--c) 35%, #fff); border-radius: 12px; background: #fff; font: inherit; font-size: 15px; font-weight: 800; color: var(--c); cursor: pointer; }
+.plan-svc-btn .eq-pastille { background: var(--c); }
+.plan-svc-btn small { font-size: 11px; font-weight: 700; color: #64748b; }
+.plan-svc-btn.on { background: var(--c); color: #fff; border-color: var(--c); box-shadow: 0 4px 12px color-mix(in srgb, var(--c) 35%, transparent); }
+.plan-svc-btn.on small { color: rgb(255 255 255 / 85%); }
+.plan-svc-btn.on .eq-pastille { background: #fff; }
