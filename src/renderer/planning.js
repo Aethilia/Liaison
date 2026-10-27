@@ -387,12 +387,16 @@ function vueSemaine(head) {
 // Semaine « jours en lignes, agents en colonnes », un tableau par service.
 function grilleService(svc, jours, sem, auj) {
   const eq = PLAN_EQUIPES.find((e) => e.id === svc);
-  const agents = planState.agents.filter((a) => (a.equipe === svc || (a.equipe === 'responsables' && a.service === svc)) && presentEntre(a, jours[0], jours[6]))
-    .sort((a, b) => (a.equipe === 'responsables') - (b.equipe === 'responsables'));
+  // Les responsables ont leur propre tableau (leur service est rappelé sous le nom).
+  const agents = planState.agents.filter((a) => a.equipe === svc && presentEntre(a, jours[0], jours[6]));
   if (!agents.length) return null;
   const entete = h('thead', {}, h('tr', {},
     h('th', { class: 'c-jour' }, h('span', { class: 'eq-pastille' }), eq.label, eq.heures ? h('small', {}, eq.heures) : null),
-    agents.map((a) => h('th', { class: `c-nom${a.equipe === 'responsables' ? ' resp' : ''}`, title: a.equipe === 'responsables' ? `${a.nom} · responsable` : a.nom }, h('span', {}, a.nom), pastillesRoles(a))),
+    agents.map((a) => {
+      const sv = a.equipe === 'responsables' && PLAN_EQUIPES.find((x) => x.id === a.service);
+      return h('th', { class: 'c-nom', title: sv ? `${a.nom} · responsable ${sv.label.toLowerCase()}` : a.nom }, h('span', {}, a.nom), pastillesRoles(a),
+        sv ? h('small', { class: 'c-nom-svc', style: { '--c': sv.couleur() } }, sv.label) : null);
+    }),
     h('th', { class: 'c-compte' }, 'Présents')));
   const lignes = jours.map((d, i) => {
     const effectif = agents.filter((a) => presentLe(a, d));
@@ -403,9 +407,9 @@ function grilleService(svc, jours, sem, auj) {
       h('th', { class: `c-jour${M.ferie(d) ? ' ferie' : ''}${dimancheOuvert(d) ? ' dim-ouvert' : ''}`, title: M.ferie(d) || '' },
         h('b', {}, M.ferie(d) ? 'Férié' : JOURS_COURTS[i]), h('small', {}, fmtJour(d)), dimancheOuvert(d) ? h('i', { class: 'j-ouvert' }, 'ouvert') : null),
       agents.map((a) => (presentLe(a, d)
-        ? caseAgent(a, d, valeurCase(a, d, (sem.cases[a.id] || {})[d]), { we: estWeekEnd(d), auj: d === auj, nuit: svc === 'nuit' })
+        ? caseAgent(a, d, valeurCase(a, d, (sem.cases[a.id] || {})[d]), { we: estWeekEnd(d), auj: d === auj, nuit: equipeEff(a, (sem.cases[a.id] || {})[d]) === 'nuit' })
         : h('td', { class: 'plan-case hors' }))),
-      h('td', { class: 'c-compte' }, dimanche
+      h('td', { class: 'c-compte' }, dimanche && svc !== 'responsables'
         ? h('span', { class: `eq-compte${dimancheOuvert(d) && !nDim && svc !== 'apresmidi' ? ' manque' : ''}` }, dimancheOuvert(d) || nDim ? String(nDim) : '—')
         : h('span', { class: `eq-compte${absents ? ' manque' : ''}` }, `${effectif.length - absents}/${effectif.length}`)));
   });
@@ -414,7 +418,7 @@ function grilleService(svc, jours, sem, auj) {
 }
 
 function vueSemaineServices(jours, sem, auj, lundi) {
-  const services = PLAN_EQUIPES.filter((e) => ['matin', 'apresmidi', 'nuit'].includes(e.id) && M.SERVICES.some((x) => x.id === e.id)).map((e) => e.id);
+  const services = [...PLAN_EQUIPES.filter((e) => ['matin', 'apresmidi', 'nuit'].includes(e.id) && M.SERVICES.some((x) => x.id === e.id)).map((e) => e.id), 'responsables'];
   if (!services.includes(planState.svcSemaine)) planState.svcSemaine = services[0];
   const choix = planState.dispo === 'onglets' ? h('div', { class: 'plan-svc-choix' }, services.map((id) => {
     const eq = PLAN_EQUIPES.find((e) => e.id === id);

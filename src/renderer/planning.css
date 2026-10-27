@@ -354,7 +354,7 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .plan-grille.plan-t thead th.c-jour small { display: block; font-size: 10px; opacity: .85; font-weight: 600; }
 .plan-grille.plan-t thead th.c-jour .eq-pastille { background: #fff; }
 .plan-grille.plan-t thead th.c-nom span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plan-grille.plan-t thead th.c-nom.resp { background: #134e4a; }
+.plan-grille.plan-t thead th .c-nom-svc { display: inline-block; margin-top: 3px; padding: 0 6px; border-radius: 6px; font-size: 9.5px; color: #fff; background: var(--c); }
 .plan-grille.plan-t thead th.c-compte { width: 64px; }
 .plan-grille.plan-t tbody th.c-jour { position: sticky; left: 0; z-index: 1; background: #f8fafc; text-align: left; padding: 4px 10px; border-bottom: 1px solid #eef1f5; white-space: nowrap; }
 .plan-grille.plan-t tbody th.c-jour b { font-size: 13px; margin-right: 6px; }
@@ -373,3 +373,5 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .plan-svc-btn.on { background: var(--c); color: #fff; border-color: var(--c); box-shadow: 0 4px 12px color-mix(in srgb, var(--c) 35%, transparent); }
 .plan-svc-btn.on small { color: rgb(255 255 255 / 85%); }
 .plan-svc-btn.on .eq-pastille { background: #fff; }
+.plan-grille.plan-t thead th.c-jour { white-space: normal; word-break: normal; line-height: 1.15; font-size: 12px; width: 116px; }
+.plan-grille.plan-t thead th .c-nom-svc { box-shadow: 0 0 0 1px rgb(255 255 255 / 55%); }
