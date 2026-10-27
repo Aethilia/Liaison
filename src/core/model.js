@@ -47,6 +47,7 @@ function emptyService(date, service) {
     entrees: { plateaux: null, pl: null, tonnage: null }, // tonnage : sites qui pèsent les entrées (CPTP)
     sorties,
     sortiesExtra: [], // sorties ponctuelles (ex. sapins) : { nom, nb, tonnage, pesees, couleur }
+    quantites: {}, // sorties à part, sans poids (ex. pneus, extincteurs) : { nom: quantité }
     bennes,
     plateaux,
     nonConformes: [], // { type, quantite, unite, provenance, commentaire, photos }
@@ -81,6 +82,8 @@ function normalize(data, date, service) {
     ...x,
     nom: (x && x.nom) || '', nb: numOrNull(x && x.nb), tonnage: numOrNull(x && x.tonnage), pesees: cleanPesees(x && x.pesees), couleur: (x && x.couleur) || '',
   }));
+  out.quantites = {};
+  for (const [k, v] of Object.entries(data.quantites && typeof data.quantites === 'object' ? data.quantites : {})) out.quantites[k] = numOrNull(v);
   out.nonConformes = (Array.isArray(data.nonConformes) ? data.nonConformes : []).map((x) => ({
     ...x,
     type: (x && x.type) || '', quantite: numOrNull(x && x.quantite), unite: (x && x.unite) || UNITES[0],
@@ -112,6 +115,7 @@ function isEmpty(s) {
   if (Object.values(s.sorties).some((v) => v.nb != null || v.tonnage != null)) return false;
   if (Object.values(s.bennes).some((v) => v != null)) return false;
   if (Object.values(s.plateaux).some((v) => v != null)) return false;
+  if (Object.values(s.quantites || {}).some((v) => v != null)) return false;
   if ((s.sortiesExtra || []).some((x) => x.nom || x.nb != null || x.tonnage != null)) return false;
   if ((s.nonConformes || []).some((x) => x.type || x.quantite != null)) return false;
   if ((s.stockage || []).some((x) => x.type || x.nombre != null)) return false;
@@ -198,6 +202,17 @@ function matieresDuSite(site) {
 
 // Toutes les lignes de sorties : matières du site (plus celles retirées depuis
 // mais renseignées dans ce service) puis ponctuelles.
+// Sorties à part, comptées à la pièce (liste du site) : hors total des sorties et du tonnage.
+function quantitesDuSite(site) {
+  return site && Array.isArray(site.quantites) ? site.quantites.filter((n) => typeof n === 'string' && n) : [];
+}
+
+function allQuantites(s, site) {
+  const noms = quantitesDuSite(siteDe(site));
+  for (const [k, v] of Object.entries(s.quantites || {})) if (!noms.includes(k) && v != null) noms.push(k);
+  return noms.map((nom) => ({ nom, nb: (s.quantites || {})[nom] ?? null }));
+}
+
 function allSorties(s, site) {
   const noms = matieresDuSite(siteDe(site));
   for (const [m, v] of Object.entries(s.sorties)) if (!noms.includes(m) && v && (v.nb != null || v.tonnage != null)) noms.push(m);
@@ -457,7 +472,7 @@ function daysInMonth(year, month) {
 
 const api = {
   stats, compareVersions, UNITES, ETATS_STOCKAGE, SERVICE_COMMANDES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
-  boxNames, boxAlerts, boxUnique, boxTitres, boxCle, matieresDuSite, entreesTonnage, deuxServices, servicesDuSite, setProfil, SERVICES_TOUS,
+  boxNames, boxAlerts, boxUnique, boxTitres, boxCle, matieresDuSite, quantitesDuSite, allQuantites, entreesTonnage, deuxServices, servicesDuSite, setProfil, SERVICES_TOUS,
   SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth, joursFeries, ferie,

@@ -766,6 +766,7 @@ function renderForm() {
     M.entreesTonnage(S.site) || s.entrees.tonnage != null
       ? h('label', { class: 'field' }, h('span', {}, 'Tonnage (T)'), field('entrees.tonnage', 'ton', { placeholder: 'ex. 12,540' })) : null));
 
+  const quantites = M.allQuantites(s);
   const sortieRows = [];
   for (const row of M.allSorties(s)) {
     const base = row.extra ? `sortiesExtra.${row.index}` : `sorties.${row.nom}`;
@@ -798,6 +799,14 @@ function renderForm() {
     closed ? null : h('div', { class: 'absents-foot' },
       h('button', { class: 'btn small', onclick: addMatiere, title: 'Nouvelle matière proposée à chaque service du site' }, icon('plus', 14), 'Matière'),
       h('button', { class: 'btn small ghost', onclick: addExtraSortie, title: 'Sortie pour ce service seulement (ex. sapins)' }, icon('plus', 14), 'Sortie ponctuelle')),
+    quantites.length || !closed ? h('div', { class: 'qte-bloc' },
+      h('div', { class: 'qte-titre' }, 'À part', h('span', { class: 'muted' }, ' — à la pièce, sans poids')),
+      quantites.length ? h('div', { class: 'qte-liste' }, quantites.map((q) => h('label', { class: 'qte-it' },
+        h('span', {}, q.nom),
+        field(`quantites.${q.nom}`, 'int', { placeholder: '0', 'aria-label': `Quantité ${q.nom}` }),
+        closed ? null : h('button', { class: 'o-btn rm', title: 'Retirer pour le site', 'aria-label': `Retirer ${q.nom}`, onclick: (e) => { e.preventDefault(); removeQuantite(q.nom); } }, icon('x', 13)))))
+        : h('div', { class: 'muted qte-vide' }, 'Rien pour l\'instant (ex. pneus, extincteurs, bouteilles de gaz).'),
+      closed ? null : h('button', { class: 'btn small ghost', onclick: addQuantite, title: 'Élément compté à la pièce, proposé à chaque service du site' }, icon('plus', 14), 'Élément à part')) : null,
   ], { hint: 'Plusieurs bennes : 5,54+4,74' });
 
   const titres = boxTitres();
@@ -1026,6 +1035,46 @@ async function removeMatiere(nom) {
   const v = s.sorties[nom];
   if (v && (v.nb != null || v.tonnage != null) && !isLocked(s)) {
     s.sorties[nom] = M.MATIERES_EXTERNES.includes(nom) ? { nb: null } : { nb: null, tonnage: null, pesees: [] };
+    markDirty();
+  }
+  renderForm();
+}
+
+// Sorties à part (à la pièce) : liste permanente du site, comme les matières.
+async function saveQuantites(update) {
+  let site;
+  try {
+    site = await call(api.loadSite());
+  } catch {
+    site = { ...S.site };
+  }
+  site.quantites = update(M.quantitesDuSite(site));
+  try {
+    S.site = await call(api.saveSite(site));
+    appliquerProfil();
+  } catch (err) {
+    toast(`Non enregistré : ${err.message}`);
+  }
+}
+
+async function addQuantite() {
+  const nom = (await promptText('Ajouter un élément à part', 'Nom (ex. Pneus)', { text: 'Compté à la pièce, sans tonnage. Proposé à tous les services du site.' }) || '').trim().replace(/\./g, ' ');
+  if (!nom) return;
+  if (M.allQuantites(cur()).some((q) => q.nom.toLowerCase() === nom.toLowerCase())) {
+    toast(`« ${nom} » existe déjà.`);
+    return;
+  }
+  await saveQuantites((list) => [...list, nom]);
+  renderForm();
+}
+
+async function removeQuantite(nom) {
+  if (await ask('Retirer cet élément ?', `« ${nom} » ne sera plus proposé sur ce site (les services déjà saisis gardent leurs chiffres).`,
+    [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+  await saveQuantites((list) => list.filter((n) => n !== nom));
+  const s = cur();
+  if (s.quantites && s.quantites[nom] != null && !isLocked(s)) {
+    delete s.quantites[nom];
     markDirty();
   }
   renderForm();
