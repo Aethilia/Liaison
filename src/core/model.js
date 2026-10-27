@@ -14,6 +14,8 @@ const MOTIFS = ['CP', 'Maladie', 'RTT', 'Récupération', 'Formation', 'Accident
 // Matières en sortie : Bois et Matelas sont gérés par un service externe (nombre seulement).
 const MATIERES = ['Bois', 'Matelas', 'Fer', 'DIB', 'UVE', 'DEEE', 'Sport', 'TV'];
 const MATIERES_EXTERNES = ['Bois', 'Matelas'];
+// Sorties « à part » par défaut : des caisses, comptées à la pièce sans poids.
+const QUANTITES_DEFAUT = ['DEEE', 'TV'];
 
 const BENNES = ['Matelas', 'Fer', 'Bois', 'DIB', 'UVE'];
 const PLATEAUX = ['Sport', 'Fer', 'Bois', 'DIB'];
@@ -197,14 +199,15 @@ function parseTonnage(str) {
 // Matières en sortie d'un site : liste réglée (ajouts / retraits) ou liste d'origine.
 function matieresDuSite(site) {
   const list = site && Array.isArray(site.matieres) ? site.matieres.filter((n) => typeof n === 'string' && n) : null;
-  return list || [...MATIERES];
+  const aPart = quantitesDuSite(site);
+  return (list || [...MATIERES]).filter((n) => !aPart.includes(n));
 }
 
 // Toutes les lignes de sorties : matières du site (plus celles retirées depuis
 // mais renseignées dans ce service) puis ponctuelles.
 // Sorties à part, comptées à la pièce (liste du site) : hors total des sorties et du tonnage.
 function quantitesDuSite(site) {
-  return site && Array.isArray(site.quantites) ? site.quantites.filter((n) => typeof n === 'string' && n) : [];
+  return site && Array.isArray(site.quantites) ? site.quantites.filter((n) => typeof n === 'string' && n) : [...QUANTITES_DEFAUT];
 }
 
 function allQuantites(s, site) {
@@ -295,6 +298,7 @@ function layoutObservations(s, width = LARGEUR_LIGNE_NB) {
 function stats(days, services = SERVICES) {
   const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   const matieres = new Map();
+  const quantites = new Map();
   const entSvc = Object.fromEntries(services.map((d) => [d.id, { service: d.id, plateaux: 0, pl: 0 }]));
   const motifs = new Map();
   const nc = new Map();
@@ -316,6 +320,7 @@ function stats(days, services = SERVICES) {
         matieres.set(nom, m);
         tonJour += n(r.data.tonnage);
       }
+      for (const q of allQuantites(s)) if (q.nb != null) quantites.set(q.nom, (quantites.get(q.nom) || 0) + n(q.nb));
       for (const a of s.absents) {
         if (!a.nom) continue;
         k.absents += 1;
@@ -345,6 +350,7 @@ function stats(days, services = SERVICES) {
   return {
     kpis: k,
     matieres: list,
+    quantites: [...quantites.entries()].map(([nom, nb]) => ({ nom, nb })),
     entrees,
     parJour,
     motifs: [...motifs.entries()].map(([motif, nb]) => ({ motif, nb })).sort((a, b) => b.nb - a.nb),
@@ -473,7 +479,7 @@ function daysInMonth(year, month) {
 const api = {
   stats, compareVersions, UNITES, ETATS_STOCKAGE, SERVICE_COMMANDES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
   boxNames, boxAlerts, boxUnique, boxTitres, boxCle, matieresDuSite, quantitesDuSite, allQuantites, entreesTonnage, deuxServices, servicesDuSite, setProfil, SERVICES_TOUS,
-  SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
+  SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, QUANTITES_DEFAUT, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth, joursFeries, ferie,
 };

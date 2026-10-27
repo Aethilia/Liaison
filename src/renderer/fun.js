@@ -736,7 +736,7 @@ const ZONES_SON = [
   ['obs', 'Observations (saisie et texte)', '#qa-texte, #form [data-bind^="observations."]'],
   ['tache', 'Nouvelle tâche pour la relève', '#task-new'],
   ['entrees', 'Entrées (plateaux, PL, tonnage)', '#form [data-bind^="entrees."]'],
-  ['sorties', 'Sorties (nombre, tonnage)', '#form [data-bind^="sorties."], #form [data-bind^="sortiesExtra."]'],
+  ['sorties', 'Sorties (nombre, tonnage)', '#form [data-bind^="sorties."], #form [data-bind^="sortiesExtra."], #form [data-bind^="quantites."]'],
   ['bennes', 'Bennes (%)', '#form [data-bind^="bennes."]'],
   ['plateaux', 'Plateaux (%)', '#form [data-bind^="plateaux."]'],
   ['nc', 'Déchets non conformes', '#form [data-bind^="nonConformes."]'],

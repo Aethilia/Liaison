@@ -205,6 +205,13 @@ function buildDaySheet(ws, model, day, { tasks = [], site = {}, siteName = '' } 
     b.put(`D${b.row}`, { formula: `SUM(D${first}:D${last})`, result: t.tonnage }, b.st('D23', def));
     if (rows.some((r) => r.extra)) b.merge(`E${b.row}`, `H${b.row}`, '* sortie ponctuelle', { font: { italic: true, size: 8, color: { argb: 'FF999999' } }, alignment: { vertical: 'middle' } });
     b.next(H.total);
+    // À part : comptés à la pièce (caisses), hors total des sorties.
+    for (const q of M.allQuantites(s, profil)) {
+      b.merge(`A${b.row}`, `B${b.row}`, q.nom, b.st('A15', def));
+      b.put(`C${b.row}`, q.nb, b.st('C15', def));
+      b.put(`D${b.row}`, 'à la pièce', b.st('D15', def));
+      b.next(H.row);
+    }
     // Remplissage : fond du vert au rouge, chiffre en rouge à partir de 80 %.
     for (const ref of [noms.bennes.length && `F${first}:F${first + noms.bennes.length - 1}`, noms.plateaux.length && `H${first}:H${first + noms.plateaux.length - 1}`].filter(Boolean)) {
       ws.addConditionalFormatting({

@@ -1752,7 +1752,8 @@ function renderFiche() {
             h('tbody', {}, M.allSorties(s).filter((r) => r.data.nb != null || r.data.tonnage != null).map((r) => h('tr', {},
               h('td', {}, r.nom || 'Sortie ponctuelle', r.extra ? h('span', { class: 'muted' }, ' (ponctuelle)') : null), h('td', {}, plural(r.data.nb || 0, 'sortie')),
               h('td', { title: (r.data.pesees || []).length > 1 ? r.data.pesees.map((v) => fmtNum(v)).join(' + ') : '' }, r.externe ? 'externe' : fmtTon(r.data.tonnage))))),
-            h('tfoot', {}, h('tr', { class: 'tot' }, h('td', {}, 'Total'), h('td', {}, plural(t.sortiesNb, 'sortie')), h('td', {}, fmtTon(t.tonnage))))),
+            h('tfoot', {}, h('tr', { class: 'tot' }, h('td', {}, 'Total'), h('td', {}, plural(t.sortiesNb, 'sortie')), h('td', {}, fmtTon(t.tonnage))),
+              M.allQuantites(s).filter((q) => q.nb != null).map((q) => h('tr', {}, h('td', {}, q.nom, h('span', { class: 'muted' }, ' (à part)')), h('td', {}, fmtNum(q.nb)), h('td', { class: 'muted' }, 'à la pièce'))))),
         ]),
         ficheCard('État des boxs', 'box', [
           subTitle(boxTitres().bennes.toUpperCase(), 0), boxNames(s).bennes.map((b) => miniBar(b, s.bennes[b])),
@@ -1990,6 +1991,7 @@ async function renderRecap() {
   }
   const parMatiere = Object.fromEntries(M.matieresDuSite(siteProfil()).map((m) => [m, { nb: 0, tonnage: 0 }]));
   const ponctuelles = new Set();
+  const aPart = Object.fromEntries(M.quantitesDuSite(siteProfil()).map((q) => [q, 0]));
   const parNc = {};
   const parMotif = {};
   const tot = { plateaux: 0, pl: 0, entrees: 0, nb: 0, tonnage: 0, absents: 0, clos: 0, saisis: 0, obs: 0 };
@@ -2015,6 +2017,7 @@ async function renderRecap() {
         parMatiere[nom].nb += n(r.data.nb);
         parMatiere[nom].tonnage += n(r.data.tonnage);
       }
+      for (const q of M.allQuantites(s)) if (q.nb != null) aPart[q.nom] = (aPart[q.nom] || 0) + n(q.nb);
       for (const x of s.nonConformes) {
         if (!x.type) continue;
         const k = `${x.type}|${x.unite}`;
@@ -2104,7 +2107,9 @@ async function renderRecap() {
               h('div', { class: 'bar' }, h('i', { style: { width: `${Math.round(ratio * 100)}%` } })),
               h('b', {}, fmtNum(parMatiere[m].nb)),
               h('span', { title: ext && tonExterne[m] != null ? 'Pesées du service externe (onglet Externes)' : '' }, ext ? (tonExterne[m] != null ? fmtTon(tonExterne[m]) : 'externe') : fmtTon(parMatiere[m].tonnage)));
-          }))),
+          }),
+          Object.keys(aPart).length ? [h('div', { class: 'recap-apart' }, 'À part', h('span', { class: 'muted' }, ' — à la pièce')),
+            Object.entries(aPart).map(([k, v]) => h('div', { class: 'kv' }, h('span', {}, k), h('b', {}, fmtNum(v))))] : null)),
         h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('recycle', 16)), 'Déchets non conformes'),
           h('div', { class: 'card-body' }, Object.keys(parNc).length
             ? Object.entries(parNc).sort((a, b) => a[0].localeCompare(b[0], 'fr')).map(([k, v]) => {
@@ -2472,7 +2477,8 @@ function buildPrint() {
       h('div', { class: 'p-sec' }, 'SORTIES  ·  ÉTAT DES BOXS'),
       h('table', {}, h('tr', {}, ['Matière', 'Nb sorties', 'Tonnage', boxTitres().bennes, 'Remplissage', noms.plateaux.length ? boxTitres().plateaux : '', noms.plateaux.length ? 'Remplissage' : ''].map((x) => h('th', {}, x))),
         boxRows,
-        h('tr', { class: 'tot' }, h('td', {}, 'TOTAL'), h('td', { class: 'c' }, t.sortiesNb), h('td', { class: 'c' }, fmtTon(t.tonnage)), h('td', { colspan: 4, style: { background: 'transparent', border: 0 } }))),
+        h('tr', { class: 'tot' }, h('td', {}, 'TOTAL'), h('td', { class: 'c' }, t.sortiesNb), h('td', { class: 'c' }, fmtTon(t.tonnage)), h('td', { colspan: 4, style: { background: 'transparent', border: 0 } })),
+        M.allQuantites(s).map((q) => h('tr', {}, h('td', {}, q.nom), h('td', { class: 'c' }, q.nb ?? ''), h('td', { class: 'ext' }, 'à la pièce'), h('td', { colspan: 4, style: { background: 'transparent', border: 0 } })))),
       s.nonConformes.length ? h('div', { class: 'p-sec' }, 'DÉCHETS NON CONFORMES') : null,
       s.nonConformes.length ? h('table', {}, h('tr', {}, ['Déchet', 'Quantité', 'Provenance', 'Commentaire'].map((x) => h('th', {}, x))),
         s.nonConformes.map((x) => h('tr', {}, h('td', {}, x.type), h('td', { class: 'c' }, fmtQte(x)), h('td', {}, x.provenance), h('td', {}, x.commentaire, x.photos.length ? ` (📷 ${x.photos.length})` : '')))) : null,

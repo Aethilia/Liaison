@@ -792,3 +792,4 @@ dialog.ext-dialog { width: min(560px, 94vw); }
 .qte-it { display: inline-flex; align-items: center; gap: 6px; background: var(--head); border-radius: 10px; padding: 4px 6px 4px 10px; font-weight: 600; font-size: 13px; }
 .qte-it input { width: 58px; padding: 4px 6px; }
 .qte-vide { font-size: 12.5px; }
+.recap-apart { margin: 12px 0 4px; padding-top: 10px; border-top: 1px dashed var(--line); font-weight: 800; font-size: 12.5px; }

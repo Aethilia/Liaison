@@ -293,6 +293,10 @@ Les deux figurent dans la fiche, l'impression, la recherche et l'export Excel.
 - **Matières du site** : « + Matière » ajoute une matière proposée à tous les
   services du site ; la petite croix (au survol) la retire. Les services déjà
   saisis gardent leurs chiffres.
+- **À part** (DEEE et TV par défaut, en caisses) : comptés à la pièce, sans
+  tonnage, hors total des sorties. Liste propre au site (« + Élément à part »,
+  croix pour retirer) ; repris sur la fiche, le récap, l'impression et l'Excel
+  (sous le total, et une ligne dans les chiffres clés de la Synthèse).
 - **Sorties ponctuelles** (ex. sapins en hiver) : « + Sortie ponctuelle »,
   supprimables, comptées dans les totaux et le récap.
 - **Couleurs** : la pastille devant chaque matière choisit sa couleur (nom seul

@@ -419,7 +419,19 @@ test('sorties : matières ajoutées ou retirées pour le site', () => {
   assert.equal(M.allSorties(s, site).find((r) => r.nom === 'Bois').externe, true);
   assert.equal(M.totals(s).tonnage, 0.5);
   assert.equal(M.stats([{ date: s.date, services: { matin: s } }]).matieres.find((m) => m.nom === 'Carton').tonnage, 0.5);
-  assert.deepEqual(M.allSorties(M.emptyService('2026-10-02', 'matin')).map((r) => r.nom), M.MATIERES);
+  assert.deepEqual(M.allSorties(M.emptyService('2026-10-02', 'matin')).map((r) => r.nom), M.MATIERES.filter((m) => !M.QUANTITES_DEFAUT.includes(m)));
+});
+
+test('sorties à part : DEEE et TV comptés à la pièce, hors total', () => {
+  const s = M.normalize({ sorties: { Fer: { nb: 2, tonnage: 3 } }, quantites: { DEEE: 4, TV: 'x' } }, '2026-10-02', 'matin');
+  assert.deepEqual(s.quantites, { DEEE: 4, TV: null });
+  assert.deepEqual(M.allQuantites(s, {}).map((q) => [q.nom, q.nb]), [['DEEE', 4], ['TV', null]]);
+  assert.ok(!M.allSorties(s, {}).some((r) => r.nom === 'DEEE'));
+  assert.equal(M.totals(s).sortiesNb, 2);
+  assert.equal(M.isEmpty(M.normalize({ quantites: { TV: 1 } }, '2026-10-02', 'matin')), false);
+  // Liste propre au site : un élément retiré garde ses chiffres dans ce service.
+  assert.deepEqual(M.allQuantites(s, { quantites: ['Pneus'] }).map((q) => q.nom), ['Pneus', 'DEEE']);
+  assert.deepEqual(M.stats([{ date: s.date, services: { matin: s } }]).quantites, [{ nom: 'DEEE', nb: 4 }]);
 });
 
 test('planning : import d\'un classeur (format CTVO), heures supp et repères colorés', async () => {

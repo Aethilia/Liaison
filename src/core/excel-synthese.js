@@ -89,6 +89,7 @@ function buildSynthese(ws, days, { siteName = '', services = M.SERVICES, externe
     ['Entrées (passages de véhicules)', k.entrees, '0', days.length > 1 ? `${Math.round(k.entrees / days.length)} par jour en moyenne` : ''],
     ['Sorties', k.sorties, '0', nbExt ? `dont ${nbExt} service externe` : ''],
     ['Tonnage sorti', Math.round((k.tonnage + tonExt) * 1000) / 1000, '#,##0.000" T"', tonExt ? `dont ${fmtT(tonExt)} service externe` : nbExt ? 'service externe : poids non saisis' : ''],
+    ...(st.quantites.some((q) => q.nb > 0) ? [['À part (à la pièce)', st.quantites.reduce((a, q) => a + q.nb, 0), '0', st.quantites.filter((q) => q.nb > 0).map((q) => `${q.nom} ${q.nb}`).join(', ')]] : []),
     ['Observations', k.observations, '0', k.importantes ? `dont ${k.importantes} importante${k.importantes > 1 ? 's' : ''}` : ''],
     ['Services clôturés', `${k.clos} / ${k.services}`, null, `${pct(k.clos, k.services)} %`],
     ['Déchets non conformes (lignes)', k.nonConformes, '0', topNc],
