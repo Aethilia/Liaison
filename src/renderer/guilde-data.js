@@ -297,6 +297,8 @@
     h4: VIS('4_directeur', 'rupture', 8),
     h5: VIS('5_chauffeur', 'klaxon', 7),
   };
+  // Illustrations manga (fiche du héros, montée de rang).
+  G.PORTRAITS = { h1: 'portraits/h1.jpg', h2: 'portraits/h2.jpg', h3: 'portraits/h3.jpg', h4: 'portraits/h4.jpg', h5: 'portraits/h5.jpg' };
   G.VISUEL_L = 84;
   G.VISUEL_H = 64;
 

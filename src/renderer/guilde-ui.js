@@ -81,9 +81,26 @@
       `${def.comp.nom} : ${def.comp.desc}`, spec ? `Spécialisation : ${spec.nom} — ${spec.desc}` : ''].filter(Boolean).join('\n');
   };
 
+  // Illustration au survol d'une carte de héros (boutique, départ, enchères).
+  let portraitPop = null;
+  const cacherPortrait = () => { if (portraitPop) portraitPop.remove(); portraitPop = null; };
+  function montrerPortrait(carte, id) {
+    cacherPortrait();
+    if (!G.PORTRAITS[id]) return;
+    const def = G.heros(id);
+    portraitPop = h('div', { class: 'gd-portrait-pop' }, h('img', { src: IMG + G.PORTRAITS[id], alt: '' }), h('b', {}, def.nom), h('small', {}, def.comp.nom));
+    document.body.append(portraitPop);
+    const r = carte.getBoundingClientRect();
+    const w = 260;
+    let x = r.right + 10;
+    if (x + w > window.innerWidth - 8) x = r.left - w - 10;
+    portraitPop.style.left = `${Math.max(8, x)}px`;
+    portraitPop.style.top = `${Math.max(8, Math.min(window.innerHeight - 420, r.top - 40))}px`;
+  }
+
   function carteHeros(id, { prix = null, promo = false, onclick, choisi = false, desactive = false, rang = 'C' } = {}) {
     const def = G.heros(id);
-    return h('button', { class: `gd-carte${choisi ? ' choisi' : ''}`, disabled: desactive, onclick, title: def.specs.map((s) => `• ${s.nom}${s.classe2 ? ` (+${nomClasse(s.classe2)})` : ''} : ${s.desc}`).join('\n') },
+    return h('button', { class: `gd-carte${choisi ? ' choisi' : ''}`, disabled: desactive, onclick: (e) => { cacherPortrait(); if (onclick) onclick(e); }, onmouseenter: (e) => montrerPortrait(e.currentTarget, id), onmouseleave: cacherPortrait, title: def.specs.map((s) => `• ${s.nom}${s.classe2 ? ` (+${nomClasse(s.classe2)})` : ''} : ${s.desc}`).join('\n') },
       h('div', { class: 'gd-carte-haut' }, jeton(def, { rang }), h('div', {}, h('b', {}, def.nom), h('small', { style: { color: couleurClasse(def.classes[0]) } }, nomClasse(def.classes[0])))),
       h('div', { class: 'gd-carte-stats' }, `PV ${def.stats.pv} · Att ${def.stats.atk} · Mag ${def.stats.mag} · Portée ${def.stats.portee}`),
       h('div', { class: 'gd-carte-txt' }, h('b', {}, def.comp.nom), ` : ${def.comp.desc}`),
@@ -196,6 +213,7 @@
     const f = R.ficheHeros(r, hr);
     const spec = hr.spec && def.specs.find((s) => s.id === hr.spec);
     return h('div', { class: 'gd-fiche' },
+      G.PORTRAITS[hr.id] ? h('div', { class: 'gd-fiche-portrait', style: { backgroundImage: `url("${IMG}${G.PORTRAITS[hr.id]}")` } }) : null,
       h('div', { class: 'gd-fiche-haut' }, jeton(def, { rang: hr.rang, classes: f.classes }), h('div', {}, h('b', {}, def.nom), h('small', {}, f.classes.map(nomClasse).join(' / ')))),
       h('div', { class: 'gd-stats' }, [['PV', f.stats.pv], ['Att', f.stats.atk], ['Déf', f.stats.def], ['Mag', f.stats.mag], ['Vit', f.stats.vit.toFixed(2)], ['Portée', f.stats.portee], ['Crit', `${f.stats.crit} %`], ['Mana', `${f.stats.mana} (+${f.stats.regen}/2 s)`]]
         .map(([k, v]) => h('span', {}, h('small', {}, k), typeof v === 'number' ? Math.round(v) : v))),
@@ -219,10 +237,14 @@
     const cartes = a.type === 'spec'
       ? a.options.map((id) => { const s = def.specs.find((x) => x.id === id); return h('button', { class: 'gd-carte', onclick: () => { R.resoudreAttente(r, id); sauver(); rendre(); } }, h('div', { class: 'gd-carte-haut' }, h('b', {}, s.nom), s.classe2 ? h('span', { class: 'gd-rar', style: { '--c': couleurClasse(s.classe2) } }, `+ ${nomClasse(s.classe2)}`) : null), h('div', { class: 'gd-carte-txt' }, s.desc)); })
       : a.options.map((id) => { const x = G.AMELIORATIONS.find((y) => y.id === id); return h('button', { class: 'gd-carte petite', onclick: () => { R.resoudreAttente(r, id); sauver(); rendre(); } }, h('div', { class: 'gd-carte-haut' }, h('b', {}, x.nom), pastille(x.rarete)), h('div', { class: 'gd-carte-txt' }, x.desc), h('small', { style: { color: couleurClasse(x.classe) } }, nomClasse(x.classe))); });
-    cadre(h('div', { class: 'gd-centre' },
+    const choix = h('div', { class: 'gd-centre' },
       jeton(def, { rang: hr.rang, classes: R.classesHeros(hr) }),
       h('h2', {}, a.type === 'spec' ? `${def.nom} passe au rang B : choisis sa spécialisation` : `${def.nom} passe au rang ${hr.rang} : choisis une amélioration`),
-      h('div', { class: 'gd-cartes' }, cartes)));
+      h('div', { class: 'gd-cartes' }, cartes));
+    // Avec illustration : elle occupe la gauche de l'écran, les choix à droite.
+    cadre(G.PORTRAITS[hr.id]
+      ? h('div', { class: 'gd-rang-up' }, h('div', { class: 'gd-rang-illu', style: { backgroundImage: `url("${IMG}${G.PORTRAITS[hr.id]}")` } }, h('span', { class: `gd-rang-gros r${hr.rang}` }, hr.rang)), choix)
+      : choix);
     return null;
   }
 
@@ -696,6 +718,7 @@
 
   function rendre() {
     if (!S) return;
+    cacherPortrait();
     cancelAnimationFrame(S.anim);
     cancelAnimationFrame(S.animFond);
     cancelAnimationFrame(S.animLogo);
