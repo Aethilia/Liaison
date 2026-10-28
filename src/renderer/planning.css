@@ -375,3 +375,17 @@ body.sim-pinceau .sim-case { cursor: copy; }
 .plan-svc-btn.on .eq-pastille { background: #fff; }
 .plan-grille.plan-t thead th.c-jour { white-space: normal; word-break: normal; line-height: 1.15; font-size: 12px; width: 116px; }
 .plan-grille.plan-t thead th .c-nom-svc { box-shadow: 0 0 0 1px rgb(255 255 255 / 55%); }
+
+/* Détail du calcul des heures supp */
+.syn-hs.cliquable { cursor: pointer; }
+.syn-hs.cliquable:hover { background: var(--head); }
+.det-hs-btn { border: 0; cursor: pointer; font: inherit; }
+.det-hs-btn:hover { filter: brightness(1.1); text-decoration: underline; }
+dialog.plan-detail.dhs { width: min(680px, 94vw); }
+.dhs-table { width: 100%; margin-top: 12px; font-size: 13px; }
+.dhs-table td, .dhs-table th { padding: 6px 8px; }
+.dhs-table .num { text-align: right; width: 64px; }
+.dhs-section td { background: var(--head); font-weight: 800; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.dhs-jours { white-space: nowrap; font-weight: 700; }
+.dhs-jours small { display: block; font-weight: 500; color: var(--muted); white-space: normal; max-width: 150px; }
+.dhs-table tfoot th { text-align: left; }

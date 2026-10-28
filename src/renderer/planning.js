@@ -180,7 +180,10 @@ function hsDuJour(a, d, val) {
   const out = hsDuJourCalcule(a, d, val);
   out.calcule = out.reg;
   const c = val && planCode(val.code);
-  if (!(c && c.absence) && a && presentLe(a, d)) out.reg = corrigerReg(out.reg, val, d);
+  if (!(c && c.absence) && a && presentLe(a, d) && regModifie(val)) {
+    out.reg = corrigerReg(out.reg, val, d);
+    out.corrige = true;
+  }
   return out;
 }
 function hsDuJourCalcule(a, d, val) {
@@ -190,20 +193,33 @@ function hsDuJourCalcule(a, d, val) {
   const c = val && planCode(val.code);
   if (c && c.absence) return out;
   // Férié : 7h rouges si c'est un jour normalement travaillé, ou si la case
-  // dit qu'il a travaillé (code saisi autre qu'une absence).
+  // dit qu'il a travaillé (code saisi autre qu'une absence ou des HS seules).
   if (equipeHs(a, val) && M.ferie(d)) {
-    if (jourNormal(a, d, val) || c) out.reg.rouge += HS_FERIE;
+    if (jourNormal(a, d, val) || (c && c.code !== 'HS')) {
+      out.reg.rouge += HS_FERIE;
+      out.motif = `Férié travaillé (${M.ferie(d)})`;
+    }
     return out;
   }
   const j = M.parseISODate(d).getDay();
   // Dimanche travaillé (case remplie autre qu'une absence ou des HS seules) : 6h rouges.
   if (equipeHs(a, val) && j === 0) {
-    if (c && c.code !== 'HS') out.reg.rouge += HS_DIMANCHE;
+    if (c && c.code !== 'HS') {
+      out.reg.rouge += HS_DIMANCHE;
+      out.motif = 'Dimanche travaillé';
+    }
     return out;
   }
   const semaine = j >= 1 && j <= 5;
-  if ((equipeEff(a, val) === 'matin' || equipeEff(a, val) === 'nuit') && semaine) out.reg.vert += 1;
-  if (samediHs(a, d, val) && !(val && (val.code || val.texte || val.hs))) out.reg.bleu += HS_SAMEDI_APM;
+  const eq = equipeEff(a, val);
+  if ((eq === 'matin' || eq === 'nuit') && semaine) {
+    out.reg.vert += 1;
+    out.motif = `${SVC[eq] ? SVC[eq].label : eq} en semaine (+1h par jour)`;
+  }
+  if (samediHs(a, d, val) && !(val && (val.code || val.texte || val.hs))) {
+    out.reg.bleu += HS_SAMEDI_APM;
+    out.motif = 'Samedi de l\'après-midi';
+  }
   return out;
 }
 const presentLe = (a, d) => (!a.arrivee || d >= a.arrivee) && (!a.depart || d <= a.depart);
@@ -709,10 +725,10 @@ function syntheseAgent(cases, debut, fin, agent = null) {
 }
 
 // Cellule « H. supp » : total + mini barre des trois types, détail au survol.
-function celluleHs(s) {
+function celluleHs(s, ouvrir = null) {
   if (!s.hs) return h('td', { class: 'num syn-hs' }, h('span', { class: 'muted' }, '·'));
   const detail = HS_TYPES.filter((t) => s.parType[t.id]).map((t) => `${t.label} (${t.detail}) : ${fmtHs(s.parType[t.id])}  —  régulières ${fmtHs(s.reg[t.id])}, ponctuelles ${fmtHs(s.ponct[t.id])}`).join('\n');
-  return h('td', { class: 'num syn-hs', title: detail },
+  return h('td', { class: `num syn-hs${ouvrir ? ' cliquable' : ''}`, title: ouvrir ? `${detail}\n\nCliquer pour le détail du calcul` : detail, onclick: ouvrir ? (e) => { e.stopPropagation(); ouvrir(); } : null },
     h('b', {}, fmtHs(s.hs)),
     reglesHs() ? h('span', { class: 'hs-barre' }, HS_TYPES.filter((t) => s.parType[t.id]).map((t) => h('i', { style: { flex: s.parType[t.id], background: t.couleur } }))) : null);
 }
@@ -761,7 +777,7 @@ async function vueSynthese(head) {
       lignes.push(h('tr', { class: 'syn-agent', onclick: () => detailAgent(a, cases[a.id] || {}, debut, fin) },
         h('th', { title: datesAgent(a) }, a.nom, pastillesRoles(a), datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
         h('td', { class: 'num' }, h('b', {}, s.travailles)),
-        celluleHs(s),
+        celluleHs(s, () => detailHs(a, cases[a.id] || {}, deb, fn)),
         codesUtiles.map((c) => h('td', { class: 'num' }, s.codes[c.code] ? h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, s.codes[c.code]) : h('span', { class: 'muted' }, '·'))),
         h('td', {}, barre)));
     }
@@ -790,7 +806,7 @@ function detailAgent(agent, cases, debut, fin) {
   const dlg = h('dialog', { class: 'plan-detail' }, h('div', { class: 'dialog-body' },
     h('h2', {}, agent.nom, h('small', { class: 'muted' }, ` · ${eq.label}${eq.heures ? ` ${eq.heures}` : ''}`)),
     h('div', { class: 'det-resume' }, h('span', { class: 'syn-badge', style: { '--c': eq.couleur() } }, `${s.travailles} travaillés`),
-      HS_TYPES.filter((t) => s.parType[t.id]).map((t) => h('span', { class: 'syn-badge', style: { '--c': t.couleur }, title: `régulières ${fmtHs(s.reg[t.id])}, ponctuelles ${fmtHs(s.ponct[t.id])}` }, `${fmtHs(s.parType[t.id])} ${t.label.toLowerCase()}`)),
+      HS_TYPES.filter((t) => s.parType[t.id]).map((t) => h('button', { class: 'syn-badge det-hs-btn', style: { '--c': t.couleur }, title: `régulières ${fmtHs(s.reg[t.id])}, ponctuelles ${fmtHs(s.ponct[t.id])} · cliquer pour le détail`, onclick: () => detailHs(agent, cases, debut, fin) }, `${fmtHs(s.parType[t.id])} ${t.label.toLowerCase()}`)),
       PLAN_CODES.filter((c) => s.codes[c.code]).map((c) => h('span', { class: 'syn-badge', style: { '--c': c.couleur } }, `${s.codes[c.code]} ${c.label.toLowerCase()}`))),
     h('div', { class: 'det-cal' }, JOURS_COURTS.map((j) => h('div', { class: 'det-j' }, j)), cellules.map((d) => {
       if (!d) return h('div', { class: 'det-vide' });
@@ -800,6 +816,55 @@ function detailAgent(agent, cases, debut, fin) {
         h('span', { class: 'det-num' }, Number(d.slice(8))), c ? h('b', {}, v.code === 'H' && v.texte ? v.texte : v.code === 'HS' && v.hs ? fmtHs(v.hs) : c.code) : null,
         v && v.hs && v.code !== 'HS' ? h('small', { class: 'det-hs' }, fmtHs(v.hs)) : null);
     })),
+    h('div', { class: 'dialog-actions' }, h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: () => dlg.close() }, 'Fermer'))));
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+}
+
+// Détail du calcul des heures supp d'un agent sur une période : automatiques
+// regroupées par motif, saisies et corrections jour par jour.
+function detailHs(agent, cases, debut, fin) {
+  const auto = new Map();
+  const saisies = [];
+  const corrections = [];
+  const tot = hsVide();
+  const jourTxt = (d) => new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }).format(M.parseISODate(d));
+  const heures = (r) => HS_TYPES.map((t) => h('td', { class: 'num' }, r[t.id] ? h('b', { style: { color: t.couleur } }, fmtHs(r[t.id])) : h('span', { class: 'muted' }, '·')));
+  for (let d = debut; d <= fin; d = isoAjout(d, 1)) {
+    const val = cases[d];
+    const hj = hsDuJour(agent, d, val);
+    for (const t of HS_TYPES) tot[t.id] += hj.reg[t.id] + hj.ponct[t.id];
+    if (hj.corrige) {
+      const avant = HS_TYPES.reduce((x, t) => x + hj.calcule[t.id], 0);
+      corrections.push({ d, reg: hj.reg, texte: val.hsReg ? `Corrigées à la main (calculé ${fmtHs(avant)})` : `Retirées à la main (calculé ${fmtHs(avant)})` });
+    } else if (hj.motif) {
+      const g = auto.get(hj.motif) || { motif: hj.motif, jours: [], reg: hsVide() };
+      g.jours.push(d);
+      for (const t of HS_TYPES) g.reg[t.id] += hj.reg[t.id];
+      auto.set(hj.motif, g);
+    }
+    if (HS_TYPES.some((t) => hj.ponct[t.id])) {
+      const c = val && planCode(val.code);
+      saisies.push({ d, reg: hj.ponct, texte: `${c && c.code !== 'HS' ? `${c.label} + heures` : 'Heures'} saisies dans la case${val.texte ? ` (${val.texte})` : ''}` });
+    }
+  }
+  const section = (titre, lignes) => (lignes.length ? [h('tr', { class: 'dhs-section' }, h('td', { colSpan: 5 }, titre)), lignes] : null);
+  const total = HS_TYPES.reduce((x, t) => x + tot[t.id], 0);
+  const dlg = h('dialog', { class: 'plan-detail dhs' }, h('div', { class: 'dialog-body' },
+    h('h2', {}, 'Heures supp', h('small', { class: 'muted' }, ` · ${agent.nom} · ${fmtJour(debut)} → ${fmtJour(fin)}`)),
+    h('div', { class: 'det-resume' }, HS_TYPES.filter((t) => tot[t.id]).map((t) => h('span', { class: 'syn-badge', style: { '--c': t.couleur } }, `${fmtHs(tot[t.id])} ${t.label.toLowerCase()}`))),
+    h('table', { class: 'grid dhs-table' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Jour(s)'), h('th', {}, 'Motif'), HS_TYPES.map((t) => h('th', { class: 'num', style: { color: t.couleur } }, t.label)))),
+      h('tbody', {},
+        section('Automatiques', [...auto.values()].map((g) => h('tr', {},
+          h('td', { class: 'dhs-jours', title: g.jours.map(jourTxt).join(', ') }, g.jours.length > 1 ? `${g.jours.length} jours` : jourTxt(g.jours[0]),
+            g.jours.length > 1 ? h('small', {}, g.jours.map((d) => Number(d.slice(8))).join(', ')) : null),
+          h('td', {}, g.motif), heures(g.reg)))),
+        section('Corrigées à la main', corrections.map((x) => h('tr', {}, h('td', {}, jourTxt(x.d)), h('td', {}, x.texte), heures(x.reg)))),
+        section('Saisies', saisies.map((x) => h('tr', {}, h('td', {}, jourTxt(x.d)), h('td', {}, x.texte), heures(x.reg))))),
+      h('tfoot', {}, h('tr', {}, h('th', {}, 'Total'), h('th', {}, fmtHs(total)), heures(tot)))),
+    total ? null : h('p', { class: 'muted' }, 'Aucune heure supp sur la période.'),
     h('div', { class: 'dialog-actions' }, h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: () => dlg.close() }, 'Fermer'))));
   dlg.addEventListener('close', () => dlg.remove());
   document.body.append(dlg);
