@@ -402,3 +402,13 @@ dialog.plan-detail.dhs { width: min(680px, 94vw); }
 tr.an-proche .an-reste { color: #e8590c; font-weight: 700; }
 tr.an-depasse .an-reste { color: #e03131; font-weight: 800; }
 tr.an-depasse th { color: #e03131; }
+
+/* Distribution de gants */
+.gt-table .gt-ligne th { cursor: pointer; }
+.gt-table .gt-ligne th:hover { text-decoration: underline; }
+.gt-cell small { color: var(--muted); font-size: 11.5px; }
+.gt-pastille { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.gt-action { display: flex; gap: 6px; align-items: center; }
+.gt-action select, .gt-action input { padding: 4px 6px; font-size: 12.5px; }
+.gt-histo { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; max-height: 50vh; overflow: auto; }
+.gt-histo-ligne { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; background: var(--head); font-size: 13px; }

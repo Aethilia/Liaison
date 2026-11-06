@@ -67,6 +67,17 @@ function nettoyerConfig(c) {
   return { dimanches: { debut, fin } };
 }
 
+// Distribution de gants : qui y a accès (noms d'utilisateurs) et l'historique
+// des distributions { id, agentId, type, date, par, le }.
+const TYPES_GANTS = ['pluie', 'fourres', 'gants'];
+function nettoyerGants(g) {
+  const autorises = [...new Set((Array.isArray(g && g.autorises) ? g.autorises : []).map((n) => String(n || '').trim()).filter(Boolean))];
+  const distributions = (Array.isArray(g && g.distributions) ? g.distributions : [])
+    .filter((x) => x && x.id && x.agentId && TYPES_GANTS.includes(x.type) && ISO.test(x.date || ''))
+    .map((x) => ({ id: String(x.id), agentId: String(x.agentId), type: x.type, date: x.date, par: String(x.par || ''), le: String(x.le || '') }));
+  return { autorises, distributions };
+}
+
 function nettoyerCouleursRoles(c) {
   const out = {};
   for (const [k, v] of Object.entries(c && typeof c === 'object' ? c : {})) {
@@ -153,6 +164,35 @@ class Planning {
 
   saveConfig(cfg) {
     return this.writeJson(path.join(this.dir, 'config.json'), nettoyerConfig(cfg));
+  }
+
+  // ---- Distribution de gants (gants.json) ----
+  loadGants() {
+    return nettoyerGants(this.readJson(path.join(this.dir, 'gants.json'), {}));
+  }
+
+  majGants(f) {
+    const g = this.loadGants();
+    f(g);
+    return this.writeJson(path.join(this.dir, 'gants.json'), nettoyerGants(g));
+  }
+
+  autoriserGants(nom, oui) {
+    return this.majGants((g) => {
+      g.autorises = g.autorises.filter((n) => n !== nom);
+      if (oui) g.autorises.push(nom);
+    });
+  }
+
+  distribuerGants(agentId, type, date, par) {
+    if (!TYPES_GANTS.includes(type) || !ISO.test(date || '')) throw new Error('Distribution invalide.');
+    return this.majGants((g) => {
+      g.distributions.push({ id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, agentId, type, date, par, le: new Date().toISOString() });
+    });
+  }
+
+  annulerGants(id) {
+    return this.majGants((g) => { g.distributions = g.distributions.filter((x) => x.id !== id); });
   }
 
   saveCodes(codes) {
@@ -417,4 +457,4 @@ class Planning {
   }
 }
 
-module.exports = { Planning, lundiDe, ajouterJours, EQUIPES };
+module.exports = { Planning, lundiDe, ajouterJours, EQUIPES, TYPES_GANTS };

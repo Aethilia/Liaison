@@ -661,3 +661,16 @@ test('jeu caché : joueurs reconnus par empreinte, code secret chiffré', () => 
     delete process.env.LIAISON_JEU_JOUEURS;
   }
 });
+
+test('planning : distribution de gants (accès, distributions, annulation)', () => {
+  const { Planning } = require('../src/core/planning');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'liaison-gants-'));
+  const p = new Planning(dir);
+  assert.deepEqual(p.loadGants(), { autorises: [], distributions: [] });
+  assert.deepEqual(p.autoriserGants('Paul', true).autorises, ['Paul']);
+  assert.deepEqual(p.autoriserGants('Paul', false).autorises, []);
+  const g = p.distribuerGants('ag1', 'fourres', '2026-11-06', 'Paul');
+  assert.equal(g.distributions.length, 1);
+  assert.throws(() => p.distribuerGants('ag1', 'chaussettes', '2026-11-06', 'Paul'));
+  assert.equal(p.annulerGants(g.distributions[0].id).distributions.length, 0);
+});
