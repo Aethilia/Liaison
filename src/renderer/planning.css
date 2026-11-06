@@ -412,3 +412,12 @@ tr.an-depasse th { color: #e03131; }
 .gt-action select, .gt-action input { padding: 4px 6px; font-size: 12.5px; }
 .gt-histo { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; max-height: 50vh; overflow: auto; }
 .gt-histo-ligne { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; background: var(--head); font-size: 13px; }
+.gt-vue { display: flex; flex-direction: column; gap: 12px; }
+.gt-seg { align-self: flex-start; }
+.gt-seg .eq-pastille { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--eq); margin-right: 6px; }
+.gt-grille { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+.gt-journal .card-body { max-height: 70vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+.gt-jour-date { font-weight: 800; font-size: 12.5px; text-transform: capitalize; color: var(--eq, var(--text)); border-bottom: 1px solid var(--line); padding-bottom: 3px; margin-bottom: 4px; }
+.gt-jour-ligne { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; }
+.gt-jour-ligne b { min-width: 120px; }
+@media (max-width: 1100px) { .gt-grille { grid-template-columns: 1fr; } }

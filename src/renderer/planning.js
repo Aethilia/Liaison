@@ -821,31 +821,52 @@ function vueGants() {
       toast(`Non enregistré : ${err.message}`);
     }
   };
-  const lignes = [];
-  for (const eq of PLAN_EQUIPES) {
-    const agents = planState.agents.filter((a) => a.equipe === eq.id && !estParti(a));
-    if (!agents.length) continue;
-    lignes.push(h('tr', { class: 'syn-equipe', style: { '--eq': eq.couleur() } }, h('td', { colSpan: 5 }, h('span', { class: 'eq-pastille' }), eq.label)));
-    for (const a of agents) {
-      const type = h('select', { class: 'gt-type', 'aria-label': `Type de gants pour ${a.nom}` }, GANTS.map((t) => h('option', { value: t.id }, t.label)));
-      const date = h('input', { type: 'date', class: 'gt-date', value: aujourdhui(), max: aujourdhui(), 'aria-label': 'Date de distribution' });
-      lignes.push(h('tr', { class: 'gt-ligne' },
-        h('th', { onclick: () => historiqueGants(a), title: 'Historique des distributions' }, a.nom),
-        GANTS.map((t) => {
-          const d = derniere(a.id, t.id);
-          const n = nbAnnee(a.id, t.id);
-          return h('td', { class: 'gt-cell' }, d ? [h('b', { style: { color: t.couleur } }, fmtCourt(d.date)), n ? h('small', {}, ` · ${n} en ${annee}`) : null] : h('span', { class: 'muted' }, '—'));
-        }),
-        h('td', { class: 'gt-action' }, type, date,
-          h('button', { class: 'btn small primary', onclick: () => { if (date.value) distribuer(a, type.value, date.value); } }, icon('check', 13), 'Distribuer'))));
-    }
+  // Un service à la fois (comme la semaine « par service »).
+  const equipes = PLAN_EQUIPES.filter((eq) => planState.agents.some((a) => a.equipe === eq.id && !estParti(a)));
+  if (!equipes.some((eq) => eq.id === planState.gantsSvc)) planState.gantsSvc = equipes.length ? equipes[0].id : null;
+  const eq = equipes.find((x) => x.id === planState.gantsSvc);
+  const agents = eq ? planState.agents.filter((a) => a.equipe === eq.id && !estParti(a)) : [];
+  const lignes = agents.map((a) => {
+    const type = h('select', { class: 'gt-type', 'aria-label': `Type de gants pour ${a.nom}` }, GANTS.map((t) => h('option', { value: t.id }, t.label)));
+    const date = h('input', { type: 'date', class: 'gt-date', value: aujourdhui(), max: aujourdhui(), 'aria-label': 'Date de distribution' });
+    return h('tr', { class: 'gt-ligne' },
+      h('th', { onclick: () => historiqueGants(a), title: 'Historique des distributions' }, a.nom),
+      GANTS.map((t) => {
+        const d = derniere(a.id, t.id);
+        const n = nbAnnee(a.id, t.id);
+        return h('td', { class: 'gt-cell' }, d ? [h('b', { style: { color: t.couleur } }, fmtCourt(d.date)), n ? h('small', {}, ` · ${n} en ${annee}`) : null] : h('span', { class: 'muted' }, '—'));
+      }),
+      h('td', { class: 'gt-action' }, type, date,
+        h('button', { class: 'btn small primary', onclick: () => { if (date.value) distribuer(a, type.value, date.value); } }, icon('check', 13), 'Distribuer')));
+  });
+  // Journal du service : à qui, quel jour, quels gants (le plus récent en haut).
+  const ids = new Set(agents.map((a) => a.id));
+  const parJour = new Map();
+  for (const x of g.distributions.filter((y) => ids.has(y.agentId)).sort((p, q) => q.date.localeCompare(p.date) || q.le.localeCompare(p.le))) {
+    if (!parJour.has(x.date)) parJour.set(x.date, []);
+    parJour.get(x.date).push(x);
   }
-  return h('div', { class: 'card plan-synthese' },
-    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('hand', 16)), 'Distribution de gants',
-      h('span', { class: 'hint' }, 'Dernière distribution par type · cliquer sur un nom pour l\'historique')),
-    h('div', { class: 'card-body plan-scroll' }, h('table', { class: 'grid syn-table gt-table' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'Agent'), GANTS.map((t) => h('th', {}, h('span', { class: 'gt-pastille', style: { background: t.couleur } }), t.label)), h('th', {}, 'Distribuer'))),
-      h('tbody', {}, lignes))));
+  const jourLong = (iso) => new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(M.parseISODate(iso));
+  const journal = h('div', { class: 'card gt-journal', style: eq ? { '--eq': eq.couleur() } : null },
+    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('list', 16)), `Distributions · ${eq ? eq.label : ''}`),
+    h('div', { class: 'card-body' }, parJour.size ? [...parJour].map(([d, xs]) => h('div', { class: 'gt-jour' },
+      h('div', { class: 'gt-jour-date' }, jourLong(d)),
+      xs.map((x) => {
+        const t = GANTS.find((y) => y.id === x.type);
+        const a = agents.find((y) => y.id === x.agentId);
+        return h('div', { class: 'gt-jour-ligne' }, h('span', { class: 'gt-pastille', style: { background: t.couleur } }), h('b', {}, a ? a.nom : '?'), h('span', {}, t.label));
+      }))) : h('p', { class: 'muted' }, 'Aucune distribution pour ce service.')));
+  return h('div', { class: 'gt-vue' },
+    h('div', { class: 'seg gt-seg' }, equipes.map((x) => h('button', { class: x.id === planState.gantsSvc ? 'on' : '', style: { '--eq': x.couleur() }, onclick: () => { planState.gantsSvc = x.id; renderPlanning({ reload: false }); } },
+      h('span', { class: 'eq-pastille' }), x.label))),
+    h('div', { class: 'gt-grille' },
+      h('div', { class: 'card plan-synthese' },
+        h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('hand', 16)), `Distribution de gants · ${eq ? eq.label : ''}`,
+          h('span', { class: 'hint' }, 'Dernière date par type · cliquer sur un nom pour son historique')),
+        h('div', { class: 'card-body plan-scroll' }, h('table', { class: 'grid syn-table gt-table' },
+          h('thead', {}, h('tr', {}, h('th', {}, 'Agent'), GANTS.map((t) => h('th', {}, h('span', { class: 'gt-pastille', style: { background: t.couleur } }), t.label)), h('th', {}, 'Distribuer'))),
+          h('tbody', {}, lignes)))),
+      journal));
 }
 
 function historiqueGants(agent) {
