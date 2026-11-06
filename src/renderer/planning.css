@@ -389,3 +389,16 @@ dialog.plan-detail.dhs { width: min(680px, 94vw); }
 .dhs-jours { white-space: nowrap; font-weight: 700; }
 .dhs-jours small { display: block; font-weight: 500; color: var(--muted); white-space: normal; max-width: 150px; }
 .dhs-table tfoot th { text-align: left; }
+
+/* Heures annuelles */
+.an-table .num { width: 46px; font-size: 12.5px; }
+.an-table .an-mois.futur { opacity: .45; }
+.an-plafond { display: flex; align-items: center; gap: 10px; min-width: 260px; }
+.an-barre { position: relative; flex: 1; display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #eef1f5; }
+.an-barre i { display: block; height: 100%; }
+.an-reste { font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 110px; }
+.an-reste small { display: block; font-size: 11px; font-weight: 500; color: var(--muted); }
+.an-reste small.alerte { color: #e03131; font-weight: 700; }
+tr.an-proche .an-reste { color: #e8590c; font-weight: 700; }
+tr.an-depasse .an-reste { color: #e03131; font-weight: 800; }
+tr.an-depasse th { color: #e03131; }

@@ -266,7 +266,7 @@ async function renderPlanning({ reload = true } = {}) {
     planState.loadedAt = Date.now();
   }
   const root = document.getElementById('planning');
-  const onglets = h('div', { class: 'seg plan-seg' }, [['semaine', 'Semaine', 'list'], ['synthese', 'Synthèse', 'chart'], ['simulation', 'Simulation', 'clock'], ['agents', 'Agents', 'users'], ['codes', 'Codes', 'palette']].map(([id, label, ic]) => h('button', {
+  const onglets = h('div', { class: 'seg plan-seg' }, [['semaine', 'Semaine', 'list'], ['synthese', 'Synthèse', 'chart'], ['simulation', 'Simulation', 'clock'], ['agents', 'Agents', 'users'], ['codes', 'Codes', 'palette'], ['annuel', 'Heures annuelles', 'clock']].map(([id, label, ic]) => h('button', {
     class: planState.vue === id ? 'on' : '', onclick: () => { planState.vue = id; renderPlanning(); },
   }, icon(ic, 14), label)));
   const head = h('div', { class: 'recap-head plan-head' }, h('h2', {}, `Planning${S.siteName ? ` · ${S.siteName}` : ''}`), onglets, h('span', { class: 'spacer' }));
@@ -280,6 +280,7 @@ async function renderPlanning({ reload = true } = {}) {
   } else if (planState.vue === 'semaine') corps = vueSemaine(head);
   else if (planState.vue === 'synthese') corps = await vueSynthese(head);
   else if (planState.vue === 'codes') corps = vueCodes();
+  else if (planState.vue === 'annuel') corps = await vueAnnuelle(head);
   else if (planState.vue === 'simulation') corps = await vueSimulation(head, { reload });
   else corps = vueAgents();
   root.replaceChildren(head, corps, boutonCouleursRoles());
@@ -793,6 +794,63 @@ async function vueSynthese(head) {
       h('tfoot', {}, h('tr', {}, h('th', {}, 'Total'), h('td', { class: 'num' }, h('b', {}, totaux.travailles)), celluleHs(totaux),
         codesUtiles.map((c) => h('td', { class: 'num' }, h('b', {}, totaux.codes[c.code] || 0))), h('td', {})))),
     codesUtiles.length ? null : h('p', { class: 'muted syn-vide' }, 'Aucun code saisi ce mois-ci : tout le monde travaille normalement.')));
+}
+
+// Heures supp de l'année par agent, face au plafond annuel.
+const PLAFOND_HS = 400;
+async function vueAnnuelle(head) {
+  if (!planState.annee) planState.annee = Number(aujourdhui().slice(0, 4));
+  const y = planState.annee;
+  const allerAn = (n) => { planState.annee = y + n; renderPlanning({ reload: false }); };
+  head.append(
+    h('button', { class: 'btn', title: 'Année précédente', onclick: () => allerAn(-1) }, icon('chevronLeft', 16)),
+    h('div', { class: 'plan-periode mois' }, String(y)),
+    h('button', { class: 'btn', title: 'Année suivante', onclick: () => allerAn(1) }, icon('chevronRight', 16)));
+  const debut = `${y}-01-01`;
+  const fin = `${y}-12-31`;
+  const cases = await call(api.planEntre(debut, fin)).catch(() => ({}));
+  const moisCourant = aujourdhui().slice(0, 4) === String(y) ? Number(aujourdhui().slice(5, 7)) : 12;
+  const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const lignes = [];
+  for (const eq of PLAN_EQUIPES) {
+    const agents = planState.agents.filter((a) => a.equipe === eq.id && presentEntre(a, debut, fin));
+    if (!agents.length) continue;
+    lignes.push(h('tr', { class: 'syn-equipe', style: { '--eq': eq.couleur() } }, h('td', { colSpan: 16 }, h('span', { class: 'eq-pastille' }), eq.label)));
+    for (const a of agents) {
+      const deb = a.arrivee && a.arrivee > debut ? a.arrivee : debut;
+      const fn = a.depart && a.depart < fin ? a.depart : fin;
+      // Total à ce jour (l'année en cours n'est pas finie) ; projection jusqu'au 31/12 à côté.
+      const jusqua = aujourdhui() < fn ? aujourdhui() : fn;
+      const s = jusqua >= deb ? syntheseAgent(cases[a.id] || {}, deb, jusqua, a) : syntheseAgent({}, deb, deb, null);
+      const projete = jusqua < fn ? syntheseAgent(cases[a.id] || {}, deb, fn, a).hs : null;
+      const parMois = MOIS_COURTS.map((_, i) => {
+        const d1 = `${y}-${String(i + 1).padStart(2, '0')}-01`;
+        const d2 = isoAjout(i === 11 ? `${y + 1}-01-01` : `${y}-${String(i + 2).padStart(2, '0')}-01`, -1);
+        const a1 = d1 < deb ? deb : d1;
+        // Mois passés et en cours : à ce jour ; mois à venir : prévision (grisée).
+        const borne = i + 1 <= moisCourant && jusqua < fn ? jusqua : fn;
+        const a2 = d2 > borne ? borne : d2;
+        return a1 <= a2 ? syntheseAgent(cases[a.id] || {}, a1, a2, a).hs : 0;
+      });
+      const pct = s.hs / PLAFOND_HS;
+      const niveau = pct >= 1 ? 'depasse' : pct >= 0.8 ? 'proche' : 'ok';
+      lignes.push(h('tr', { class: `syn-agent an-${niveau}`, onclick: () => detailHs(a, cases[a.id] || {}, deb, jusqua >= deb ? jusqua : deb) },
+        h('th', { title: datesAgent(a) }, a.nom, pastillesRoles(a), datesAgent(a) ? h('small', { class: 'ag-dates' }, datesAgent(a)) : null),
+        parMois.map((v, i) => h('td', { class: `num an-mois${i + 1 > moisCourant ? ' futur' : ''}` }, v ? fmtHs(v).replace('+', '') : h('span', { class: 'muted' }, '·'))),
+        h('td', { class: 'num' }, h('b', {}, `${fmtHs(s.hs).replace('+', '')}`)),
+        h('td', { class: 'an-plafond' },
+          h('div', { class: 'an-barre', title: HS_TYPES.filter((t) => s.parType[t.id]).map((t) => `${t.label} : ${fmtHs(s.parType[t.id])}`).join(' · ') },
+            HS_TYPES.filter((t) => s.parType[t.id]).map((t) => h('i', { style: { width: `${Math.min(100, (s.parType[t.id] / PLAFOND_HS) * 100)}%`, background: t.couleur } }))),
+          h('span', { class: 'an-reste' }, pct >= 1 ? `dépassé de ${fmtHs(s.hs - PLAFOND_HS).replace('+', '')}` : `reste ${fmtHs(PLAFOND_HS - s.hs).replace('+', '')}`,
+            projete != null ? h('small', { class: projete > PLAFOND_HS ? 'alerte' : '', title: 'Si le planning reste tel quel jusqu\'au 31 décembre' }, `fin d'année ≈ ${fmtHs(projete).replace('+', '')}`) : null))));
+    }
+  }
+  return h('div', { class: 'card plan-synthese' },
+    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('clock', 16)), `Heures supp · ${y}`,
+      h('span', { class: 'hint' }, `Plafond ${PLAFOND_HS} h par an · orange à 80 % · cliquer sur un agent pour le détail`)),
+    h('div', { class: 'card-body plan-scroll' }, h('table', { class: 'grid syn-table an-table' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Agent'), MOIS_COURTS.map((m) => h('th', { class: 'num' }, m)), h('th', { class: 'num', title: 'Heures supp à ce jour' }, 'Total'), h('th', {}, `Plafond ${PLAFOND_HS} h`))),
+      h('tbody', {}, lignes))));
 }
 
 // Détail d'un agent : mini calendrier du mois.
