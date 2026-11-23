@@ -781,7 +781,7 @@ function renderForm() {
           row.extra ? field(`${base}.nom`, 'text', { placeholder: 'Matière ponctuelle', class: 'extra-name' }) : h('span', {}, row.nom),
           row.extra && !closed ? h('button', { class: 'o-btn rm', title: 'Supprimer cette sortie', 'aria-label': 'Supprimer cette sortie', onclick: () => removeExtraSortie(row.index) }, icon('x', 14)) : null,
           !row.extra && !closed ? h('button', { class: 'o-btn rm mat-rm', title: 'Retirer cette matière pour le site', 'aria-label': `Retirer ${row.nom}`, onclick: () => removeMatiere(row.nom) }, icon('x', 13)) : null)),
-      h('td', {}, field(`${base}.nb`, 'int', { 'data-nb': base })),
+      h('td', {}, field(`${base}.nb`, 'int', { 'data-nb': base, ...(row.nom === 'DEEE' && !row.extra ? { placeholder: 'caisses', title: 'Nombre de caisses sorties' } : {}) })),
       row.externe ? h('td', { class: 'ext' }, 'service externe') : h('td', {}, tonField(base, row.data))));
     const n = peseeCount(row);
     if (n >= 2) {

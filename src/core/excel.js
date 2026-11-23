@@ -176,7 +176,9 @@ function readService(ws, def, date) {
   M.MATIERES.forEach((m, i) => {
     const r = ROWS.sortiesStart + i + o;
     s.sorties[m].nb = cellNumber(v(`C${r}`));
-    if (!M.MATIERES_EXTERNES.includes(m)) s.sorties[m].tonnage = cellNumber(v(`D${r}`));
+    // Anciennes feuilles : DEEE avait un tonnage ; on le garde s'il y en a un.
+    const t = cellNumber(v(`D${r}`));
+    if (!M.MATIERES_EXTERNES.includes(m) || t != null) s.sorties[m].tonnage = t;
   });
   const pct = (x) => {
     const n = cellNumber(x);

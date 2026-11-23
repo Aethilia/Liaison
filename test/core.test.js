@@ -415,23 +415,28 @@ test('sorties : matières ajoutées ou retirées pour le site', () => {
   const site = { matieres: ['Fer', 'DIB', 'Carton'] };
   const s = M.normalize({ sorties: { Bois: { nb: 2 }, Carton: { nb: 1, tonnage: 0.5 } } }, '2026-10-02', 'matin');
   // Bois a été retiré du site mais garde ses chiffres dans ce service.
-  assert.deepEqual(M.allSorties(s, site).filter((r) => !r.extra).map((r) => r.nom), ['Fer', 'DIB', 'Carton', 'Bois']);
+  // DEEE (un temps « à part ») revient dans une liste enregistrée sans lui.
+  assert.deepEqual(M.allSorties(s, site).filter((r) => !r.extra).map((r) => r.nom), ['Fer', 'DIB', 'Carton', 'DEEE', 'Bois']);
+  assert.deepEqual(M.matieresDuSite({ matieres: ['Fer', 'DIB'], quantites: ['TV'] }), ['Fer', 'DIB']);
   assert.equal(M.allSorties(s, site).find((r) => r.nom === 'Bois').externe, true);
   assert.equal(M.totals(s).tonnage, 0.5);
   assert.equal(M.stats([{ date: s.date, services: { matin: s } }]).matieres.find((m) => m.nom === 'Carton').tonnage, 0.5);
   assert.deepEqual(M.allSorties(M.emptyService('2026-10-02', 'matin')).map((r) => r.nom), M.MATIERES.filter((m) => !M.QUANTITES_DEFAUT.includes(m)));
 });
 
-test('sorties à part : DEEE et TV comptés à la pièce, hors total', () => {
+test('sorties : DEEE en externe (caisses, poids plus tard) et TV à part', () => {
+  // Saisie faite quand les DEEE étaient « à part » : les caisses reviennent en sortie.
   const s = M.normalize({ sorties: { Fer: { nb: 2, tonnage: 3 } }, quantites: { DEEE: 4, TV: 'x' } }, '2026-10-02', 'matin');
-  assert.deepEqual(s.quantites, { DEEE: 4, TV: null });
-  assert.deepEqual(M.allQuantites(s, {}).map((q) => [q.nom, q.nb]), [['DEEE', 4], ['TV', null]]);
-  assert.ok(!M.allSorties(s, {}).some((r) => r.nom === 'DEEE'));
-  assert.equal(M.totals(s).sortiesNb, 2);
+  assert.equal(s.sorties.DEEE.nb, 4);
+  assert.deepEqual(s.quantites, { TV: null });
+  const deee = M.allSorties(s, {}).find((r) => r.nom === 'DEEE');
+  assert.equal(deee.externe, true);
+  assert.deepEqual(M.allQuantites(s, {}).map((q) => [q.nom, q.nb]), [['TV', null]]);
+  assert.equal(M.totals(s).sortiesNb, 6);
   assert.equal(M.isEmpty(M.normalize({ quantites: { TV: 1 } }, '2026-10-02', 'matin')), false);
-  // Liste propre au site : un élément retiré garde ses chiffres dans ce service.
-  assert.deepEqual(M.allQuantites(s, { quantites: ['Pneus'] }).map((q) => q.nom), ['Pneus', 'DEEE']);
-  assert.deepEqual(M.stats([{ date: s.date, services: { matin: s } }]).quantites, [{ nom: 'DEEE', nb: 4 }]);
+  assert.deepEqual(M.allQuantites(s, { quantites: ['Pneus', 'DEEE'] }).map((q) => q.nom), ['Pneus']);
+  const t = M.normalize({ quantites: { TV: 3 } }, '2026-10-02', 'matin');
+  assert.deepEqual(M.stats([{ date: t.date, services: { matin: t } }]).quantites, [{ nom: 'TV', nb: 3 }]);
 });
 
 test('planning : import d\'un classeur (format CTVO), heures supp et repères colorés', async () => {

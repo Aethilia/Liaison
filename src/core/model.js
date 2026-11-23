@@ -11,11 +11,12 @@ const SERVICES = [
 
 const MOTIFS = ['CP', 'Maladie', 'RTT', 'Récupération', 'Formation', 'Accident du travail', 'Congé exceptionnel', 'Absence injustifiée', 'Autre'];
 
-// Matières en sortie : Bois et Matelas sont gérés par un service externe (nombre seulement).
+// Matières en sortie : Bois, Matelas et DEEE sont enlevés par un service externe :
+// on compte les bennes (caisses pour les DEEE), le poids arrive plus tard (onglet Externes).
 const MATIERES = ['Bois', 'Matelas', 'Fer', 'DIB', 'UVE', 'DEEE', 'Sport', 'TV'];
-const MATIERES_EXTERNES = ['Bois', 'Matelas'];
-// Sorties « à part » par défaut : des caisses, comptées à la pièce sans poids.
-const QUANTITES_DEFAUT = ['DEEE', 'TV'];
+const MATIERES_EXTERNES = ['Bois', 'Matelas', 'DEEE'];
+// Sorties « à part » par défaut : comptées à la pièce, sans poids.
+const QUANTITES_DEFAUT = ['TV'];
 
 const BENNES = ['Matelas', 'Fer', 'Bois', 'DIB', 'UVE'];
 const PLATEAUX = ['Sport', 'Fer', 'Bois', 'DIB'];
@@ -25,7 +26,7 @@ const UNITES = ['pièce(s)', 'kg', 'T'];
 const ETATS_STOCKAGE = [{ id: 'vide', label: 'Vide' }, { id: 'pleine', label: 'Pleine' }, { id: 'en-cours', label: 'En cours' }];
 const SERVICE_COMMANDES = 'matin'; // service qui saisit les commandes, vues en info par les autres
 // Couleur par défaut des matières en sortie (les externes en vert) ; modifiable par site.
-const COULEURS_DEFAUT = { Bois: { couleur: '#2f9e44', mode: 'nom' }, Matelas: { couleur: '#2f9e44', mode: 'nom' } };
+const COULEURS_DEFAUT = { Bois: { couleur: '#2f9e44', mode: 'nom' }, Matelas: { couleur: '#2f9e44', mode: 'nom' }, DEEE: { couleur: '#2f9e44', mode: 'nom' } };
 const PALETTE = ['#2f9e44', '#1971c2', '#e8590c', '#c2255c', '#7048e8', '#f08c00', '#0c8599', '#868e96'];
 
 const NB_ABSENTS = 4;
@@ -85,7 +86,12 @@ function normalize(data, date, service) {
     nom: (x && x.nom) || '', nb: numOrNull(x && x.nb), tonnage: numOrNull(x && x.tonnage), pesees: cleanPesees(x && x.pesees), couleur: (x && x.couleur) || '',
   }));
   out.quantites = {};
-  for (const [k, v] of Object.entries(data.quantites && typeof data.quantites === 'object' ? data.quantites : {})) out.quantites[k] = numOrNull(v);
+  for (const [k, v] of Object.entries(data.quantites && typeof data.quantites === 'object' ? data.quantites : {})) {
+    // Saisies 1.10.7-1.10.10 : les caisses de DEEE étaient « à part » ; elles reviennent en sortie (externe).
+    if (MATIERES_EXTERNES.includes(k)) {
+      if (numOrNull(v) != null && out.sorties[k].nb == null) out.sorties[k].nb = numOrNull(v);
+    } else out.quantites[k] = numOrNull(v);
+  }
   out.nonConformes = (Array.isArray(data.nonConformes) ? data.nonConformes : []).map((x) => ({
     ...x,
     type: (x && x.type) || '', quantite: numOrNull(x && x.quantite), unite: (x && x.unite) || UNITES[0],
@@ -200,14 +206,22 @@ function parseTonnage(str) {
 function matieresDuSite(site) {
   const list = site && Array.isArray(site.matieres) ? site.matieres.filter((n) => typeof n === 'string' && n) : null;
   const aPart = quantitesDuSite(site);
-  return (list || [...MATIERES]).filter((n) => !aPart.includes(n));
+  const out = (list || [...MATIERES]).filter((n) => !aPart.includes(n));
+  // DEEE était « à part » (1.10.7-1.10.10) : une liste enregistrée pendant ce temps l'avait
+  // perdue ; elle revient à sa place parmi les matières.
+  const etaitAPart = !site || !Array.isArray(site.quantites) || site.quantites.includes('DEEE');
+  if (list && etaitAPart && !out.includes('DEEE')) {
+    const i = out.indexOf('UVE');
+    out.splice(i >= 0 ? i + 1 : out.length, 0, 'DEEE');
+  }
+  return out;
 }
 
 // Toutes les lignes de sorties : matières du site (plus celles retirées depuis
 // mais renseignées dans ce service) puis ponctuelles.
 // Sorties à part, comptées à la pièce (liste du site) : hors total des sorties et du tonnage.
 function quantitesDuSite(site) {
-  return site && Array.isArray(site.quantites) ? site.quantites.filter((n) => typeof n === 'string' && n) : [...QUANTITES_DEFAUT];
+  return site && Array.isArray(site.quantites) ? site.quantites.filter((n) => typeof n === 'string' && n && !MATIERES_EXTERNES.includes(n)) : [...QUANTITES_DEFAUT];
 }
 
 function allQuantites(s, site) {
