@@ -165,7 +165,7 @@ function buildDaySheet(ws, model, day, { tasks = [], site = {}, siteName = '' } 
       const r = rows[i];
       if (r) {
         const nameStyle = b.st('A15', def);
-        const col = r.extra ? (r.data.couleur ? { couleur: r.data.couleur, mode: 'nom' } : null) : couleurs[r.nom];
+        const col = r.extra ? (r.data.couleur ? { couleur: r.data.couleur, mode: 'nom' } : null) : (couleurs[r.nom] || (r.externe ? { couleur: '#2f9e44', mode: 'nom' } : null));
         const lineFill = col && col.couleur && col.mode === 'ligne' ? { type: 'pattern', pattern: 'solid', fgColor: { argb: lighten(col.couleur) } } : null;
         if (col && col.couleur) nameStyle.font = { ...nameStyle.font, bold: true, color: { argb: argb(col.couleur) } };
         if (lineFill) nameStyle.fill = lineFill;

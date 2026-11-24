@@ -49,8 +49,8 @@ const styles = {
 
 // Écrit l'onglet et renvoie la description des graphiques à ajouter.
 // externes : pesées des services externes [{ date, matiere, nb, tonnage }].
-function buildSynthese(ws, days, { siteName = '', services = M.SERVICES, externes = [] } = {}) {
-  const st = M.stats(days, services);
+function buildSynthese(ws, days, { siteName = '', services = M.SERVICES, externes = [], site } = {}) {
+  const st = M.stats(days, services, site);
   const charts = [];
   ws.columns = [{ width: 30 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 3 }, ...Array.from({ length: 9 }, () => ({ width: 11 }))];
   ws.views = [{ showGridLines: false }];

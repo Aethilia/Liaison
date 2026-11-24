@@ -293,8 +293,11 @@ Les deux figurent dans la fiche, l'impression, la recherche et l'export Excel.
 - **Matières du site** : « + Matière » ajoute une matière proposée à tous les
   services du site ; la petite croix (au survol) la retire. Les services déjà
   saisis gardent leurs chiffres.
-- **DEEE** : comme le Bois et les Matelas (service externe), on saisit le nombre
-  de caisses sorties ; le poids arrive plus tard et se saisit dans l'onglet Externes.
+- **Services externes** (Bois, Matelas en bennes, DEEE en caisses par défaut) : on
+  compte les enlèvements dans la saisie, le poids arrive plus tard. « + Service
+  externe » (sous les sorties) en ajoute un pour le site, avec son unité (bennes,
+  caisses, palettes…) ; chacun a son cadre dans l'onglet Externes, où l'on saisit
+  les poids. La croix de la ligne le retire (les chiffres saisis restent).
 - **À part** (TV par défaut) : comptés à la pièce, sans tonnage, hors total des
   sorties. Liste propre au site (« + Élément à part », croix pour retirer) ; repris
   sur la fiche, le récap, l'impression et l'Excel.

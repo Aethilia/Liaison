@@ -15,6 +15,8 @@ const MOTIFS = ['CP', 'Maladie', 'RTT', 'Récupération', 'Formation', 'Accident
 // on compte les bennes (caisses pour les DEEE), le poids arrive plus tard (onglet Externes).
 const MATIERES = ['Bois', 'Matelas', 'Fer', 'DIB', 'UVE', 'DEEE', 'Sport', 'TV'];
 const MATIERES_EXTERNES = ['Bois', 'Matelas', 'DEEE'];
+// Services externes par défaut d'un site (modifiables : « + Service externe » dans la saisie).
+const EXTERNES_DEFAUT = [{ nom: 'Bois', unite: 'bennes' }, { nom: 'Matelas', unite: 'bennes' }, { nom: 'DEEE', unite: 'caisses' }];
 // Sorties « à part » par défaut : comptées à la pièce, sans poids.
 const QUANTITES_DEFAUT = ['TV'];
 
@@ -203,6 +205,17 @@ function parseTonnage(str) {
 }
 
 // Matières en sortie d'un site : liste réglée (ajouts / retraits) ou liste d'origine.
+// Matières enlevées par un service externe sur ce site : { nom, unite } (unité de comptage).
+function externesDuSite(site) {
+  const s = siteDe(site);
+  const list = s && Array.isArray(s.externes)
+    ? s.externes.filter((x) => x && typeof x.nom === 'string' && x.nom.trim()).map((x) => ({ nom: x.nom.trim(), unite: String(x.unite || 'bennes').trim() || 'bennes' }))
+    : null;
+  return list || EXTERNES_DEFAUT.map((x) => ({ ...x }));
+}
+const estExterne = (nom, site) => externesDuSite(site).some((x) => x.nom === nom);
+const uniteExterne = (nom, site) => (externesDuSite(site).find((x) => x.nom === nom) || {}).unite || 'bennes';
+
 function matieresDuSite(site) {
   const list = site && Array.isArray(site.matieres) ? site.matieres.filter((n) => typeof n === 'string' && n) : null;
   const aPart = quantitesDuSite(site);
@@ -210,10 +223,12 @@ function matieresDuSite(site) {
   // DEEE était « à part » (1.10.7-1.10.10) : une liste enregistrée pendant ce temps l'avait
   // perdue ; elle revient à sa place parmi les matières.
   const etaitAPart = !site || !Array.isArray(site.quantites) || site.quantites.includes('DEEE');
-  if (list && etaitAPart && !out.includes('DEEE')) {
+  if (list && etaitAPart && !Array.isArray(site.externes) && !out.includes('DEEE')) {
     const i = out.indexOf('UVE');
     out.splice(i >= 0 ? i + 1 : out.length, 0, 'DEEE');
   }
+  // Un service externe ajouté au site figure toujours parmi les matières.
+  if (list && site && Array.isArray(site.externes)) for (const x of externesDuSite(site)) if (!out.includes(x.nom)) out.push(x.nom);
   return out;
 }
 
@@ -234,7 +249,7 @@ function allSorties(s, site) {
   const noms = matieresDuSite(siteDe(site));
   for (const [m, v] of Object.entries(s.sorties)) if (!noms.includes(m) && v && (v.nb != null || v.tonnage != null)) noms.push(m);
   return [
-    ...noms.map((m) => ({ nom: m, externe: MATIERES_EXTERNES.includes(m), data: s.sorties[m] || (s.sorties[m] = sortieVide(m)), extra: false })),
+    ...noms.map((m) => ({ nom: m, externe: estExterne(m, site), data: s.sorties[m] || (s.sorties[m] = sortieVide(m)), extra: false })),
     ...(s.sortiesExtra || []).map((x, i) => ({ nom: x.nom, externe: false, data: x, extra: true, index: i })),
   ];
 }
@@ -309,7 +324,7 @@ function layoutObservations(s, width = LARGEUR_LIGNE_NB) {
 }
 
 // Chiffres d'une période (récap, feuille Synthèse) : days = [{ date, services }].
-function stats(days, services = SERVICES) {
+function stats(days, services = SERVICES, site) {
   const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   const matieres = new Map();
   const quantites = new Map();
@@ -326,7 +341,7 @@ function stats(days, services = SERVICES) {
       if (s.cloture) k.clos += 1;
       entSvc[def.id].plateaux += n(s.entrees.plateaux);
       entSvc[def.id].pl += n(s.entrees.pl);
-      for (const r of allSorties(s)) {
+      for (const r of allSorties(s, site)) {
         const nom = r.nom || 'Sortie ponctuelle';
         const m = matieres.get(nom) || { nom, nb: 0, tonnage: 0, externe: r.externe, extra: r.extra };
         m.nb += n(r.data.nb);
@@ -492,7 +507,7 @@ function daysInMonth(year, month) {
 
 const api = {
   stats, compareVersions, UNITES, ETATS_STOCKAGE, SERVICE_COMMANDES, COULEURS_DEFAUT, PALETTE, parsePoids, parseTonnage, allSorties, fillColor, newTaskId,
-  boxNames, boxAlerts, boxUnique, boxTitres, boxCle, matieresDuSite, quantitesDuSite, allQuantites, entreesTonnage, deuxServices, servicesDuSite, setProfil, SERVICES_TOUS,
+  boxNames, boxAlerts, boxUnique, boxTitres, boxCle, matieresDuSite, externesDuSite, estExterne, uniteExterne, EXTERNES_DEFAUT, quantitesDuSite, allQuantites, entreesTonnage, deuxServices, servicesDuSite, setProfil, SERVICES_TOUS,
   SERVICES, MOTIFS, MATIERES, MATIERES_EXTERNES, QUANTITES_DEFAUT, BENNES, PLATEAUX, NB_ABSENTS, NB_OBSERVATIONS, SEUIL_ALERTE, CONSIGNES_PREFIX, IMPORTANT_PREFIX, ABSENTS_PREFIX,
   emptyService, normalize, isEmpty, totals, wrapText, layoutObservations, previousService, nextService, currentService,
   toISODate, parseISODate, addDays, daysInMonth, joursFeries, ferie,

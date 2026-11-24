@@ -148,7 +148,7 @@ async function exportWorkbook(days, file, { tasks = [], site = {}, siteName = ''
   await wb.xlsx.readFile(TEMPLATE);
   const model = wb.getWorksheet(MODEL_SHEET);
   const services = M.servicesDuSite({ ...site, nom: site.nom || siteName });
-  const charts = days.length ? buildSynthese(wb.addWorksheet(SYNTHESE_SHEET), days, { siteName, services, externes }) : [];
+  const charts = days.length ? buildSynthese(wb.addWorksheet(SYNTHESE_SHEET), days, { siteName, services, externes, site: { ...site, nom: site.nom || siteName } }) : [];
   for (const day of days) {
     buildDaySheet(wb.addWorksheet(sheetName(day.date)), model, day, { tasks, site, siteName });
   }

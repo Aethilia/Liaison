@@ -793,3 +793,9 @@ dialog.ext-dialog { width: min(560px, 94vw); }
 .qte-it input { width: 58px; padding: 4px 6px; }
 .qte-vide { font-size: 12.5px; }
 .recap-apart { margin: 12px 0 4px; padding-top: 10px; border-top: 1px dashed var(--line); font-weight: 800; font-size: 12.5px; }
+/* Externes : un cadre par service externe */
+.ext-cadre { border-top: 3px solid var(--mc); }
+.ext-cadre .card-head { color: color-mix(in srgb, var(--mc) 75%, black); }
+.ext-pastille { width: 11px; height: 11px; border-radius: 50%; background: var(--mc); flex: none; }
+.ext-cadre .ext-add { margin-left: 8px; }
+.ext-aide { margin: 4px 2px 0; font-size: 12.5px; }

@@ -85,59 +85,65 @@ async function renderExternes({ reload = true } = {}) {
     h('button', { class: 'btn', title: 'Mois suivant', onclick: () => aller(1) }, icon('chevronRight', 16)),
     h('button', { class: 'btn accent', onclick: () => ouvrirPesee({ date: '' }) }, icon('plus', 15), 'Pesée'));
 
-  // Enlèvements de la main courante : poids saisi ou en attente.
-  const enl = enlevementsExternes(extState.jours);
-  const aPeser = enl.filter((e) => !peseesDe(e.date, e.matiere).length).length;
-  const lignesEnl = enl.map((e) => {
-    const p = peseesDe(e.date, e.matiere);
-    const ton = p.reduce((t, x) => t + (x.tonnage || 0), 0);
-    return h('tr', { class: p.length ? '' : 'ext-attente' },
-      h('td', {}, fmtShortDate(e.date)),
-      h('td', {}, h('b', {}, e.matiere)),
-      h('td', { class: 'num', title: e.services.join(', ') }, fmtNum(e.nb)),
-      h('td', { class: 'num' }, p.length ? h('span', { class: 'ext-ok' }, icon('check', 13), fmtTon(ton)) : h('span', { class: 'ext-wait' }, 'en attente')),
-      h('td', { class: 'num' }, p.length
-        ? h('button', { class: 'o-btn', title: 'Modifier la pesée', onclick: () => ouvrirPesee(p[0]) }, icon('edit', 14))
-        : h('button', { class: 'btn small', onclick: () => ouvrirPesee({ date: e.date, matiere: e.matiere, nb: e.nb }) }, 'Saisir le poids')));
-  });
-  const carteEnl = h('div', { class: 'card' },
-    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('truck', 16)), 'Enlèvements du mois',
-      h('span', { class: 'hint' }, aPeser ? `${plural(aPeser, 'enlèvement')} en attente de poids` : 'D\'après les sorties « service externe » de la main courante')),
-    h('div', { class: 'card-body' }, lignesEnl.length
-      ? h('table', { class: 'grid ext-table' }, h('thead', {}, h('tr', {}, ['Date', 'Matière', 'Bennes', 'Poids', ''].map((x, i) => h('th', { class: i >= 2 ? 'num' : '' }, x)))), h('tbody', {}, lignesEnl))
-      : h('p', { class: 'muted' }, 'Aucune sortie externe saisie ce mois-ci.')));
 
-  // Pesées enregistrées ce mois-ci (y compris sans enlèvement correspondant).
+  // Un cadre par service externe du site (Bois, Matelas, DEEE… et ceux ajoutés dans la saisie) :
+  // ses enlèvements du mois (poids saisi ou en attente) puis ses pesées.
+  const enl = enlevementsExternes(extState.jours);
   const pesees = extState.entrees.filter((e) => e.date.startsWith(prefixe));
-  const totaux = new Map();
-  for (const e of pesees) {
-    const t = totaux.get(e.matiere) || { nb: 0, ton: 0 };
-    t.nb += e.nb || 0;
-    t.ton += e.tonnage || 0;
-    totaux.set(e.matiere, t);
+  const externes = M.externesDuSite();
+  for (const nom of new Set([...enl.map((e) => e.matiere), ...pesees.map((e) => e.matiere)])) {
+    if (!externes.some((x) => x.nom.toLowerCase() === nom.toLowerCase())) externes.push({ nom, unite: 'bennes', retire: true });
   }
-  const cartePes = h('div', { class: 'card' },
-    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('checkSquare', 16)), 'Pesées du mois', h('span', { class: 'hint' }, plural(pesees.length, 'pesée'))),
-    h('div', { class: 'card-body' },
-      pesees.length ? h('table', { class: 'grid ext-table' },
-        h('thead', {}, h('tr', {}, ['Date', 'Matière', 'Bennes', 'Poids', 'N° de bon', ''].map((x, i) => h('th', { class: [2, 3].includes(i) ? 'num' : '' }, x)))),
-        h('tbody', {}, pesees.map((e) => h('tr', { title: [e.commentaire, `Saisi par ${e.creePar || '?'}`].filter(Boolean).join(' · ') },
-          h('td', {}, fmtShortDate(e.date)), h('td', {}, h('b', {}, e.matiere)), h('td', { class: 'num' }, e.nb == null ? '' : fmtNum(e.nb)),
-          h('td', { class: 'num' }, e.tonnage == null ? '' : fmtTon(e.tonnage)), h('td', {}, e.bon || ''),
-          h('td', { class: 'num' },
-            h('button', { class: 'o-btn', title: 'Modifier', onclick: () => ouvrirPesee(e) }, icon('edit', 14)),
-            h('button', { class: 'o-btn rm', title: 'Supprimer', onclick: () => supprimerPesee(e) }, icon('trash', 14)))))),
-        h('tfoot', {}, [...totaux].map(([mat, t]) => h('tr', { class: 'total' }, h('td', {}, 'Total'), h('td', {}, mat), h('td', { class: 'num' }, fmtNum(t.nb)), h('td', { class: 'num' }, fmtTon(t.ton)), h('td', { colSpan: 2 })))))
-        : h('p', { class: 'muted' }, 'Aucune pesée ce mois-ci. « Saisir le poids » sur un enlèvement, ou « + Pesée ».')));
-  root.replaceChildren(head, h('div', { class: 'ext-grille' }, carteEnl, cartePes));
+  const couleurs = { ...M.COULEURS_DEFAUT, ...((S.site && S.site.couleurs) || {}) };
+  const memeMat = (a, b) => a.toLowerCase() === b.toLowerCase();
+  const cadres = externes.map((x) => {
+    const lesEnl = enl.filter((e) => memeMat(e.matiere, x.nom));
+    const lesPes = pesees.filter((e) => memeMat(e.matiere, x.nom));
+    const aPeser = lesEnl.filter((e) => !peseesDe(e.date, e.matiere).length).length;
+    const total = lesEnl.reduce((n, e) => n + e.nb, 0);
+    const ton = lesPes.reduce((n, e) => n + (e.tonnage || 0), 0);
+    const col = (couleurs[x.nom] && couleurs[x.nom].couleur) || '#2f9e44';
+    const unite = x.unite.charAt(0).toUpperCase() + x.unite.slice(1);
+    const lignes = lesEnl.map((e) => {
+      const p = peseesDe(e.date, e.matiere);
+      const tp = p.reduce((s, y) => s + (y.tonnage || 0), 0);
+      return h('tr', { class: p.length ? '' : 'ext-attente' },
+        h('td', {}, fmtShortDate(e.date)),
+        h('td', { class: 'num' }, h('b', {}, fmtNum(e.nb))),
+        h('td', { class: 'muted' }, e.services.join(', ')),
+        h('td', { class: 'num' }, p.length ? h('span', { class: 'ext-ok' }, icon('check', 13), fmtTon(tp)) : h('span', { class: 'ext-wait' }, 'en attente')),
+        h('td', { class: 'num' }, p.length
+          ? h('button', { class: 'o-btn', title: 'Modifier la pesée', onclick: () => ouvrirPesee(p[0]) }, icon('edit', 14))
+          : h('button', { class: 'btn small', onclick: () => ouvrirPesee({ date: e.date, matiere: x.nom, nb: e.nb }) }, 'Saisir le poids')));
+    });
+    // Pesées sans enlèvement correspondant dans la main courante (saisies à part).
+    const seules = lesPes.filter((e) => !lesEnl.some((y) => extCle(y.date, y.matiere) === extCle(e.date, e.matiere)));
+    return h('div', { class: 'card ext-cadre', style: { '--mc': col } },
+      h('div', { class: 'card-head' }, h('span', { class: 'ext-pastille' }), x.nom,
+        h('span', { class: 'hint' }, [`compté en ${x.unite}`, aPeser ? `${aPeser} en attente de poids` : null, x.retire ? 'plus proposé en saisie' : null].filter(Boolean).join(' · ')),
+        h('button', { class: 'btn small ghost ext-add', title: `Pesée de ${x.nom}`, onclick: () => ouvrirPesee({ date: '', matiere: x.nom }) }, icon('plus', 13), 'Pesée')),
+      h('div', { class: 'card-body' },
+        lignes.length || seules.length ? h('table', { class: 'grid ext-table' },
+          h('thead', {}, h('tr', {}, h('th', {}, 'Date'), h('th', { class: 'num' }, unite), h('th', {}, 'Services'), h('th', { class: 'num' }, 'Poids'), h('th'))),
+          h('tbody', {}, lignes, seules.map((e) => h('tr', { title: [e.commentaire, e.bon ? `Bon ${e.bon}` : ''].filter(Boolean).join(' · ') },
+            h('td', {}, fmtShortDate(e.date)), h('td', { class: 'num' }, e.nb == null ? '' : fmtNum(e.nb)), h('td', { class: 'muted' }, 'pesée seule'),
+            h('td', { class: 'num' }, h('span', { class: 'ext-ok' }, icon('check', 13), fmtTon(e.tonnage || 0))),
+            h('td', { class: 'num' },
+              h('button', { class: 'o-btn', title: 'Modifier', onclick: () => ouvrirPesee(e) }, icon('edit', 14)),
+              h('button', { class: 'o-btn rm', title: 'Supprimer', onclick: () => supprimerPesee(e) }, icon('trash', 14)))))),
+          h('tfoot', {}, h('tr', { class: 'total' }, h('td', {}, 'Total'), h('td', { class: 'num' }, `${fmtNum(total)} ${x.unite}`), h('td'), h('td', { class: 'num' }, ton ? `${fmtTon(ton)} reçus` : '—'), h('td'))))
+          : h('p', { class: 'muted' }, `Aucune sortie de ${x.nom} ce mois-ci.`)));
+  });
+  root.replaceChildren(head, h('div', { class: 'ext-grille' }, cadres),
+    h('p', { class: 'muted ext-aide' }, 'Un cadre par service externe. Pour en ajouter un : « + Service externe » sous les sorties, dans la saisie.'));
   if (reload) majBadgeExternes();
 }
 
 // Fenêtre de saisie d'une pesée : date (modifiable), matière, bennes, poids, bon.
 function ouvrirPesee(e) {
-  const noms = [...new Set([...M.MATIERES_EXTERNES, ...extState.entrees.map((x) => x.matiere)])];
+  const noms = [...new Set([...M.externesDuSite().map((x) => x.nom), ...extState.entrees.map((x) => x.matiere)])];
   const date = h('input', { type: 'date', value: e.date || '', required: true });
-  const matiere = h('input', { type: 'text', value: e.matiere || M.MATIERES_EXTERNES[0], list: 'ext-matieres', maxLength: 40 });
+  const matiere = h('input', { type: 'text', value: e.matiere || noms[0] || '', list: 'ext-matieres', maxLength: 40 });
   const nb = h('input', { type: 'text', value: e.nb ?? '', inputMode: 'numeric', maxLength: 4, placeholder: 'ex. 2' });
   const poids = h('input', { type: 'text', value: e.tonnage == null ? '' : (e.pesees && e.pesees.length > 1 ? e.pesees.join('+') : String(e.tonnage)).replace(/\./g, ','), placeholder: 'ex. 5,540 ou 5,54+4,74', inputMode: 'decimal' });
   const bon = h('input', { type: 'text', value: e.bon || '', maxLength: 40, placeholder: 'Facultatif' });
@@ -146,12 +152,12 @@ function ouvrirPesee(e) {
   const dlg = h('dialog', { class: 'plan-fusion ext-dialog' }, h('div', { class: 'dialog-body' },
     h('h2', {}, e.id ? 'Modifier la pesée' : 'Pesée d\'un service externe'),
     h('datalist', { id: 'ext-matieres' }, noms.map((n) => h('option', { value: n }))),
-    h('div', { class: 'ext-form' }, champ('Date de l\'enlèvement', date), champ('Matière', matiere), champ('Nombre de bennes', nb), champ('Poids (T)', poids), champ('N° de bon', bon), champ('Commentaire', com)),
+    h('div', { class: 'ext-form' }, champ('Date de l\'enlèvement', date), champ('Matière', matiere), champ(`Nombre de ${M.uniteExterne(e.matiere || noms[0])}`, nb), champ('Poids (T)', poids), champ('N° de bon', bon), champ('Commentaire', com)),
     h('div', { class: 'dialog-actions' }, h('span', { class: 'spacer' }),
       h('button', { class: 'btn ghost', onclick: () => dlg.close() }, 'Annuler'),
       h('button', { class: 'btn primary', onclick: async () => {
         if (!date.value) { toast('Indiquez la date de l\'enlèvement.'); date.focus(); return; }
-        if (nb.value.trim() !== '' && !(Number(nb.value.trim().replace(',', '.')) >= 0)) { toast('Nombre de bennes : un nombre, ex. 2.'); nb.focus(); return; }
+        if (nb.value.trim() !== '' && !(Number(nb.value.trim().replace(',', '.')) >= 0)) { toast('Nombre : un nombre, ex. 2.'); nb.focus(); return; }
         const t = M.parseTonnage(poids.value);
         if (!t.ok) { toast('Poids illisible : ex. 5,540 ou 5,54+4,74.'); poids.focus(); return; }
         try {

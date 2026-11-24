@@ -781,7 +781,7 @@ function renderForm() {
           row.extra ? field(`${base}.nom`, 'text', { placeholder: 'Matière ponctuelle', class: 'extra-name' }) : h('span', {}, row.nom),
           row.extra && !closed ? h('button', { class: 'o-btn rm', title: 'Supprimer cette sortie', 'aria-label': 'Supprimer cette sortie', onclick: () => removeExtraSortie(row.index) }, icon('x', 14)) : null,
           !row.extra && !closed ? h('button', { class: 'o-btn rm mat-rm', title: 'Retirer cette matière pour le site', 'aria-label': `Retirer ${row.nom}`, onclick: () => removeMatiere(row.nom) }, icon('x', 13)) : null)),
-      h('td', {}, field(`${base}.nb`, 'int', { 'data-nb': base, ...(row.nom === 'DEEE' && !row.extra ? { placeholder: 'caisses', title: 'Nombre de caisses sorties' } : {}) })),
+      h('td', {}, field(`${base}.nb`, 'int', { 'data-nb': base, ...(row.externe ? { placeholder: M.uniteExterne(row.nom), title: `Nombre de ${M.uniteExterne(row.nom)} sorties` } : {}) })),
       row.externe ? h('td', { class: 'ext' }, 'service externe') : h('td', {}, tonField(base, row.data))));
     const n = peseeCount(row);
     if (n >= 2) {
@@ -798,7 +798,8 @@ function renderForm() {
       h('tfoot', {}, h('tr', { class: 'total' }, h('td', {}, 'TOTAL'), h('td', { id: 'calc-nb' }), h('td', { id: 'calc-ton' })))),
     closed ? null : h('div', { class: 'absents-foot' },
       h('button', { class: 'btn small', onclick: addMatiere, title: 'Nouvelle matière proposée à chaque service du site' }, icon('plus', 14), 'Matière'),
-      h('button', { class: 'btn small ghost', onclick: addExtraSortie, title: 'Sortie pour ce service seulement (ex. sapins)' }, icon('plus', 14), 'Sortie ponctuelle')),
+      h('button', { class: 'btn small ghost', onclick: addExtraSortie, title: 'Sortie pour ce service seulement (ex. sapins)' }, icon('plus', 14), 'Sortie ponctuelle'),
+      h('button', { class: 'btn small ghost', onclick: addServiceExterne, title: 'Matière enlevée par un service externe : on compte ici, le poids se saisit plus tard (onglet Externes)' }, icon('truck', 14), 'Service externe')),
     quantites.length || !closed ? h('div', { class: 'qte-bloc' },
       h('div', { class: 'qte-titre' }, 'À part', h('span', { class: 'muted' }, ' — à la pièce, sans poids')),
       quantites.length ? h('div', { class: 'qte-liste' }, quantites.map((q) => h('label', { class: 'qte-it' },
@@ -943,7 +944,8 @@ function tonField(base, data) {
 
 function sortieColor(row) {
   if (row.extra) return row.data.couleur ? { couleur: row.data.couleur, mode: 'nom' } : null;
-  const c = Object.prototype.hasOwnProperty.call(S.site.couleurs || {}, row.nom) ? S.site.couleurs[row.nom] : M.COULEURS_DEFAUT[row.nom];
+  // Services externes en vert par défaut (y compris ceux ajoutés par le site).
+  const c = Object.prototype.hasOwnProperty.call(S.site.couleurs || {}, row.nom) ? S.site.couleurs[row.nom] : (M.COULEURS_DEFAUT[row.nom] || (row.externe ? { couleur: '#2f9e44', mode: 'nom' } : null));
   return c && c.couleur ? c : null;
 }
 
@@ -1027,14 +1029,63 @@ async function addMatiere() {
   renderForm();
 }
 
+// Service externe : matière du site comptée ici (bennes, caisses…), pesée plus tard (onglet Externes).
+async function addServiceExterne() {
+  const nom = h('input', { type: 'text', maxLength: 30, placeholder: 'ex. Cartons, Pneus…', id: 'ext-nouveau-nom' });
+  const unite = h('select', { id: 'ext-nouveau-unite' }, ['bennes', 'caisses', 'palettes', 'big-bags', 'pièces'].map((u) => h('option', { value: u }, u)));
+  const dlg = h('dialog', { class: 'plan-fusion' }, h('div', { class: 'dialog-body' },
+    h('h2', {}, 'Ajouter un service externe'),
+    h('p', { class: 'muted' }, 'La matière apparaît dans les sorties de chaque service du site (on y compte les enlèvements) et a son cadre dans l\'onglet Externes, où l\'on saisit le poids quand il arrive.'),
+    h('div', { class: 'ext-form' }, h('label', { class: 'field' }, h('span', {}, 'Matière'), nom), h('label', { class: 'field' }, h('span', {}, 'Compté en'), unite)),
+    h('div', { class: 'dialog-actions' }, h('span', { class: 'spacer' }),
+      h('button', { class: 'btn ghost', onclick: () => dlg.close() }, 'Annuler'),
+      h('button', { class: 'btn primary', onclick: async () => {
+        const n = nom.value.trim().replace(/\./g, ' ');
+        if (!n) { nom.focus(); return; }
+        if (M.estExterne(n)) { toast(`« ${n} » est déjà un service externe.`); return; }
+        let site;
+        try {
+          site = await call(api.loadSite());
+        } catch {
+          site = { ...S.site };
+        }
+        site.externes = [...M.externesDuSite(site), { nom: n, unite: unite.value }];
+        const mats = M.matieresDuSite(site);
+        if (!mats.some((m) => m.toLowerCase() === n.toLowerCase())) site.matieres = [...mats, n];
+        try {
+          S.site = await call(api.saveSite(site));
+          appliquerProfil();
+          dlg.close();
+          toast(`${n} : service externe ajouté (compté en ${unite.value}).`);
+          renderForm();
+        } catch (err) {
+          toast(`Non enregistré : ${err.message}`);
+        }
+      } }, 'Ajouter'))));
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+  nom.focus();
+}
+
 async function removeMatiere(nom) {
   if (await ask('Retirer cette matière ?', `« ${nom} » ne sera plus proposée en sortie sur ce site (les services déjà saisis gardent leurs chiffres).`,
     [{ label: 'Annuler', value: 'no' }, { label: 'Retirer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
   await saveMatieres((list) => list.filter((n) => n !== nom));
+  if (M.estExterne(nom)) {
+    try {
+      const site = await call(api.loadSite());
+      site.externes = M.externesDuSite(site).filter((x) => x.nom !== nom);
+      S.site = await call(api.saveSite(site));
+      appliquerProfil();
+    } catch (err) {
+      toast(`Non enregistré : ${err.message}`);
+    }
+  }
   const s = cur();
   const v = s.sorties[nom];
   if (v && (v.nb != null || v.tonnage != null) && !isLocked(s)) {
-    s.sorties[nom] = M.MATIERES_EXTERNES.includes(nom) ? { nb: null } : { nb: null, tonnage: null, pesees: [] };
+    s.sorties[nom] = { nb: null, tonnage: null, pesees: [] };
     markDirty();
   }
   renderForm();
@@ -1339,7 +1390,7 @@ function onFormChange(e) {
   if (cacaActif && el.dataset && el.dataset.type === 'pct' && /^bennes\./.test(el.dataset.bind || '') && el.value.trim() && !el.readOnly) cacaTombe(el);
   if (!el.dataset || !(el.dataset.nb || el.dataset.type === 'tonexpr')) return;
   const base = el.dataset.nb || el.dataset.bind.replace(/\.tonnage$/, '');
-  if (base.startsWith('sorties.') && M.MATIERES_EXTERNES.includes(base.split('.')[1])) return;
+  if (base.startsWith('sorties.') && M.estExterne(base.split('.')[1])) return;
   const wanted = peseeCount({ externe: false, data: getPath(cur(), base) });
   const shown = document.querySelectorAll(`#form [data-bind^="${base}.pesees."]`).length;
   // Différé : on laisse le focus arriver sur le champ cliqué avant de redessiner.
@@ -2101,7 +2152,7 @@ async function renderRecap() {
       h('div', { class: 'recap-side' },
         h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('upload', 16)), 'Sorties par matière'),
           h('div', { class: 'card-body' }, matieres.map((m) => {
-            const ext = M.MATIERES_EXTERNES.includes(m);
+            const ext = M.estExterne(m);
             const ratio = ext ? parMatiere[m].nb / maxNb : parMatiere[m].tonnage / maxTon;
             return h('div', { class: 'matiere-row' }, h('span', { title: ponctuelles.has(m) ? 'Sortie ponctuelle' : '' }, m, ponctuelles.has(m) ? '*' : ''),
               h('div', { class: 'bar' }, h('i', { style: { width: `${Math.round(ratio * 100)}%` } })),

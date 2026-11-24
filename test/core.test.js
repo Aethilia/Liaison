@@ -683,3 +683,16 @@ test('planning : distribution de gants (accès, distributions, annulation)', () 
   assert.throws(() => p.distribuerGants('ag1', 'chaussettes', '2026-11-06', 'Paul'));
   assert.equal(p.annulerGants(g.distributions.find((x) => x.type === 'fourres').id).distributions.length, 0);
 });
+
+test('sorties : services externes du site (ajout, unité, retrait)', () => {
+  assert.deepEqual(M.externesDuSite({}).map((x) => `${x.nom}:${x.unite}`), ['Bois:bennes', 'Matelas:bennes', 'DEEE:caisses']);
+  const site = { matieres: ['Fer', 'DIB'], externes: [{ nom: 'Bois', unite: 'bennes' }, { nom: 'Cartons', unite: 'palettes' }] };
+  assert.deepEqual(M.matieresDuSite(site), ['Fer', 'DIB', 'Bois', 'Cartons']);
+  assert.equal(M.estExterne('Cartons', site), true);
+  assert.equal(M.estExterne('Matelas', site), false);
+  assert.equal(M.uniteExterne('Cartons', site), 'palettes');
+  const s = M.normalize({ sorties: { Cartons: { nb: 3 } } }, '2026-11-02', 'matin');
+  assert.equal(M.allSorties(s, site).find((r) => r.nom === 'Cartons').externe, true);
+  const st = M.stats([{ date: s.date, services: { matin: s } }], undefined, site);
+  assert.equal(st.matieres.find((m) => m.nom === 'Cartons').externe, true);
+});
