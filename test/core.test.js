@@ -674,8 +674,12 @@ test('planning : distribution de gants (accès, distributions, annulation)', () 
   assert.deepEqual(p.loadGants(), { autorises: [], distributions: [] });
   assert.deepEqual(p.autoriserGants('Paul', true).autorises, ['Paul']);
   assert.deepEqual(p.autoriserGants('Paul', false).autorises, []);
+  p.distribuerGants('ag1', 'fourres', '2026-10-06', 'Paul');
+  p.distribuerGants('ag1', 'pluie', '2026-10-07', 'Paul');
+  // Pas d'historique : la nouvelle distribution du même type remplace l'ancienne.
   const g = p.distribuerGants('ag1', 'fourres', '2026-11-06', 'Paul');
-  assert.equal(g.distributions.length, 1);
+  assert.deepEqual(g.distributions.map((x) => [x.type, x.date]).sort(), [['fourres', '2026-11-06'], ['pluie', '2026-10-07']]);
+  p.annulerGants(g.distributions.find((x) => x.type === 'pluie').id);
   assert.throws(() => p.distribuerGants('ag1', 'chaussettes', '2026-11-06', 'Paul'));
-  assert.equal(p.annulerGants(g.distributions[0].id).distributions.length, 0);
+  assert.equal(p.annulerGants(g.distributions.find((x) => x.type === 'fourres').id).distributions.length, 0);
 });

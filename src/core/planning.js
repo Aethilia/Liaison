@@ -67,15 +67,22 @@ function nettoyerConfig(c) {
   return { dimanches: { debut, fin } };
 }
 
-// Distribution de gants : qui y a accès (noms d'utilisateurs) et l'historique
-// des distributions { id, agentId, type, date, par, le }.
+// Distribution de gants : qui y a accès (noms d'utilisateurs) et, pour chaque
+// agent et chaque type, la dernière distribution { id, agentId, type, date, par, le }
+// (pas d'historique : une nouvelle distribution remplace la précédente).
 const TYPES_GANTS = ['pluie', 'fourres', 'gants'];
 function nettoyerGants(g) {
   const autorises = [...new Set((Array.isArray(g && g.autorises) ? g.autorises : []).map((n) => String(n || '').trim()).filter(Boolean))];
   const distributions = (Array.isArray(g && g.distributions) ? g.distributions : [])
     .filter((x) => x && x.id && x.agentId && TYPES_GANTS.includes(x.type) && ISO.test(x.date || ''))
     .map((x) => ({ id: String(x.id), agentId: String(x.agentId), type: x.type, date: x.date, par: String(x.par || ''), le: String(x.le || '') }));
-  return { autorises, distributions };
+  const derniere = new Map();
+  for (const x of distributions) {
+    const k = `${x.agentId}|${x.type}`;
+    const y = derniere.get(k);
+    if (!y || x.date > y.date || (x.date === y.date && x.le > y.le)) derniere.set(k, x);
+  }
+  return { autorises, distributions: [...derniere.values()] };
 }
 
 function nettoyerCouleursRoles(c) {
@@ -187,6 +194,7 @@ class Planning {
   distribuerGants(agentId, type, date, par) {
     if (!TYPES_GANTS.includes(type) || !ISO.test(date || '')) throw new Error('Distribution invalide.');
     return this.majGants((g) => {
+      g.distributions = g.distributions.filter((x) => !(x.agentId === agentId && x.type === type));
       g.distributions.push({ id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, agentId, type, date, par, le: new Date().toISOString() });
     });
   }

@@ -809,9 +809,17 @@ const GANTS = [
 ];
 function vueGants() {
   const g = planState.gants;
-  const annee = aujourdhui().slice(0, 4);
-  const derniere = (agentId, type) => g.distributions.filter((x) => x.agentId === agentId && x.type === type).sort((a, b) => b.date.localeCompare(a.date) || b.le.localeCompare(a.le))[0];
-  const nbAnnee = (agentId, type) => g.distributions.filter((x) => x.agentId === agentId && x.type === type && x.date.startsWith(annee)).length;
+  const derniere = (agentId, type) => g.distributions.find((x) => x.agentId === agentId && x.type === type);
+  const effacer = async (agent, x) => {
+    const t = GANTS.find((y) => y.id === x.type);
+    if (await ask('Effacer cette date ?', `${t.label} du ${fmtCourt(x.date)} pour ${agent.nom}.`, [{ label: 'Non', value: 'no' }, { label: 'Effacer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
+    try {
+      planState.gants = await call(api.planGantsAnnuler(x.id));
+      renderPlanning({ reload: false });
+    } catch (err) {
+      toast(err.message);
+    }
+  };
   const distribuer = async (agent, type, date) => {
     try {
       planState.gants = await call(api.planGantsDistribuer(agent.id, type, date, S.user));
@@ -830,16 +838,16 @@ function vueGants() {
     const type = h('select', { class: 'gt-type', 'aria-label': `Type de gants pour ${a.nom}` }, GANTS.map((t) => h('option', { value: t.id }, t.label)));
     const date = h('input', { type: 'date', class: 'gt-date', value: aujourdhui(), max: aujourdhui(), 'aria-label': 'Date de distribution' });
     return h('tr', { class: 'gt-ligne' },
-      h('th', { onclick: () => historiqueGants(a), title: 'Historique des distributions' }, a.nom),
+      h('th', {}, a.nom),
       GANTS.map((t) => {
         const d = derniere(a.id, t.id);
-        const n = nbAnnee(a.id, t.id);
-        return h('td', { class: 'gt-cell' }, d ? [h('b', { style: { color: t.couleur } }, fmtCourt(d.date)), n ? h('small', {}, ` · ${n} en ${annee}`) : null] : h('span', { class: 'muted' }, '—'));
+        return h('td', { class: 'gt-cell' }, d ? [h('b', { style: { color: t.couleur } }, fmtCourt(d.date)),
+          h('button', { class: 'o-btn rm gt-effacer', title: 'Effacer cette date (erreur de saisie)', 'aria-label': `Effacer ${t.label} de ${a.nom}`, onclick: () => effacer(a, d) }, icon('x', 12))] : h('span', { class: 'muted' }, '—'));
       }),
       h('td', { class: 'gt-action' }, type, date,
         h('button', { class: 'btn small primary', onclick: () => { if (date.value) distribuer(a, type.value, date.value); } }, icon('check', 13), 'Distribuer')));
   });
-  // Journal du service : à qui, quel jour, quels gants (le plus récent en haut).
+  // Dernières distributions du service : à qui, quel jour, quels gants (le plus récent en haut).
   const ids = new Set(agents.map((a) => a.id));
   const parJour = new Map();
   for (const x of g.distributions.filter((y) => ids.has(y.agentId)).sort((p, q) => q.date.localeCompare(p.date) || q.le.localeCompare(p.le))) {
@@ -848,7 +856,7 @@ function vueGants() {
   }
   const jourLong = (iso) => new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(M.parseISODate(iso));
   const journal = h('div', { class: 'card gt-journal', style: eq ? { '--eq': eq.couleur() } : null },
-    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('list', 16)), `Distributions · ${eq ? eq.label : ''}`),
+    h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('list', 16)), `Dernières distributions · ${eq ? eq.label : ''}`),
     h('div', { class: 'card-body' }, parJour.size ? [...parJour].map(([d, xs]) => h('div', { class: 'gt-jour' },
       h('div', { class: 'gt-jour-date' }, jourLong(d)),
       xs.map((x) => {
@@ -862,38 +870,11 @@ function vueGants() {
     h('div', { class: 'gt-grille' },
       h('div', { class: 'card plan-synthese' },
         h('div', { class: 'card-head' }, h('span', { class: 'ch-icon' }, icon('hand', 16)), `Distribution de gants · ${eq ? eq.label : ''}`,
-          h('span', { class: 'hint' }, 'Dernière date par type · cliquer sur un nom pour son historique')),
+          h('span', { class: 'hint' }, 'Une date par type : une nouvelle distribution remplace la précédente')),
         h('div', { class: 'card-body plan-scroll' }, h('table', { class: 'grid syn-table gt-table' },
           h('thead', {}, h('tr', {}, h('th', {}, 'Agent'), GANTS.map((t) => h('th', {}, h('span', { class: 'gt-pastille', style: { background: t.couleur } }), t.label)), h('th', {}, 'Distribuer'))),
           h('tbody', {}, lignes)))),
       journal));
-}
-
-function historiqueGants(agent) {
-  const liste = () => planState.gants.distributions.filter((x) => x.agentId === agent.id).sort((a, b) => b.date.localeCompare(a.date) || b.le.localeCompare(a.le));
-  const corps = h('div', { class: 'gt-histo' });
-  const remplir = () => corps.replaceChildren(...(liste().length ? liste().map((x) => {
-    const t = GANTS.find((y) => y.id === x.type);
-    return h('div', { class: 'gt-histo-ligne' }, h('span', { class: 'gt-pastille', style: { background: t.couleur } }), h('b', {}, fmtCourt(x.date)), h('span', {}, t.label),
-      x.par ? h('small', { class: 'muted' }, `par ${x.par}`) : null, h('span', { class: 'spacer' }),
-      h('button', { class: 'o-btn rm', title: 'Annuler cette distribution', onclick: async () => {
-        if (await ask('Annuler cette distribution ?', `${t.label} du ${fmtCourt(x.date)} pour ${agent.nom}.`, [{ label: 'Non', value: 'no' }, { label: 'Annuler la distribution', value: 'yes', cls: 'danger' }]) !== 'yes') return;
-        try {
-          planState.gants = await call(api.planGantsAnnuler(x.id));
-          remplir();
-          renderPlanning({ reload: false });
-        } catch (err) {
-          toast(err.message);
-        }
-      } }, icon('x', 13)));
-  }) : [h('p', { class: 'muted' }, 'Aucune distribution.')]));
-  remplir();
-  const dlg = h('dialog', { class: 'plan-detail' }, h('div', { class: 'dialog-body' },
-    h('h2', {}, 'Gants', h('small', { class: 'muted' }, ` · ${agent.nom}`)), corps,
-    h('div', { class: 'dialog-actions' }, h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: () => dlg.close() }, 'Fermer'))));
-  dlg.addEventListener('close', () => dlg.remove());
-  document.body.append(dlg);
-  dlg.showModal();
 }
 
 // Heures supp de l'année par agent, face au plafond annuel.

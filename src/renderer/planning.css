@@ -421,3 +421,6 @@ tr.an-depasse th { color: #e03131; }
 .gt-jour-ligne { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; }
 .gt-jour-ligne b { min-width: 120px; }
 @media (max-width: 1100px) { .gt-grille { grid-template-columns: 1fr; } }
+.gt-cell { white-space: nowrap; }
+.gt-effacer { display: inline-grid; margin-left: 4px; opacity: 0; vertical-align: middle; }
+.gt-ligne:hover .gt-effacer, .gt-effacer:focus-visible { opacity: 1; }

@@ -122,7 +122,7 @@
     planSaveConfig: (c) => { plan.config = c; return ok(c); },
     planGants: () => ok(plan.gants || (plan.gants = { autorises: [], distributions: [] })),
     planGantsAutoriser: (nom, oui) => { const g = plan.gants || (plan.gants = { autorises: [], distributions: [] }); g.autorises = g.autorises.filter((n) => n !== nom).concat(oui ? [nom] : []); return ok(g); },
-    planGantsDistribuer: (agentId, type, date, par) => { const g = plan.gants || (plan.gants = { autorises: [], distributions: [] }); g.distributions.push({ id: `g${g.distributions.length}${Date.now()}`, agentId, type, date, par: par || 'Pont-bascule' }); return ok(g); },
+    planGantsDistribuer: (agentId, type, date, par) => { const g = plan.gants || (plan.gants = { autorises: [], distributions: [] }); g.distributions = g.distributions.filter((x) => !(x.agentId === agentId && x.type === type)); g.distributions.push({ id: `g${g.distributions.length}${Date.now()}`, agentId, type, date, par: par || 'Pont-bascule' }); return ok(g); },
     planGantsAnnuler: (id) => { plan.gants.distributions = plan.gants.distributions.filter((x) => x.id !== id); return ok(plan.gants); },
     planRoles: () => ok(plan.rolesCouleurs || {}),
     planSaveRoles: (c) => { plan.rolesCouleurs = c; return ok(c); },
