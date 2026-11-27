@@ -867,30 +867,8 @@ function renderForm() {
       S.prev && S.prev.stockage.length ? h('button', { class: 'btn small ghost', onclick: takeOverStockage }, 'Reprendre le service précédent') : null),
   ], { hint: 'Ex. Benne Fer · 2 · Vide' });
 
-  // Commandes : saisies par le matin, affichées en information aux autres services.
-  let commandes;
-  if (s.service === M.SERVICE_COMMANDES) {
-    const cmdRows = s.commandes.map((x, i) => {
-      const base = `commandes.${i}`;
-      return h('div', { class: `cmd-row${x.recue ? ' recue' : ''}` },
-        field(`${base}.quoi`, 'text', { placeholder: 'Quoi (article, benne…)', 'data-cmd': String(i) }),
-        field(`${base}.quantite`, 'text', { placeholder: 'Qté' }),
-        field(`${base}.fournisseur`, 'text', { placeholder: 'Fournisseur' }),
-        field(`${base}.date`, 'text', { type: 'date', 'aria-label': 'Date prévue' }),
-        h('label', { class: 'cmd-recue', title: 'Commande reçue' }, h('input', { type: 'checkbox', checked: x.recue, disabled: closed, onchange: (e) => { x.recue = e.target.checked; markDirty(); renderForm(); } }), 'Reçue'),
-        closed ? h('span') : h('button', { class: 'o-btn rm', title: 'Supprimer cette commande', 'aria-label': 'Supprimer cette commande', onclick: () => removeCommande(i) }, icon('trash', 15)));
-    });
-    commandes = card('Commandes', 'send', [
-      cmdRows.length ? h('div', { class: 'cmd-list' }, cmdRows) : h('div', { class: 'empty' }, 'Aucune commande.'),
-      closed ? null : h('div', { class: 'absents-foot' }, h('button', { class: 'btn small', onclick: addCommande }, icon('plus', 14), 'Ajouter une commande')),
-    ], { wide: true, hint: `Affichées en information ${M.SERVICES.filter((d) => d.id !== M.SERVICE_COMMANDES).map((d) => ({ apresmidi: 'à l\'après-midi', nuit: d.label === 'Soir' ? 'au soir' : 'à la nuit' })[d.id]).join(' et ')}` });
-  } else {
-    const m = S.data[M.SERVICE_COMMANDES];
-    const list = m ? m.commandes.filter((x) => x.quoi || x.quantite || x.fournisseur) : [];
-    commandes = list.length ? card(`Commandes du jour (${list.length})`, 'send', commandesView(list), { wide: true, cls: 'info-card', hint: `Saisies par le ${SVC[M.SERVICE_COMMANDES].label.toLowerCase()}` }) : null;
-  }
-
-  $('#form').replaceChildren(...[banner, closedNote, obs, taches, s.service === M.SERVICE_COMMANDES ? null : commandes, motifs, absents, entrees, sorties, boxs, nonConformes, stockage, s.service === M.SERVICE_COMMANDES ? commandes : null].filter(Boolean));
+  // Commandes : plus de carte dans la saisie, elles se saisissent dans la pastille « Commandes » en haut.
+  $('#form').replaceChildren(...[banner, closedNote, obs, taches, motifs, absents, entrees, sorties, boxs, nonConformes, stockage].filter(Boolean));
   $('#form').querySelectorAll('textarea').forEach(fitTextarea);
   $('#form').querySelectorAll('[data-agent]').forEach((input) => Suggest.attach(input, {
     items: () => S.agents.map((a) => ({ label: a })),
@@ -1218,22 +1196,7 @@ async function takeOverStockage() {
   markDirty();
 }
 
-function addCommande() {
-  cur().commandes.push({ quoi: '', quantite: '', fournisseur: '', date: S.date, recue: false });
-  renderForm();
-  markDirty();
-  const inputs = document.querySelectorAll('#form [data-cmd]');
-  if (inputs.length) inputs[inputs.length - 1].focus();
-}
 
-async function removeCommande(i) {
-  const x = cur().commandes[i];
-  if (x.quoi && await ask('Supprimer cette commande ?', `« ${x.quoi} » sera retirée.`,
-    [{ label: 'Annuler', value: 'no' }, { label: 'Supprimer', value: 'yes', cls: 'danger' }]) !== 'yes') return;
-  cur().commandes.splice(i, 1);
-  renderForm();
-  markDirty();
-}
 
 const fmtCmdDate = (d) => (d ? M.parseISODate(d).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '');
 const cmdText = (x) => [x.quantite, x.quoi].filter(Boolean).join(' × ') + (x.fournisseur ? ` — ${x.fournisseur}` : '') + (x.date ? ` (${fmtCmdDate(x.date)})` : '');

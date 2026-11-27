@@ -1,7 +1,8 @@
 'use strict';
 
-// Pastilles « Tâches » et « Commandes » de la saisie, propres à chaque service
-// (le matin ne voit que les siennes, etc.). Rangées dans <données>/notes-service/,
+// Pastilles « Tâches » et « Commandes » de la saisie : les tâches sont propres à
+// chaque service (le matin ne voit que les siennes) ; les commandes, une fois
+// saisies, sont vues par tous les services (le service qui l'a saisie est noté). Rangées dans <données>/notes-service/,
 // un fichier par entrée pour que plusieurs postes écrivent en même temps.
 //  - tâche : { type: 'tache', service, texte, creePar, creeLe, validePar, valideLe }
 //  - commande : { type: 'commande', service, matiere, date, etat, creePar, creeLe, majPar, majLe }
@@ -55,11 +56,11 @@ class NotesService {
     return out;
   }
 
-  // Tâches en cours et dernières validées, commandes (toutes, plus récentes d'abord), d'un service.
+  // Tâches en cours et dernières validées du service ; commandes de tous les services (plus récentes d'abord).
   list(service, recents = 5) {
-    const miens = this.tout().filter((m) => m.service === service);
-    const taches = miens.filter((m) => m.type === 'tache');
-    const commandes = miens.filter((m) => m.type === 'commande')
+    const tout = this.tout();
+    const taches = tout.filter((m) => m.type === 'tache' && m.service === service);
+    const commandes = tout.filter((m) => m.type === 'commande')
       .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.creeLe).localeCompare(String(a.creeLe)));
     return {
       taches: taches.filter((m) => !m.valideLe).sort((a, b) => String(b.creeLe).localeCompare(String(a.creeLe))),

@@ -712,7 +712,9 @@ test('tâches et commandes par service', () => {
   assert.equal(c.etat, 'a-faire');
   n.etatCommande(c.id, 'non-realisee', 'Sophie');
   assert.deepEqual(n.list('matin').commandes.map((x) => [x.matiere, x.etat]), [['Gants', 'a-faire'], ['Big-bags', 'non-realisee']]);
-  assert.equal(n.list('apresmidi').commandes.length, 0);
+  // Les commandes saisies par le matin sont vues par l'après-midi et la nuit.
+  assert.equal(n.list('apresmidi').commandes.length, 2);
+  assert.equal(n.list('nuit').taches.map((x) => x.texte)[0], 'Fermer le portail');
   assert.throws(() => n.etatCommande(c.id, 'perdue', 'Paul'));
   assert.throws(() => n.ajouterCommande('matin', { matiere: '', date: '2026-11-20' }, 'Paul'));
   n.supprimer(c.id);
