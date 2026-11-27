@@ -826,3 +826,7 @@ dialog.ext-dialog { width: min(560px, 94vw); }
 .nsv-etat.on.faite { background: #e6f4ea; color: #1f7a3f; }
 .nsv-etat.on.nonrea { background: #fdecea; color: #b42318; }
 .nsv-zone .imp-pop { right: auto; left: 0; }
+.nsv-ajout-cmd { flex-wrap: wrap; }
+.nsv-ajout-cmd select { flex: 1; min-width: 120px; }
+.nsv-ajout-cmd .nsv-nb { flex: 0 0 56px; text-align: center; }
+.nsv-ajout-cmd input[type=text] { flex: 1 1 120px; }

@@ -707,7 +707,9 @@ test('tâches et commandes par service', () => {
   n.validerTache(t.id, 'Paul');
   assert.equal(n.list('matin').taches.length, 0);
   assert.equal(n.list('matin').tachesValidees.length, 1);
-  const c = n.ajouterCommande('matin', { matiere: 'Big-bags', date: '2026-11-20' }, 'Paul');
+  const c = n.ajouterCommande('matin', { matiere: 'Big-bags', date: '2026-11-20', nb: 2 }, 'Paul');
+  assert.equal(c.nb, 2);
+  assert.throws(() => n.ajouterCommande('matin', { matiere: 'Bois', date: '2026-11-20', nb: 0 }, 'Paul'));
   n.ajouterCommande('matin', { matiere: 'Gants', date: '2026-11-25' }, 'Paul');
   assert.equal(c.etat, 'a-faire');
   n.etatCommande(c.id, 'non-realisee', 'Sophie');

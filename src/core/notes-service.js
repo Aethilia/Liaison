@@ -5,7 +5,7 @@
 // saisies, sont vues par tous les services (le service qui l'a saisie est noté). Rangées dans <données>/notes-service/,
 // un fichier par entrée pour que plusieurs postes écrivent en même temps.
 //  - tâche : { type: 'tache', service, texte, creePar, creeLe, validePar, valideLe }
-//  - commande : { type: 'commande', service, matiere, date, etat, creePar, creeLe, majPar, majLe }
+//  - commande de bennes : { type: 'commande', service, matiere, nb, date, etat, creePar, creeLe, majPar, majLe }
 //    etat : 'a-faire' | 'faite' | 'non-realisee' (on garde tout : historique)
 
 const fs = require('fs');
@@ -82,12 +82,14 @@ class NotesService {
     return this.ecrire({ ...m, validePar: by || '', valideLe: new Date().toISOString() });
   }
 
-  ajouterCommande(service, { matiere, date } = {}, by) {
+  ajouterCommande(service, { matiere, date, nb } = {}, by) {
     if (!SERVICE.test(service || '')) throw new Error('Service inconnu.');
     const mat = String(matiere || '').replace(/\s+/g, ' ').trim().slice(0, 80);
     if (!mat) throw new Error('Indiquez la matière commandée.');
     if (!ISO.test(date || '')) throw new Error('Date de commande invalide.');
-    return this.ecrire({ id: newId(), type: 'commande', service, matiere: mat, date, etat: 'a-faire', creePar: by || '', creeLe: new Date().toISOString(), majPar: '', majLe: null });
+    const n = Math.round(Number(nb ?? 1));
+    if (!(n >= 1 && n <= 99)) throw new Error('Nombre de bennes : de 1 à 99.');
+    return this.ecrire({ id: newId(), type: 'commande', service, matiere: mat, nb: n, date, etat: 'a-faire', creePar: by || '', creeLe: new Date().toISOString(), majPar: '', majLe: null });
   }
 
   etatCommande(id, etat, by) {

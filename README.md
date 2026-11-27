@@ -319,7 +319,7 @@ récemment »). Fichiers dans `<données>/importants/`.
 À côté, deux pastilles :
 - **Tâches** : comme Important (ajouter, valider), mais propres au service
   affiché (le matin ne voit que les siennes, etc.).
-- **Commandes** : historique des commandes (matière, date de la commande) avec
+- **Commandes de bennes** : historique (nombre de bennes, matière du site ou « Autre… » à préciser, date de la commande) avec
   leur état : à faire, faite, non réalisée (la pastille compte celles à faire).
   Une fois saisies, elles sont vues par tous les services (le service qui l'a
   saisie est indiqué). Elles remplacent l'ancienne carte « Commandes » du matin.

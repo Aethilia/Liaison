@@ -44,12 +44,12 @@ async function renderNotesService() {
   const enfants = [
     h('button', { class: `imp-pill nsv-pill nsv-taches${nT ? ' actif' : ''}`, title: 'Tâches de ce service (visibles par ce service seulement)', 'aria-expanded': String(nsvState.ouvert === 'taches'), onclick: basculer('taches') },
       icon('checkSquare', 13), nT ? `${nT} ${nT > 1 ? 'tâches' : 'tâche'}` : 'Tâches'),
-    h('button', { class: `imp-pill nsv-pill nsv-cmd${nC ? ' actif' : ''}`, title: 'Commandes (vues par tous les services) : à faire, faites, non réalisées', 'aria-expanded': String(nsvState.ouvert === 'commandes'), onclick: basculer('commandes') },
+    h('button', { class: `imp-pill nsv-pill nsv-cmd${nC ? ' actif' : ''}`, title: 'Commandes de bennes (vues par tous les services) : à faire, faites, non réalisées', 'aria-expanded': String(nsvState.ouvert === 'commandes'), onclick: basculer('commandes') },
       icon('box', 13), nC ? `${nC} ${nC > 1 ? 'commandes' : 'commande'} à faire` : 'Commandes'),
   ];
   const svc = (M.SERVICES.find((d) => d.id === S.service) || {}).label || '';
   if (nsvState.ouvert === 'taches') enfants.push(popTaches(svc));
-  if (nsvState.ouvert === 'commandes') enfants.push(popCommandes(svc));
+  if (nsvState.ouvert === 'commandes') enfants.push(popCommandes());
   zone.replaceChildren(...enfants);
 }
 
@@ -79,21 +79,26 @@ function popTaches(svc) {
       nsvState.tachesValidees.map((m) => h('div', { class: 'imp-it fait' }, h('p', {}, m.texte, h('small', {}, `validée par ${m.validePar || '?'} · ${impQuand(m.valideLe)}`))))) : null);
 }
 
-function popCommandes(svc) {
+function popCommandes() {
   const auj = new Date().toLocaleDateString('fr-CA');
-  const deja = [...new Set(nsvState.commandes.map((c) => c.matiere))];
-  const matiere = h('input', { type: 'text', placeholder: 'Matière commandée (ex. Big-bags)', maxLength: 80, list: 'nsv-matieres' });
+  // Commandes de bennes : matières du site (services externes compris), ou « Autre » à écrire.
+  const mats = [...new Set([...M.matieresDuSite(), ...M.externesDuSite().map((x) => x.nom)])];
+  const choix = h('select', { 'aria-label': 'Matière de la benne', id: 'nsv-cmd-matiere' },
+    h('option', { value: '' }, 'Matière…'), mats.map((m) => h('option', { value: m }, m)), h('option', { value: '__autre' }, 'Autre…'));
+  const autre = h('input', { type: 'text', placeholder: 'Préciser', maxLength: 80, hidden: true, 'aria-label': 'Autre commande' });
+  choix.addEventListener('change', () => { autre.hidden = choix.value !== '__autre'; if (!autre.hidden) autre.focus(); });
+  const nb = h('input', { type: 'number', min: 1, max: 99, value: 1, class: 'nsv-nb', 'aria-label': 'Nombre de bennes', title: 'Nombre de bennes' });
   const date = h('input', { type: 'date', value: auj, 'aria-label': 'Date de la commande' });
   const ajouter = () => {
-    const m = matiere.value.trim();
-    if (!m) { matiere.focus(); return; }
-    nsvAction(api.nsvAjouterCommande(S.service, { matiere: m, date: date.value || auj }, S.user), 'Commande ajoutée.');
+    const m = choix.value === '__autre' ? autre.value.trim() : choix.value;
+    if (!m) { (choix.value === '__autre' ? autre : choix).focus(); return; }
+    nsvAction(api.nsvAjouterCommande(S.service, { matiere: m, nb: Number(nb.value) || 1, date: date.value || auj }, S.user), 'Commande ajoutée.');
   };
-  matiere.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ajouter(); } });
+  autre.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ajouter(); } });
   const ligne = (c) => {
     const etat = ETATS_CMD.find((x) => x.id === c.etat) || ETATS_CMD[0];
     return h('div', { class: `nsv-cmd-it ${etat.cls}` },
-      h('div', { class: 'nsv-cmd-txt' }, h('b', {}, c.matiere),
+      h('div', { class: 'nsv-cmd-txt' }, h('b', {}, `${c.nb > 1 ? `${c.nb} bennes · ` : ''}${c.matiere}`),
         h('small', {}, `${c.service !== S.service && SVC[c.service] ? `${SVC[c.service].label} · ` : ''}commandée le ${fmtShortDate(c.date)}${c.majLe ? ` · ${etat.label.toLowerCase()} (${c.majPar || '?'}, ${impQuand(c.majLe)})` : ` · ${c.creePar || '?'}`}`)),
       h('div', { class: 'nsv-etats', role: 'group', 'aria-label': `État de la commande ${c.matiere}` }, ETATS_CMD.map((x) => h('button', {
         class: `nsv-etat ${x.cls}${x.id === c.etat ? ' on' : ''}`, 'aria-pressed': String(x.id === c.etat),
@@ -102,9 +107,8 @@ function popCommandes(svc) {
       h('button', { class: 'o-btn rm', title: 'Supprimer (erreur de saisie)', onclick: () => nsvAction(api.nsvSupprimer(c.id), 'Commande supprimée.') }, icon('x', 12)));
   };
   return h('div', { class: 'imp-pop nsv-pop nsv-pop-cmd', onclick: (e) => e.stopPropagation() },
-    h('div', { class: 'nsv-titre' }, 'Commandes', h('small', {}, 'historique · vu par tous les services')),
-    h('datalist', { id: 'nsv-matieres' }, [...new Set([...deja, ...M.matieresDuSite()])].map((n) => h('option', { value: n }))),
-    h('div', { class: 'imp-ajout nsv-ajout-cmd' }, matiere, date, h('button', { class: 'btn small primary', onclick: ajouter }, icon('plus', 13), 'Ajouter')),
+    h('div', { class: 'nsv-titre' }, 'Commandes de bennes', h('small', {}, 'historique · vu par tous les services')),
+    h('div', { class: 'imp-ajout nsv-ajout-cmd' }, nb, choix, autre, date, h('button', { class: 'btn small primary', onclick: ajouter }, icon('plus', 13), 'Ajouter')),
     nsvState.commandes.length ? h('div', { class: 'nsv-cmd-liste' }, nsvState.commandes.map(ligne)) : h('p', { class: 'muted imp-vide' }, 'Aucune commande pour ce service.'));
 }
 
