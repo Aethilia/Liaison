@@ -681,6 +681,7 @@ function renderSaisie() {
   renderConflict();
   renderForm();
   renderPassation();
+  renderNotesService(); // tâches et commandes du service affiché
 }
 
 function renderForm() {
@@ -1947,6 +1948,7 @@ function setView(view, { silent = false } = {}) {
   $('#view-externes').hidden = view !== 'externes';
   document.querySelector('.toolbar').hidden = ['inventaire', 'planning', 'externes'].includes(view); // dates et exports sans objet
   renderImportants();
+  renderNotesService();
   if (view !== 'planning') lacherPinceau();
   if (silent) return;
   if (view === 'inventaire') renderInventaire();
@@ -1987,6 +1989,7 @@ async function poll() {
   }
   if (Date.now() - invState.loadedAt > 60000) loadInventaire();
   if (S.view === 'saisie' && !impState.ouvert && await loadImportants()) renderImportants();
+  if (S.view === 'saisie' && !nsvState.ouvert && await loadNotesService()) renderNotesService();
   if (S.view !== 'saisie' || S.saving || $('#fiche').open) return;
   synchroAbsentsPlanning();
   let revs;
@@ -3087,6 +3090,8 @@ async function loadSiteData() {
   majBadgeExternes();
   await loadImportants();
   renderImportants();
+  await loadNotesService();
+  renderNotesService();
 }
 
 /* ---------- Démarrage ---------- */

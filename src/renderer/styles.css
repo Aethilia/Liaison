@@ -799,3 +799,30 @@ dialog.ext-dialog { width: min(560px, 94vw); }
 .ext-pastille { width: 11px; height: 11px; border-radius: 50%; background: var(--mc); flex: none; }
 .ext-cadre .ext-add { margin-left: 8px; }
 .ext-aide { margin: 4px 2px 0; font-size: 12.5px; }
+/* Tâches et commandes du service (à côté d'« Important ») */
+.nsv-zone { gap: 6px; }
+.nsv-taches.actif { background: #e7f1fb; color: #1c5d99; border: 1px solid #b6d4f2; }
+.nsv-taches:hover { color: #1c5d99; border-color: #b6d4f2; }
+.nsv-cmd.actif { background: #fff4e6; color: #b35c00; border: 1px solid #ffd8a8; }
+.nsv-cmd:hover { color: #b35c00; border-color: #ffd8a8; }
+.nsv-titre { display: flex; align-items: baseline; gap: 8px; font-weight: 800; font-size: 13.5px; padding: 2px 8px 8px; color: var(--text, #1e293b); }
+.nsv-titre small { font-weight: 500; color: #64748b; font-size: 11.5px; }
+.nsv-pop-cmd { width: 470px; }
+.nsv-ajout-cmd { margin-top: 0; padding-top: 0; border-top: 0; padding-bottom: 8px; border-bottom: 1px solid #eef1f5; }
+.nsv-ajout-cmd input[type=date] { flex: 0 0 140px; }
+.nsv-cmd-liste { max-height: 340px; overflow: auto; display: flex; flex-direction: column; }
+.nsv-cmd-it { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 10px; border-left: 3px solid var(--ec); }
+.nsv-cmd-it + .nsv-cmd-it { margin-top: 2px; }
+.nsv-cmd-it.afaire { --ec: #f08c00; }
+.nsv-cmd-it.faite { --ec: #2f9e44; }
+.nsv-cmd-it.nonrea { --ec: #e03131; }
+.nsv-cmd-it.faite b, .nsv-cmd-it.nonrea b { color: #64748b; }
+.nsv-cmd-txt { flex: 1; min-width: 0; }
+.nsv-cmd-txt b { display: block; font-size: 13px; }
+.nsv-cmd-txt small { color: #64748b; font-size: 11.5px; }
+.nsv-etats { display: inline-flex; background: #f1f4f8; border-radius: 8px; padding: 2px; flex: none; }
+.nsv-etat { border: 0; background: none; font: inherit; font-size: 11.5px; font-weight: 700; color: #64748b; padding: 4px 7px; border-radius: 6px; cursor: pointer; }
+.nsv-etat.on.afaire { background: #fff4e6; color: #b35c00; }
+.nsv-etat.on.faite { background: #e6f4ea; color: #1f7a3f; }
+.nsv-etat.on.nonrea { background: #fdecea; color: #b42318; }
+.nsv-zone .imp-pop { right: auto; left: 0; }

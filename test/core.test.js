@@ -696,3 +696,25 @@ test('sorties : services externes du site (ajout, unité, retrait)', () => {
   const st = M.stats([{ date: s.date, services: { matin: s } }], undefined, site);
   assert.equal(st.matieres.find((m) => m.nom === 'Cartons').externe, true);
 });
+
+test('tâches et commandes par service', () => {
+  const { NotesService } = require('../src/core/notes-service');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'liaison-nsv-'));
+  const n = new NotesService(dir);
+  const t = n.ajouterTache('matin', 'Nettoyer le quai 2', 'Paul');
+  n.ajouterTache('nuit', 'Fermer le portail', 'Karim');
+  assert.deepEqual(n.list('matin').taches.map((x) => x.texte), ['Nettoyer le quai 2']);
+  n.validerTache(t.id, 'Paul');
+  assert.equal(n.list('matin').taches.length, 0);
+  assert.equal(n.list('matin').tachesValidees.length, 1);
+  const c = n.ajouterCommande('matin', { matiere: 'Big-bags', date: '2026-11-20' }, 'Paul');
+  n.ajouterCommande('matin', { matiere: 'Gants', date: '2026-11-25' }, 'Paul');
+  assert.equal(c.etat, 'a-faire');
+  n.etatCommande(c.id, 'non-realisee', 'Sophie');
+  assert.deepEqual(n.list('matin').commandes.map((x) => [x.matiere, x.etat]), [['Gants', 'a-faire'], ['Big-bags', 'non-realisee']]);
+  assert.equal(n.list('apresmidi').commandes.length, 0);
+  assert.throws(() => n.etatCommande(c.id, 'perdue', 'Paul'));
+  assert.throws(() => n.ajouterCommande('matin', { matiere: '', date: '2026-11-20' }, 'Paul'));
+  n.supprimer(c.id);
+  assert.equal(n.list('matin').commandes.length, 1);
+});

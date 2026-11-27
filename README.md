@@ -316,6 +316,13 @@ rouge borde la saisie ; un clic ouvre la liste, « Valider » le fait
 disparaître pour tout le monde (qui et quand sont gardés, « Validés
 récemment »). Fichiers dans `<données>/importants/`.
 
+À côté, deux pastilles **propres au service affiché** (le matin ne voit que les
+siennes, etc.) :
+- **Tâches** : comme Important (ajouter, valider), mais pour ce service seulement.
+- **Commandes** : historique des commandes du service (matière, date de la
+  commande) avec leur état : à faire, faite, non réalisée (la pastille compte
+  celles à faire). Fichiers dans `<données>/notes-service/`.
+
 ## Services externes
 
 Onglet **Externes** : les sorties gérées par un service externe (Bois,
